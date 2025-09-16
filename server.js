@@ -10,6 +10,11 @@ const cron = require('node-cron'); // para agendamentos de tarefas
 
 const { sequelize, User } = require('./database/models');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
+const {
+    getNavigationShortcuts,
+    getMenuItems,
+    getQuickActions
+} = require('./src/utils/navigation');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
@@ -110,6 +115,8 @@ app.use((req, res, next) => {
     res.locals.adminLevel = getRoleLevel(USER_ROLES.ADMIN);
     res.locals.notifications = [];
     res.locals.notificationError = null;
+    res.locals.userMenuItems = [];
+    res.locals.quickActions = [];
     next();
 });
 
@@ -134,7 +141,6 @@ app.use(async (req, res, next) => {
 
             req.user = sanitizedUser;
             res.locals.user = sanitizedUser;
-            res.locals.userRoleLevel = getRoleLevel(sanitizedUser.role);
             req.session.user = {
                 id: dbUser.id,
                 name: dbUser.name,
@@ -150,6 +156,12 @@ app.use(async (req, res, next) => {
         console.error('Erro ao buscar user no middleware:', error);
         res.locals.user = null;
     }
+
+    const roleForNavigation = res.locals.user && res.locals.user.role ? res.locals.user.role : null;
+    const navigationContext = getNavigationShortcuts(roleForNavigation);
+    res.locals.userRoleLevel = navigationContext.level;
+    res.locals.userMenuItems = getMenuItems(navigationContext.shortcuts);
+    res.locals.quickActions = getQuickActions(navigationContext.shortcuts);
 
     return next();
 });
