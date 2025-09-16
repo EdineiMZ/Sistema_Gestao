@@ -7,6 +7,7 @@ process.env.APP_NAME = process.env.APP_NAME || 'Sistema de Gestão - Teste';
 
 const { sequelize, User, Notification, Procedure, Room, Appointment } = require('../database/models');
 const { processNotifications } = require('../src/services/notificationService');
+const { USER_ROLES } = require('../src/constants/roles');
 
 async function run() {
     try {
@@ -16,7 +17,7 @@ async function run() {
             name: 'Administrador Teste',
             email: 'admin.teste@example.com',
             password: 'SenhaSegura123',
-            role: 4,
+            role: USER_ROLES.ADMIN,
             creditBalance: 150
         });
 
@@ -24,7 +25,7 @@ async function run() {
             name: 'Profissional Teste',
             email: 'profissional@example.com',
             password: 'SenhaSegura123',
-            role: 3,
+            role: USER_ROLES.MANAGER,
             creditBalance: 80
         });
 
@@ -61,7 +62,7 @@ async function run() {
             sendToAll: true,
             filters: {
                 onlyActive: true,
-                targetRoles: [4]
+                targetRoles: [USER_ROLES.ADMIN]
             },
             repeatFrequency: 'none'
         });

@@ -1,6 +1,6 @@
 <%- include('../partials/header') %>
 
-<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
+<% const availableRoles = roleOptions || []; %>
 
 <div class="row gy-4 fade-in">
     <div class="col-12">
@@ -47,7 +47,7 @@
                             <td><%= userItem.address || '—' %></td>
                             <td>
                                 <span class="badge-soft badge-soft-warning">
-                                    <%= roleLabels[userItem.role] || 'Usuário' %>
+                                    <%= roleLabels && userItem.role ? (roleLabels[userItem.role] || 'Usuário') : 'Usuário' %>
                                 </span>
                             </td>
                             <td>R$ <%= Number(userItem.creditBalance || 0).toFixed(2) %></td>
@@ -116,7 +116,13 @@
                                                     </div>
                                                     <div class="col-md-4">
                                                         <label class="form-label">Nível</label>
-                                                        <input type="number" class="form-control" name="role" min="0" max="4" value="<%= userItem.role %>" />
+                                                        <select class="form-select" name="role">
+                                                            <% availableRoles.forEach((option) => { %>
+                                                                <option value="<%= option.value %>" <%= option.value === userItem.role ? 'selected' : '' %>>
+                                                                    <%= option.label %>
+                                                                </option>
+                                                            <% }) %>
+                                                        </select>
                                                     </div>
                                                     <div class="col-md-4">
                                                         <label class="form-label">Crédito</label>
@@ -182,7 +188,11 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Nível</label>
-                        <input type="number" class="form-control" name="role" min="0" max="4" />
+                        <select class="form-select" name="role">
+                            <% availableRoles.forEach((option) => { %>
+                                <option value="<%= option.value %>"><%= option.label %></option>
+                            <% }) %>
+                        </select>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Crédito inicial</label>

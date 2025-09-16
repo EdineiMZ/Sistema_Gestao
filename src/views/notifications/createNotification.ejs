@@ -1,6 +1,6 @@
 <%- include('../partials/header') %>
 
-<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
+<% const availableRoles = roleOptions || []; %>
 
 <div class="row justify-content-center fade-in">
     <div class="col-12 col-xl-10">
@@ -106,8 +106,8 @@
                         <div class="col-md-4">
                             <label class="form-label">Perfis (segure CTRL para múltiplos)</label>
                             <select class="form-select" name="targetRoles" multiple>
-                                <% roleLabels.forEach((label, index) => { %>
-                                    <option value="<%= index %>"><%= label %></option>
+                                <% availableRoles.forEach((option) => { %>
+                                    <option value="<%= option.value %>"><%= option.label %></option>
                                 <% }) %>
                             </select>
                         </div>

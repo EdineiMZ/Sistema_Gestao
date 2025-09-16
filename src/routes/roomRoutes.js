@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const roomController = require('../controllers/roomController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const authorize = require('../middlewares/authorize');
 
-router.get('/', authMiddleware, permissionMiddleware(4), roomController.listRooms);
-router.post('/create', authMiddleware, permissionMiddleware(4), roomController.createRoom);
-router.put('/update/:id', authMiddleware, permissionMiddleware(4), roomController.updateRoom);
-router.delete('/delete/:id', authMiddleware, permissionMiddleware(4), roomController.deleteRoom);
+router.get('/', authMiddleware, authorize('admin'), roomController.listRooms);
+router.post('/create', authMiddleware, authorize('admin'), roomController.createRoom);
+router.put('/update/:id', authMiddleware, authorize('admin'), roomController.updateRoom);
+router.delete('/delete/:id', authMiddleware, authorize('admin'), roomController.deleteRoom);
 
 module.exports = router;
