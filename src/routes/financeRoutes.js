@@ -30,5 +30,29 @@ router.delete(
     financeController.deleteFinanceEntry
 );
 
+router.get(
+    '/export/pdf',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeEntry.exportPdf', (req) => {
+        const start = req.query?.startDate || 'all';
+        const end = req.query?.endDate || 'all';
+        return `FinanceExport:pdf:${start}-${end}`;
+    }),
+    financeController.exportPdf
+);
+
+router.get(
+    '/export/excel',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeEntry.exportExcel', (req) => {
+        const start = req.query?.startDate || 'all';
+        const end = req.query?.endDate || 'all';
+        return `FinanceExport:excel:${start}-${end}`;
+    }),
+    financeController.exportExcel
+);
+
 
 module.exports = router;

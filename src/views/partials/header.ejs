@@ -78,7 +78,7 @@
                         </a>
                     </li>
                 <% } else { %>
-                    <li class="nav-item dropdown">
+                    <li class="nav-item dropdown user-menu-item">
                         <a
                             class="nav-link dropdown-toggle d-flex align-items-center"
                             href="#"
@@ -86,6 +86,7 @@
                             role="button"
                             data-bs-toggle="dropdown"
                             aria-expanded="false"
+                            aria-haspopup="true"
                         >
                             <span class="avatar avatar-sm me-2">
                                 <% if (user.profileImage) { %>
@@ -110,52 +111,15 @@
                         <ul class="dropdown-menu dropdown-menu-end shadow">
                             <li><span class="dropdown-item-text text-muted">Bem-vindo(a)!</span></li>
                             <li><hr class="dropdown-divider" /></li>
+                            <li>
+                                <a class="dropdown-item" href="/users/preferences">
+                                    <i class="bi bi-sliders me-2"></i>Preferências de notificações
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
                             <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-left me-2"></i>Sair</a></li>
                         </ul>
                     </li>
-
-                    <% if (userRoleLevel >= 0) { %>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/pages/sobre">Sobre</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/pages/contact">Contato</a>
-                        </li>
-                    <% } %>
-
-                    <% if (userRoleLevel >= managerLevel) { %>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/dashboard">
-                                <i class="bi bi-graph-up-arrow me-1"></i>Painel
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/appointments">Agendamentos</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/procedures">Procedimentos</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/rooms">Salas</a>
-                        </li>
-                    <% } %>
-
-                    <% if (userRoleLevel >= adminLevel) { %>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin">
-                                <i class="bi bi-shield-check me-1"></i>Administração
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/users/manage">Usuários</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/finance">Financeiro</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/notifications">Notificações</a>
-                        </li>
-                    <% } %>
                 <% } %>
                 <% if (user && Array.isArray(notifications) && notifications.length) { %>
                     <li class="nav-item ms-lg-2 mt-3 mt-lg-0">

@@ -98,12 +98,17 @@
                         <th>Nível</th>
                         <th>Crédito</th>
                         <th>Status</th>
+                        <th>Notificações</th>
                         <th class="text-end">Ações</th>
                     </tr>
                     </thead>
                     <tbody>
                     <% users.forEach(userItem => { %>
                         <tr>
+                            <% const prefInstance = userItem.notificationPreference; %>
+                            <% const prefData = prefInstance && typeof prefInstance.get === 'function' ? prefInstance.get({ plain: true }) : (prefInstance || {}); %>
+                            <% const emailOptIn = prefData.emailEnabled !== false; %>
+                            <% const scheduledOptIn = prefData.scheduledEnabled !== false; %>
                             <td class="fw-semibold"><%= userItem.id %></td>
                             <td><%= userItem.name %></td>
                             <td><%= userItem.email %></td>
@@ -119,6 +124,18 @@
                                 <span class="badge-soft <%= userItem.active ? 'badge-soft-success' : 'badge-soft-danger' %>">
                                     <%= userItem.active ? 'Ativo' : 'Inativo' %>
                                 </span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    <span class="badge-soft <%= emailOptIn ? 'badge-soft-success' : 'badge-soft-secondary' %>">
+                                        <i class="bi <%= emailOptIn ? 'bi-envelope-check' : 'bi-envelope-slash' %> me-1"></i>E-mail
+                                        <small class="ms-1 text-muted fw-normal"><%= emailOptIn ? 'Ativo' : 'Desativado' %></small>
+                                    </span>
+                                    <span class="badge-soft <%= scheduledOptIn ? 'badge-soft-success' : 'badge-soft-secondary' %>">
+                                        <i class="bi <%= scheduledOptIn ? 'bi-calendar-check' : 'bi-calendar-x' %> me-1"></i>Agenda
+                                        <small class="ms-1 text-muted fw-normal"><%= scheduledOptIn ? 'Ativo' : 'Desativado' %></small>
+                                    </span>
+                                </div>
                             </td>
                             <td class="text-end">
                                 <form
@@ -199,6 +216,38 @@
                                                             <option value="false" <%= !userItem.active ? 'selected' : '' %>>Inativo</option>
                                                         </select>
                                                     </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label d-block">Notificações por e-mail</label>
+                                                        <div class="form-check form-switch">
+                                                            <input
+                                                                class="form-check-input"
+                                                                type="checkbox"
+                                                                id="editEmailPreference-<%= userItem.id %>"
+                                                                name="notificationEmailEnabled"
+                                                                value="true"
+                                                                <%= emailOptIn ? 'checked' : '' %>
+                                                            />
+                                                            <label class="form-check-label" for="editEmailPreference-<%= userItem.id %>">
+                                                                Receber comunicados e novidades
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label d-block">Alertas de agendamento</label>
+                                                        <div class="form-check form-switch">
+                                                            <input
+                                                                class="form-check-input"
+                                                                type="checkbox"
+                                                                id="editScheduledPreference-<%= userItem.id %>"
+                                                                name="notificationScheduledEnabled"
+                                                                value="true"
+                                                                <%= scheduledOptIn ? 'checked' : '' %>
+                                                            />
+                                                            <label class="form-check-label" for="editScheduledPreference-<%= userItem.id %>">
+                                                                Receber lembretes de agenda e confirmações
+                                                            </label>
+                                                        </div>
+                                                    </div>
                                                     <div class="col-12">
                                                         <label class="form-label">Atualizar foto de perfil</label>
                                                         <input type="file" class="form-control" name="profileImage" accept="image/*" />
@@ -261,6 +310,38 @@
                     <div class="col-md-3">
                         <label class="form-label">Crédito inicial</label>
                         <input type="number" class="form-control" name="creditBalance" step="0.01" value="0" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label d-block">Notificações por e-mail</label>
+                        <div class="form-check form-switch">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="createEmailPreference"
+                                name="notificationEmailEnabled"
+                                value="true"
+                                checked
+                            />
+                            <label class="form-check-label" for="createEmailPreference">
+                                Receber comunicados e novidades
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label d-block">Alertas de agendamento</label>
+                        <div class="form-check form-switch">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="createScheduledPreference"
+                                name="notificationScheduledEnabled"
+                                value="true"
+                                checked
+                            />
+                            <label class="form-check-label" for="createScheduledPreference">
+                                Receber lembretes de agenda e confirmações
+                            </label>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Foto de perfil (até 5MB)</label>

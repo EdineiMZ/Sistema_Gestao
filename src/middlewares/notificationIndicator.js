@@ -1,4 +1,4 @@
-const { Notification } = require('../../database/models');
+const { Notification, User, UserNotificationPreference } = require('../../database/models');
 const { Op } = require('sequelize');
 
 const MAX_BADGE_ITEMS = 8;
@@ -27,6 +27,36 @@ module.exports = async function notificationIndicator(req, res, next) {
 
         const acceptHeader = req.headers.accept || '';
         if (acceptHeader && !acceptHeader.includes('text/html')) {
+            return next();
+        }
+
+        const dbUser = await User.findByPk(req.user.id, {
+            attributes: ['id', 'active'],
+            include: [
+                {
+                    model: UserNotificationPreference,
+                    as: 'notificationPreference',
+                    attributes: ['emailEnabled', 'scheduledEnabled'],
+                    required: false
+                }
+            ]
+        });
+
+        if (!dbUser || dbUser.active === false) {
+            res.locals.notifications = [];
+            return next();
+        }
+
+        const preferenceInstance = dbUser.notificationPreference;
+        const preference = preferenceInstance
+            ? preferenceInstance.get({ plain: true })
+            : null;
+
+        req.user.notificationPreference = preference;
+        res.locals.notificationPreference = preference;
+
+        if (preference && preference.emailEnabled === false) {
+            res.locals.notifications = [];
             return next();
         }
 
