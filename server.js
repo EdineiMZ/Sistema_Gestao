@@ -8,6 +8,7 @@ const methodOverride = require('method-override');
 const path = require('path');
 const { sequelize, User } = require('./database/models');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
+const { getNavigationShortcuts, getMenuItems, getQuickActions } = require('./src/utils/navigation');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
