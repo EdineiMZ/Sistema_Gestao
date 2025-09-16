@@ -13,6 +13,13 @@ const buildPreview = (notification) => {
 };
 
 module.exports = async function notificationIndicator(req, res, next) {
+    if (!Array.isArray(res.locals.notifications)) {
+        res.locals.notifications = [];
+    }
+    if (typeof res.locals.notificationError === 'undefined') {
+        res.locals.notificationError = null;
+    }
+
     try {
         if (!req.user || req.method !== 'GET') {
             return next();
@@ -64,9 +71,13 @@ module.exports = async function notificationIndicator(req, res, next) {
             });
 
             res.locals.notifications = sanitized;
+        } else {
+            res.locals.notifications = [];
         }
     } catch (error) {
         console.error('Erro ao carregar indicador de notificações:', error);
+        res.locals.notifications = [];
+        res.locals.notificationError = 'Não foi possível carregar as notificações.';
     }
 
     return next();

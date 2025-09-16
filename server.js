@@ -73,6 +73,8 @@ app.use((req, res, next) => {
     res.locals.getRoleLevel = getRoleLevel;
     res.locals.managerLevel = getRoleLevel(USER_ROLES.MANAGER);
     res.locals.adminLevel = getRoleLevel(USER_ROLES.ADMIN);
+    res.locals.notifications = [];
+    res.locals.notificationError = null;
     next();
 });
 
