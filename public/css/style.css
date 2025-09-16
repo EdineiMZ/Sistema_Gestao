@@ -515,6 +515,7 @@ body.theme-dark {
 
 .app-shell.theme-dark legend.scheduler-border {
     color: #c7d2fe;
+
 }
 
 @media (max-width: 991px) {
@@ -530,5 +531,9 @@ body.theme-dark {
     .page-container {
         padding-top: 2.5rem;
         padding-bottom: 2.5rem;
+    }
+
+    .dashboard-title {
+        font-size: 1.75rem;
     }
 }

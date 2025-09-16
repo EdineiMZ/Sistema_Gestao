@@ -1,5 +1,6 @@
 'use strict';
 const bcrypt = require('bcrypt');
+const { USER_ROLES, ROLE_ORDER, parseRole } = require('../../src/constants/roles');
 
 module.exports = (sequelize, DataTypes) => {
     const User = sequelize.define('User', {
@@ -69,17 +70,26 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         role: {
-            type: DataTypes.INTEGER,
-            defaultValue: 0,
+            type: DataTypes.ENUM(...ROLE_ORDER),
+            defaultValue: USER_ROLES.CLIENT,
             allowNull: false,
+            set(value) {
+                if (value === undefined || value === null || value === '') {
+                    this.setDataValue('role', USER_ROLES.CLIENT);
+                    return;
+                }
+
+                const resolvedRole = parseRole(value, null);
+                if (!resolvedRole) {
+                    throw new Error('Função de usuário inválida.');
+                }
+
+                this.setDataValue('role', resolvedRole);
+            },
             validate: {
-                min: {
-                    args: [0],
-                    msg: 'Nível mínimo inválido.'
-                },
-                max: {
-                    args: [4],
-                    msg: 'Nível máximo inválido.'
+                isIn: {
+                    args: [ROLE_ORDER],
+                    msg: 'Função de usuário inválida.'
                 }
             }
         },

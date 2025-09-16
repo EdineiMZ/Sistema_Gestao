@@ -1,7 +1,10 @@
 // src/controllers/notificationController.js
 const sanitizeHtml = require('sanitize-html');
 
+const { Op } = require('sequelize');
 const { Notification, User, Procedure, Room } = require('../../database/models');
+const { buildQueryFilters } = require('../utils/queryBuilder');
+
 
 const parseBoolean = (value, defaultValue = false) => {
     if (Array.isArray(value)) {
@@ -17,20 +20,22 @@ const parseBoolean = (value, defaultValue = false) => {
     return ['true', '1', 'on', 'yes'].includes(normalized);
 };
 
-const parseNumberArray = (value) => {
-    if (!value) return [];
-    const source = Array.isArray(value) ? value : [value];
-    return source
-        .map((item) => Number.parseInt(item, 10))
-        .filter((num) => Number.isInteger(num));
-};
-
 const parseStringArray = (value) => {
     if (!value) return [];
     const source = Array.isArray(value) ? value : [value];
     return source
         .map((item) => String(item).trim())
         .filter((item) => item.length > 0);
+};
+
+const parseRoleArray = (value) => {
+    if (!value) return [];
+    const source = Array.isArray(value) ? value : [value];
+    return sortRolesByHierarchy(
+        source
+            .map((item) => parseRole(item, null))
+            .filter(Boolean)
+    );
 };
 
 const parseDecimal = (value) => {
@@ -69,7 +74,7 @@ const frequencyLabels = {
 
 const buildFiltersFromRequest = (body) => {
     const filters = {};
-    const roles = parseNumberArray(body.targetRoles);
+    const roles = parseRoleArray(body.targetRoles);
     if (roles.length) {
         filters.targetRoles = roles;
     }
@@ -128,7 +133,10 @@ const formatFiltersForView = (filters = {}) => {
 
     const descriptions = [];
     if (filters.onlyActive) descriptions.push('Somente usuários ativos');
-    if (filters.targetRoles?.length) descriptions.push(`Níveis: ${filters.targetRoles.join(', ')}`);
+    if (filters.targetRoles?.length) {
+        const labels = filters.targetRoles.map((role) => ROLE_LABELS[role] || role);
+        descriptions.push(`Perfis: ${labels.join(', ')}`);
+    }
     if (filters.minimumCreditBalance !== undefined) descriptions.push(`Crédito mínimo: R$ ${filters.minimumCreditBalance}`);
     if (filters.appointmentStatus?.length) descriptions.push(`Status agendamento: ${filters.appointmentStatus.join(', ')}`);
     if (filters.procedureId) descriptions.push(`Procedimento ID: ${filters.procedureId}`);
@@ -148,7 +156,24 @@ module.exports = {
     // Lista todas as notificações
     listNotifications: async (req, res) => {
         try {
+            const { where, filters, metadata } = buildQueryFilters(req.query, {
+                statusField: 'active',
+                statusMap: {
+                    active: true,
+                    inactive: false
+                },
+                allowedStatuses: [true, false],
+                defaultStatus: 'all',
+                dateField: 'triggerDate',
+                keywordFields: ['title', 'message']
+            });
+
+            if (metadata.orConditions.length) {
+                where[Op.or] = metadata.orConditions;
+            }
+
             const notifications = await Notification.findAll({
+                where,
                 order: [['id', 'DESC']]
             });
 
@@ -163,7 +188,8 @@ module.exports = {
 
             res.render('notifications/manageNotifications', {
                 pageTitle: 'Notificações automatizadas',
-                notifications: formattedNotifications
+                notifications: formattedNotifications,
+                filters
             });
         } catch (err) {
             console.error(err);
@@ -329,3 +355,4 @@ module.exports = {
         }
     }
 };
+

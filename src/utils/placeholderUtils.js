@@ -1,10 +1,4 @@
-const roleLabels = {
-    0: 'Cliente',
-    1: 'Colaborador',
-    2: 'Especialista',
-    3: 'Gestor',
-    4: 'Administrador'
-};
+const { ROLE_LABELS, parseRole } = require('../constants/roles');
 
 const formatCurrencyBRL = (value) => {
     if (value === undefined || value === null || value === '') {
@@ -33,7 +27,13 @@ const formatDate = (value, options = {}) => {
 const formatDateTime = (value) => formatDate(value, { dateStyle: 'short', timeStyle: 'short' });
 const formatTime = (value) => formatDate(value, { hour: '2-digit', minute: '2-digit' });
 
-const buildRoleLabel = (role) => roleLabels?.[role] || 'Usuário';
+const buildRoleLabel = (role) => {
+    const resolved = parseRole(role, null);
+    if (!resolved) {
+        return 'Usuário';
+    }
+    return ROLE_LABELS[resolved] || 'Usuário';
+};
 
 const baseTemplate = ({ title, body, accentColor, previewText }) => {
     const preview = previewText

@@ -6,9 +6,18 @@ const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
+const audit = require('../middlewares/audit');
+
 
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
-router.get('/manage', authMiddleware, permissionMiddleware(4), userController.manageUsers);
+router.get(
+    '/manage',
+    authMiddleware,
+    permissionMiddleware(4),
+    ...manageUsersValidation,
+    userController.manageUsers
+);
+
 
 // Upload da imagem no create e update
 router.post(
@@ -16,6 +25,7 @@ router.post(
     authMiddleware,
     permissionMiddleware(4),
     upload.single('profileImage'),
+    audit('user.create', (req) => `User:${req.body?.email || 'novo'}`),
     userController.createUser
 );
 
@@ -24,6 +34,7 @@ router.put(
     authMiddleware,
     permissionMiddleware(4),
     upload.single('profileImage'),
+    audit('user.update', (req) => `User:${req.params.id}`),
     userController.updateUser
 );
 
@@ -31,6 +42,7 @@ router.delete(
     '/delete/:id',
     authMiddleware,
     permissionMiddleware(4),
+    audit('user.delete', (req) => `User:${req.params.id}`),
     userController.deleteUser
 );
 

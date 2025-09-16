@@ -24,7 +24,9 @@
     />
     <link rel="stylesheet" href="/css/style.css" />
 </head>
+
 <body class="theme-light" data-theme="light">
+
 <div id="appLoader" class="app-loader d-flex align-items-center justify-content-center">
     <div class="text-center">
         <div class="spinner-border text-light" role="status"></div>
@@ -85,7 +87,9 @@
                             </span>
                             <div class="d-flex flex-column text-start">
                                 <span class="fw-semibold small"><%= user.name %></span>
-                                <small class="text-white-50"><%= user.role >= 0 ? `Nível ${user.role}` : '' %></small>
+                                <small class="text-white-50">
+                                    <%= roleLabels && user.role ? roleLabels[user.role] || '' : '' %>
+                                </small>
                             </div>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -95,7 +99,7 @@
                         </ul>
                     </li>
 
-                    <% if (user.role >= 0) { %>
+                    <% if (userRoleLevel >= 0) { %>
                         <li class="nav-item">
                             <a class="nav-link" href="/pages/sobre">Sobre</a>
                         </li>
@@ -104,7 +108,12 @@
                         </li>
                     <% } %>
 
-                    <% if (user.role >= 3) { %>
+                    <% if (userRoleLevel >= managerLevel) { %>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/dashboard">
+                                <i class="bi bi-graph-up-arrow me-1"></i>Painel
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/appointments">Agendamentos</a>
                         </li>
@@ -116,7 +125,7 @@
                         </li>
                     <% } %>
 
-                    <% if (user.role >= 4) { %>
+                    <% if (userRoleLevel >= adminLevel) { %>
                         <li class="nav-item">
                             <a class="nav-link" href="/users/manage">Usuários</a>
                         </li>
