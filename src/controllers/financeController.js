@@ -2,6 +2,7 @@ const { FinanceEntry } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const financeReportingService = require('../services/financeReportingService');
+const reportChartService = require('../services/reportChartService');
 
 const { utils: reportingUtils } = financeReportingService;
 
@@ -187,6 +188,7 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const chartImage = await reportChartService.generateFinanceReportChart(summary);
 
             const document = new PDFDocument({
                 margin: 40,
@@ -216,6 +218,24 @@ module.exports = {
             document.text(`Saldo Projetado: ${formatCurrency(summary.totals.net)}`);
             document.text(`Pagamentos em Atraso: ${formatCurrency(summary.totals.overdue)}`);
             document.moveDown();
+
+            if (chartImage?.buffer instanceof Buffer) {
+                const availableWidth = document.page.width - document.page.margins.left - document.page.margins.right;
+                const imageWidth = Math.min(availableWidth, chartImage.width || availableWidth);
+
+                document.fontSize(14).fillColor('#000000').text('Resumo Visual', { underline: true });
+                document.moveDown(0.5);
+                document.image(chartImage.buffer, {
+                    width: imageWidth,
+                    align: 'center'
+                });
+                document.moveDown(0.35);
+                document.fontSize(10).fillColor('#555555').text(
+                    'Figura 1 - Comparativo mensal de valores a pagar e a receber.',
+                    { align: 'center' }
+                );
+                document.moveDown();
+            }
 
             document.fontSize(14).fillColor('#000000').text('Lançamentos', { underline: true });
             document.moveDown(0.5);
@@ -255,6 +275,10 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const chartImage = await reportChartService.generateFinanceReportChart(summary, {
+                width: 720,
+                height: 360
+            });
 
             const workbook = new ExcelJS.Workbook();
             workbook.creator = 'Sistema de Gestão';
@@ -269,6 +293,37 @@ module.exports = {
             summarySheet.addRow(['Pagamentos em Atraso', parseAmount(summary.totals.overdue)]);
             summarySheet.addRow(['Pagamentos Pendentes', parseAmount(summary.totals.pending)]);
             summarySheet.addRow(['Pagamentos Concluídos', parseAmount(summary.totals.paid)]);
+
+            if (chartImage?.buffer instanceof Buffer) {
+                const imageId = workbook.addImage({
+                    buffer: chartImage.buffer,
+                    extension: 'png'
+                });
+
+                const startRow = summarySheet.rowCount + 2;
+                const endRow = startRow + 12;
+                const endColumn = 'H';
+
+                while (summarySheet.rowCount < endRow) {
+                    summarySheet.addRow([]);
+                }
+
+                summarySheet.addImage(imageId, `A${startRow}:${endColumn}${endRow}`);
+
+                const captionRow = endRow + 1;
+                while (summarySheet.rowCount < captionRow) {
+                    summarySheet.addRow([]);
+                }
+
+                summarySheet.mergeCells(`A${captionRow}:${endColumn}${captionRow}`);
+                const captionCell = summarySheet.getCell(`A${captionRow}`);
+                captionCell.value = 'Figura 1: Comparativo mensal de valores a pagar e a receber';
+                captionCell.alignment = { horizontal: 'center' };
+                captionCell.font = {
+                    italic: true,
+                    color: { argb: 'FF6B7280' }
+                };
+            }
 
             const worksheet = workbook.addWorksheet('Lançamentos');
             worksheet.columns = [
