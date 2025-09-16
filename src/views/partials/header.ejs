@@ -26,6 +26,47 @@
 </head>
 
 <body class="theme-light" data-theme="light">
+<%
+    const currentUser = typeof user !== 'undefined' && user ? user : null;
+    const normalizedUserRole = currentUser && currentUser.role ? String(currentUser.role).trim().toLowerCase() : null;
+    const fallbackRoleOrder = ['client', 'collaborator', 'specialist', 'manager', 'admin'];
+    const providedUserRoleLevel = typeof userRoleLevel !== 'undefined' ? userRoleLevel : null;
+    const computedUserLevel = Number.isInteger(providedUserRoleLevel)
+        ? providedUserRoleLevel
+        : normalizedUserRole
+            ? fallbackRoleOrder.indexOf(normalizedUserRole)
+            : -1;
+
+    const fallbackBlueprint = [
+        { label: 'Sobre', route: '/pages/sobre', icon: 'bi-info-circle', minimumRole: 'client', groups: ['menu'] },
+        { label: 'Contato', route: '/pages/contact', icon: 'bi-envelope', minimumRole: 'client', groups: ['menu'] },
+        { label: 'Painel', route: '/dashboard', icon: 'bi-graph-up-arrow', minimumRole: 'manager', groups: ['menu', 'quick'] },
+        { label: 'Agendamentos', route: '/appointments', icon: 'bi-calendar-check', minimumRole: 'manager', groups: ['menu', 'quick'] },
+        { label: 'Procedimentos', route: '/procedures', icon: 'bi-clipboard2-heart', minimumRole: 'manager', groups: ['menu'] },
+        { label: 'Salas', route: '/rooms', icon: 'bi-door-open', minimumRole: 'manager', groups: ['menu'] },
+        { label: 'Administração', route: '/admin', icon: 'bi-shield-check', minimumRole: 'admin', groups: ['menu', 'quick'] },
+        { label: 'Usuários', route: '/users/manage', icon: 'bi-people', minimumRole: 'admin', groups: ['menu'] },
+        { label: 'Financeiro', route: '/finance', icon: 'bi-cash-coin', minimumRole: 'admin', groups: ['menu', 'quick'] },
+        { label: 'Notificações', route: '/notifications', icon: 'bi-bell', minimumRole: 'admin', groups: ['menu'] }
+    ];
+
+    const fallbackShortcuts = currentUser
+        ? fallbackBlueprint.filter((item) => {
+            const requiredRole = item.minimumRole ? String(item.minimumRole).trim().toLowerCase() : 'client';
+            const requiredLevel = fallbackRoleOrder.indexOf(requiredRole);
+            return computedUserLevel >= (requiredLevel === -1 ? 0 : requiredLevel);
+        })
+        : [];
+
+    const computedMenuItems = fallbackShortcuts.filter((item) => Array.isArray(item.groups) && item.groups.includes('menu'));
+    const computedQuickActions = fallbackShortcuts.filter((item) => Array.isArray(item.groups) && item.groups.includes('quick'));
+
+    const providedMenuItems = typeof userMenuItems !== 'undefined' ? userMenuItems : null;
+    const providedQuickActions = typeof quickActions !== 'undefined' ? quickActions : null;
+
+    const navMenuItems = Array.isArray(providedMenuItems) ? providedMenuItems : computedMenuItems;
+    const navQuickActions = Array.isArray(providedQuickActions) ? providedQuickActions : computedQuickActions;
+%>
 
 <div id="appLoader" class="app-loader d-flex align-items-center justify-content-center">
     <div class="text-center">
@@ -55,7 +96,7 @@
 
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-                <% if (!user) { %>
+                <% if (!currentUser) { %>
                     <li class="nav-item">
                         <a class="nav-link" href="/#solucoes">Soluções</a>
                     </li>
@@ -78,6 +119,36 @@
                         </a>
                     </li>
                 <% } else { %>
+                    <% if (navQuickActions.length) { %>
+                        <% navQuickActions.forEach((item) => { %>
+                            <li class="nav-item d-none d-lg-flex">
+                                <a
+                                    class="nav-link nav-quick-action d-flex align-items-center gap-2"
+                                    href="<%= item.route %>"
+                                    data-nav-close="true"
+                                >
+                                    <i class="bi <%= item.icon %>"></i>
+                                    <span><%= item.label %></span>
+                                </a>
+                            </li>
+                        <% }); %>
+                    <% } %>
+
+                    <% if (navMenuItems.length) { %>
+                        <% navMenuItems.forEach((item) => { %>
+                            <li class="nav-item d-lg-none">
+                                <a
+                                    class="nav-link nav-collapsible-link d-flex align-items-center gap-2"
+                                    href="<%= item.route %>"
+                                    data-nav-close="true"
+                                >
+                                    <i class="bi <%= item.icon %>"></i>
+                                    <span><%= item.label %></span>
+                                </a>
+                            </li>
+                        <% }); %>
+                    <% } %>
+
                     <li class="nav-item dropdown user-menu-item">
                         <a
                             class="nav-link dropdown-toggle d-flex align-items-center"
@@ -89,44 +160,91 @@
                             aria-haspopup="true"
                         >
                             <span class="avatar avatar-sm me-2">
-                                <% if (user.profileImage) { %>
+                                <% if (currentUser.profileImage) { %>
                                     <img
-                                        src="data:image/png;base64,<%= user.profileImage.toString('base64') %>"
+                                        src="data:image/png;base64,<%= currentUser.profileImage.toString('base64') %>"
                                         alt="Avatar"
                                         class="rounded-circle"
                                         width="36"
                                         height="36"
                                     />
                                 <% } else { %>
-                                    <span class="avatar-initials"><%= user.name ? user.name.charAt(0).toUpperCase() : 'U' %></span>
+                                    <span class="avatar-initials"><%= currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U' %></span>
                                 <% } %>
                             </span>
                             <div class="d-flex flex-column text-start">
-                                <span class="fw-semibold small"><%= user.name %></span>
+                                <span class="fw-semibold small"><%= currentUser.name %></span>
                                 <small class="text-white-50">
-                                    <%= roleLabels && user.role ? roleLabels[user.role] || '' : '' %>
+                                    <%= roleLabels && currentUser.role ? roleLabels[currentUser.role] || '' : '' %>
                                 </small>
                             </div>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end shadow">
                             <li><span class="dropdown-item-text text-muted">Bem-vindo(a)!</span></li>
                             <li><hr class="dropdown-divider" /></li>
+                            <% if (navQuickActions.length) { %>
+                                <li class="dropdown-header text-muted text-uppercase small">Acesso rápido</li>
+                                <% navQuickActions.forEach((item) => { %>
+                                    <li>
+                                        <a
+                                            class="dropdown-item user-menu-quick-link d-flex align-items-center gap-2"
+                                            href="<%= item.route %>"
+                                            data-nav-close="true"
+                                        >
+                                            <i class="bi <%= item.icon %> me-2"></i>
+                                            <span><%= item.label %></span>
+                                        </a>
+                                    </li>
+                                <% }); %>
+                                <li><hr class="dropdown-divider" /></li>
+                            <% } %>
+                            <% if (navMenuItems.length) { %>
+                                <li class="dropdown-header text-muted text-uppercase small">Navegação</li>
+                                <% navMenuItems.forEach((item) => { %>
+                                    <li>
+                                        <a
+                                            class="dropdown-item user-menu-link d-flex align-items-center gap-2"
+                                            href="<%= item.route %>"
+                                            data-nav-close="true"
+                                        >
+                                            <i class="bi <%= item.icon %> me-2"></i>
+                                            <span><%= item.label %></span>
+                                        </a>
+                                    </li>
+                                <% }); %>
+                                <li><hr class="dropdown-divider" /></li>
+                            <% } %>
                             <li>
-                                <a class="dropdown-item" href="/users/preferences">
-                                    <i class="bi bi-sliders me-2"></i>Preferências de notificações
+                                <a
+                                    class="dropdown-item user-menu-link d-flex align-items-center gap-2"
+                                    href="/users/preferences"
+                                    data-nav-close="true"
+                                >
+                                    <i class="bi bi-sliders me-2"></i>
+                                    <span>Preferências de notificações</span>
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider" /></li>
-                            <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-left me-2"></i>Sair</a></li>
+                            <li>
+                                <a
+                                    class="dropdown-item user-menu-logout d-flex align-items-center gap-2"
+                                    href="/logout"
+                                    data-nav-close="true"
+                                >
+                                    <i class="bi bi-box-arrow-left me-2"></i>
+                                    <span>Sair</span>
+                                </a>
+                            </li>
                         </ul>
                     </li>
                 <% } %>
-                <% if (user && Array.isArray(notifications) && notifications.length) { %>
+                <% if (currentUser && Array.isArray(notifications) && notifications.length) { %>
                     <li class="nav-item ms-lg-2 mt-3 mt-lg-0">
                         <a
                             class="nav-link position-relative nav-notification px-2"
                             href="/notifications"
                             aria-label="Visualizar notificações disponíveis"
+                            data-nav-close="true"
                         >
                             <i class="bi bi-bell-fill"></i>
                             <span

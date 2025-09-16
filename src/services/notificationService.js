@@ -1,5 +1,13 @@
 // src/services/notificationService.js
-const { Notification, User, Appointment, Procedure, Room, UserNotificationPreference, sequelize } = require('../../database/models');
+const {
+    Notification,
+    User,
+    Appointment,
+    Procedure,
+    Room,
+    UserNotificationPreference,
+    sequelize
+} = require('../../database/models');
 const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
@@ -7,6 +15,27 @@ const { Op } = require('sequelize');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
+
+const getCaseInsensitiveOperator = () => (sequelize.getDialect() === 'postgres' ? Op.iLike : Op.like);
+
+const buildCaseInsensitiveMatch = (field, value, { exact = false } = {}) => {
+    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+    if (!normalizedValue) {
+        return null;
+    }
+
+    const operator = getCaseInsensitiveOperator();
+    const pattern = exact ? normalizedValue : `%${normalizedValue}%`;
+
+    if (operator === Op.iLike) {
+        return sequelize.where(sequelize.col(field), { [Op.iLike]: pattern });
+    }
+
+    return sequelize.where(
+        sequelize.fn('lower', sequelize.col(field)),
+        { [Op.like]: pattern.toLowerCase() }
+    );
+};
 
 const userPreferenceInclude = {
     model: UserNotificationPreference,
@@ -46,10 +75,9 @@ const computeNextTriggerDate = (currentDate, frequency) => {
 
 const buildUserWhere = (filters = {}, options = {}) => {
     const where = {};
+    const order = [];
     const andConditions = [];
-    const requireScheduledOptIn = Boolean(
-        options.requireScheduledOptIn ?? filters.requireScheduledOptIn ?? false
-    );
+    const likeOperator = getCaseInsensitiveOperator();
 
     if (filters.onlyActive !== false) {
         where.active = true;
@@ -81,24 +109,30 @@ const buildUserWhere = (filters = {}, options = {}) => {
     }
 
     if (Array.isArray(filters.targetNames) && filters.targetNames.length) {
-        const nameConditions = filters.targetNames.map((name) =>
-            buildCaseInsensitiveMatch('name', name)
-        );
-        andConditions.push({ [Op.or]: nameConditions });
+        const nameConditions = filters.targetNames
+            .map((name) => buildCaseInsensitiveMatch('name', name))
+            .filter(Boolean);
+        if (nameConditions.length) {
+            andConditions.push({ [Op.or]: nameConditions });
+        }
     }
 
     if (Array.isArray(filters.targetEmails) && filters.targetEmails.length) {
-        const emailConditions = filters.targetEmails.map((email) =>
-            buildCaseInsensitiveMatch('email', email, { exact: true })
-        );
-        andConditions.push({ [Op.or]: emailConditions });
+        const emailConditions = filters.targetEmails
+            .map((email) => buildCaseInsensitiveMatch('email', email, { exact: true }))
+            .filter(Boolean);
+        if (emailConditions.length) {
+            andConditions.push({ [Op.or]: emailConditions });
+        }
     }
 
     if (Array.isArray(filters.targetEmailFragments) && filters.targetEmailFragments.length) {
-        const fragmentConditions = filters.targetEmailFragments.map((fragment) =>
-            buildCaseInsensitiveMatch('email', fragment)
-        );
-        andConditions.push({ [Op.or]: fragmentConditions });
+        const fragmentConditions = filters.targetEmailFragments
+            .map((fragment) => buildCaseInsensitiveMatch('email', fragment))
+            .filter(Boolean);
+        if (fragmentConditions.length) {
+            andConditions.push({ [Op.or]: fragmentConditions });
+        }
     }
 
     if (filters.clientEmailDomain) {
@@ -113,32 +147,12 @@ const buildUserWhere = (filters = {}, options = {}) => {
                 andConditions.push(
                     sequelize.where(
                         sequelize.fn('lower', sequelize.col('email')),
-                        { [Op.like]: pattern }
+                        { [Op.like]: pattern.toLowerCase() }
                     )
                 );
             }
         }
     }
-
-    const preferenceConditions = [
-        {
-            [Op.or]: [
-                { '$notificationPreference.emailEnabled$': { [Op.ne]: false } },
-                { '$notificationPreference.emailEnabled$': null }
-            ]
-        }
-    ];
-
-    if (requireScheduledOptIn) {
-        preferenceConditions.push({
-            [Op.or]: [
-                { '$notificationPreference.scheduledEnabled$': { [Op.ne]: false } },
-                { '$notificationPreference.scheduledEnabled$': null }
-            ]
-        });
-    }
-
-    andConditions.push(...preferenceConditions);
 
     if (andConditions.length) {
         where[Op.and] = where[Op.and] ? [...where[Op.and], ...andConditions] : andConditions;
@@ -439,6 +453,7 @@ async function processCustomNotification(notif) {
 
 module.exports = {
     processNotifications,
+    buildUserWhere,
     _internal: {
         buildUserWhere,
         processAppointmentNotification,
