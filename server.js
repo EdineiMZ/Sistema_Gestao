@@ -64,12 +64,15 @@ app.use((req, res, next) => {
     res.locals.error_msg = req.flash('error_msg');
     res.locals.error = req.flash('error');
     res.locals.user = null;
+    res.locals.userRoleLevel = -1;
     res.locals.appName = APP_NAME;
     res.locals.pageTitle = APP_NAME;
     res.locals.roles = USER_ROLES;
     res.locals.roleLabels = ROLE_LABELS;
     res.locals.roleOptions = roleOptions;
     res.locals.getRoleLevel = getRoleLevel;
+    res.locals.managerLevel = getRoleLevel(USER_ROLES.MANAGER);
+    res.locals.adminLevel = getRoleLevel(USER_ROLES.ADMIN);
     next();
 });
 
@@ -94,6 +97,7 @@ app.use(async (req, res, next) => {
 
             req.user = sanitizedUser;
             res.locals.user = sanitizedUser;
+            res.locals.userRoleLevel = getRoleLevel(sanitizedUser.role);
             req.session.user = {
                 id: dbUser.id,
                 name: dbUser.name,
