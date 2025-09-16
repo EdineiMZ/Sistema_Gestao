@@ -7,6 +7,9 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
 const audit = require('../middlewares/audit');
+const { manageUsersValidation = [] } = require('../middlewares/validateMiddleware');
+
+const userManagementValidation = Array.isArray(manageUsersValidation) ? manageUsersValidation : [];
 
 
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
@@ -14,7 +17,7 @@ router.get(
     '/manage',
     authMiddleware,
     permissionMiddleware(4),
-    ...manageUsersValidation,
+    ...userManagementValidation,
     userController.manageUsers
 );
 

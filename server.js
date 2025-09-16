@@ -15,6 +15,7 @@ const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
 // Importa o serviço de notificações
 const { processNotifications } = require('./src/services/notificationService');
+const notificationIndicator = require('./src/middlewares/notificationIndicator');
 
 // Rotas
 const authRoutes = require('./src/routes/authRoutes');
@@ -111,6 +112,9 @@ app.use(async (req, res, next) => {
 
     return next();
 });
+
+// Indicador de notificações no cabeçalho
+app.use(notificationIndicator);
 
 // EJS
 app.set('view engine', 'ejs');

@@ -1,7 +1,32 @@
 // src/controllers/authController.js
-const { User } = require('../../database/models');
+const { User, Sequelize } = require('../../database/models');
 const bcrypt = require('bcrypt');
 const { USER_ROLES } = require('../constants/roles');
+
+const FRIENDLY_DB_ERROR_MESSAGE = 'Estamos atualizando o sistema. Execute as migrações do banco de dados e tente novamente.';
+
+const isSequelizeDatabaseError = (error) => {
+    if (!error) {
+        return false;
+    }
+    if (error.name === 'SequelizeDatabaseError') {
+        return true;
+    }
+    return Boolean(Sequelize?.DatabaseError) && error instanceof Sequelize.DatabaseError;
+};
+
+const handleDatabaseError = (error, req, res, redirectPath, contextMessage) => {
+    if (!isSequelizeDatabaseError(error)) {
+        throw error;
+    }
+
+    console.error(
+        `${contextMessage} Execute as migrações do banco antes de tentar novamente (ex.: npx sequelize-cli db:migrate).`,
+        error
+    );
+    req.flash('error_msg', FRIENDLY_DB_ERROR_MESSAGE);
+    return res.redirect(redirectPath);
+};
 
 module.exports = {
     // Renderiza a página de login
@@ -17,7 +42,18 @@ module.exports = {
                 req.flash('error_msg', 'E-mail é obrigatório para login.');
                 return res.redirect('/login');
             }
-            const user = await User.findOne({ where: { email, active: true } });
+            let user;
+            try {
+                user = await User.findOne({ where: { email, active: true } });
+            } catch (error) {
+                return handleDatabaseError(
+                    error,
+                    req,
+                    res,
+                    '/login',
+                    'Erro ao buscar usuário para login.'
+                );
+            }
             if (!user) {
                 req.flash('error_msg', 'Usuário não encontrado ou inativo.');
                 return res.redirect('/login');
@@ -58,7 +94,18 @@ module.exports = {
                 return res.redirect('/register');
             }
 
-            const existingUser = await User.findOne({ where: { email } });
+            let existingUser;
+            try {
+                existingUser = await User.findOne({ where: { email } });
+            } catch (error) {
+                return handleDatabaseError(
+                    error,
+                    req,
+                    res,
+                    '/register',
+                    'Erro ao verificar usuário existente durante o cadastro.'
+                );
+            }
             if (existingUser) {
                 req.flash('error_msg', 'E-mail já cadastrado.');
                 return res.redirect('/register');
@@ -69,16 +116,26 @@ module.exports = {
                 profileBuffer = req.file.buffer;
             }
 
-            await User.create({
-                name,
-                email,
-                password, // Criptografado via hook no model
-                phone,
-                address,
-                dateOfBirth,
-                role: USER_ROLES.CLIENT,
-                profileImage: profileBuffer
-            });
+            try {
+                await User.create({
+                    name,
+                    email,
+                    password, // Criptografado via hook no model
+                    phone,
+                    address,
+                    dateOfBirth,
+                    role: USER_ROLES.CLIENT,
+                    profileImage: profileBuffer
+                });
+            } catch (error) {
+                return handleDatabaseError(
+                    error,
+                    req,
+                    res,
+                    '/register',
+                    'Erro ao criar usuário durante o cadastro.'
+                );
+            }
 
             req.flash('success_msg', 'Cadastro realizado com sucesso! Faça login.');
             return res.redirect('/login');
