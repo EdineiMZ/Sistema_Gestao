@@ -18,6 +18,8 @@ jest.mock('../../database/models', () => {
 const { User, sequelize } = require('../../database/models');
 const { createTestApp } = require('../utils/createTestApp');
 
+let consoleErrorSpy;
+
 const buildDatabaseError = (message) => {
     const error = new Error(message);
     error.name = 'SequelizeDatabaseError';
@@ -27,12 +29,21 @@ const buildDatabaseError = (message) => {
 describe('AuthController - tratamento de erros de banco de dados', () => {
     let app;
 
+    beforeAll(() => {
+        consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         app = createTestApp();
     });
 
+    afterEach(() => {
+        consoleErrorSpy.mockClear();
+    });
+
     afterAll(async () => {
+        consoleErrorSpy.mockRestore();
         await sequelize.close();
     });
 
@@ -50,6 +61,14 @@ describe('AuthController - tratamento de erros de banco de dados', () => {
         expect(response.status).toBe(302);
         expect(response.headers.location).toBe('/login');
         expect(User.findOne).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'Erro ao buscar usuário para login. Execute as migrações do banco antes de tentar novamente'
+            ),
+            expect.objectContaining({
+                message: 'SQLITE_ERROR: no such column: active'
+            })
+        );
 
         const flash = await agent.get('/__test/flash');
         expect(flash.status).toBe(200);
@@ -79,6 +98,14 @@ describe('AuthController - tratamento de erros de banco de dados', () => {
         expect(response.headers.location).toBe('/register');
         expect(User.findOne).toHaveBeenCalledTimes(1);
         expect(User.create).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'Erro ao criar usuário durante o cadastro. Execute as migrações do banco antes de tentar novamente'
+            ),
+            expect.objectContaining({
+                message: 'SQLITE_ERROR: no such column: phone'
+            })
+        );
 
         const flash = await agent.get('/__test/flash');
         expect(flash.status).toBe(200);
