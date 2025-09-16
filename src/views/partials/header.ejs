@@ -24,13 +24,9 @@
     />
     <link rel="stylesheet" href="/css/style.css" />
 </head>
-<body class="app-body">
-<% const userRoleLevel = (user && typeof getRoleLevel === 'function' && user.role)
-    ? getRoleLevel(user.role)
-    : -1;
-   const managerLevel = typeof getRoleLevel === 'function' && roles ? getRoleLevel(roles.MANAGER) : 3;
-   const adminLevel = typeof getRoleLevel === 'function' && roles ? getRoleLevel(roles.ADMIN) : 4;
-%>
+
+<body class="theme-light" data-theme="light">
+
 <div id="appLoader" class="app-loader d-flex align-items-center justify-content-center">
     <div class="text-center">
         <div class="spinner-border text-light" role="status"></div>
@@ -38,6 +34,7 @@
     </div>
 </div>
 
+<div id="appShell" class="app-shell app-body theme-light" data-theme="light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm sticky-top">
     <div class="container-lg">
         <a class="navbar-brand fw-semibold d-flex align-items-center" href="/">
@@ -140,6 +137,18 @@
                         </li>
                     <% } %>
                 <% } %>
+                <li class="nav-item ms-lg-3 mt-3 mt-lg-0">
+                    <button
+                        id="themeToggle"
+                        class="theme-toggle"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="Alternar para tema escuro"
+                    >
+                        <i class="bi bi-moon-stars theme-toggle-icon" id="themeToggleIcon" aria-hidden="true"></i>
+                        <span class="theme-toggle-label d-none d-lg-inline" data-theme-label>Modo escuro</span>
+                    </button>
+                </li>
             </ul>
         </div>
     </div>
