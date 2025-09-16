@@ -1,7 +1,4 @@
 node_modules/
-/tmp/
-*.sqlite
 .env
-.DS_Store
-npm-debug.log*
+*.log
 

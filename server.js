@@ -15,6 +15,7 @@ const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
 // Importa o serviço de notificações
 const { processNotifications } = require('./src/services/notificationService');
+const notificationIndicator = require('./src/middlewares/notificationIndicator');
 
 // Rotas
 const authRoutes = require('./src/routes/authRoutes');
@@ -27,6 +28,7 @@ const appointmentRoutes = require('./src/routes/appointmentRoutes');
 const financeRoutes = require('./src/routes/financeRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const auditRoutes = require('./src/routes/auditRoutes');
+const campaignRoutes = require('./src/routes/campaignRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,6 +113,9 @@ app.use(async (req, res, next) => {
     return next();
 });
 
+// Indicador de notificações no cabeçalho
+app.use(notificationIndicator);
+
 // EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src', 'views'));
@@ -128,6 +133,7 @@ app.use('/rooms', roomRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/finance', financeRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/campaigns', campaignRoutes);
 app.use('/audit', auditRoutes);
 
 // Conexão DB
