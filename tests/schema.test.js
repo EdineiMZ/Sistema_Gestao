@@ -18,6 +18,7 @@ const migrations = [
   require('../database/migrations/20240906-add-credit-balance-to-users'),
   require('../database/migrations/20240907-add-message-html-to-notifications'),
   require('../database/migrations/20240908-convert-user-role-to-enum'),
+  require('../database/migrations/20240909-add-status-and-previewtext-to-notifications'),
 ];
 
 (async () => {
@@ -139,7 +140,46 @@ const migrations = [
       throw new Error('Coluna "scheduledAt" não encontrada na tabela Notifications.');
     }
 
-    console.log('Verificação das colunas creditBalance, messageHtml e scheduledAt concluída com sucesso.');
+    if (!notificationsTable.status) {
+      throw new Error('Coluna "status" não encontrada na tabela Notifications.');
+    }
+
+    if (notificationsTable.status.allowNull) {
+      throw new Error('Coluna "status" deveria ser NOT NULL.');
+    }
+
+    const rawStatusDefault = notificationsTable.status.defaultValue;
+    const normalizedStatusDefault = typeof rawStatusDefault === 'string'
+      ? rawStatusDefault.replace(/['"`]/g, '')
+      : rawStatusDefault;
+
+    if (normalizedStatusDefault !== 'draft') {
+      throw new Error('Valor padrão da coluna "status" deveria ser "draft".');
+    }
+
+    const statusType = (notificationsTable.status.type || '').toLowerCase();
+    if (!statusType.includes('char') && !statusType.includes('string') && !statusType.includes('text')) {
+      throw new Error('Tipo da coluna "status" deveria ser textual.');
+    }
+
+    if (!notificationsTable.previewText) {
+      throw new Error('Coluna "previewText" não encontrada na tabela Notifications.');
+    }
+
+    if (notificationsTable.previewText.allowNull === false) {
+      throw new Error('Coluna "previewText" deveria permitir valores nulos.');
+    }
+
+    const previewType = (notificationsTable.previewText.type || '').toLowerCase();
+    if (!previewType.includes('char') && !previewType.includes('string')) {
+      throw new Error('Tipo da coluna "previewText" deveria ser textual.');
+    }
+
+    if (!previewType.includes('120')) {
+      throw new Error('Campo "previewText" deveria limitar o tamanho para 120 caracteres.');
+    }
+
+    console.log('Verificação das colunas creditBalance, messageHtml, scheduledAt, status e previewText concluída com sucesso.');
   } catch (error) {
     console.error('Teste de schema falhou:', error);
     process.exitCode = 1;
