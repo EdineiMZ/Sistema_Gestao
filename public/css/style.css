@@ -15,17 +15,27 @@
     box-sizing: border-box;
 }
 
-body,
-.app-body {
+body {
     font-family: 'Poppins', sans-serif;
+    background: var(--surface-100);
+    margin: 0;
+}
+
+.app-body {
     background: radial-gradient(circle at top left, rgba(67, 97, 238, 0.12), transparent 45%),
         radial-gradient(circle at bottom right, rgba(246, 182, 255, 0.18), transparent 40%),
         var(--surface-100);
     color: var(--text-color);
     min-height: 100vh;
-    margin: 0;
     display: flex;
     flex-direction: column;
+}
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
 .page-container {
@@ -287,6 +297,224 @@ legend.scheduler-border {
     padding: 0 0.65rem;
     width: auto;
     color: var(--brand-primary-dark);
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8f9ff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.55);
+    color: #fff;
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.theme-toggle:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.35);
+}
+
+.theme-toggle .theme-toggle-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.theme-toggle .theme-toggle-label {
+    letter-spacing: 0.01em;
+}
+
+body.theme-dark {
+    background: #0b1120;
+}
+
+.app-shell.theme-dark {
+    --surface-100: #0b1120;
+    --surface-200: #111827;
+    --surface-300: #1f2937;
+    --text-color: #e2e8f0;
+    --muted-color: #94a3b8;
+    --shadow-soft: 0 18px 48px rgba(2, 6, 23, 0.55);
+    background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.18), transparent 45%),
+        radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.12), transparent 40%),
+        #0b1120;
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .theme-toggle {
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(148, 163, 184, 0.45);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .theme-toggle:hover,
+.app-shell.theme-dark .theme-toggle:focus {
+    background: rgba(79, 70, 229, 0.3);
+    border-color: rgba(129, 140, 248, 0.5);
+    color: #fff;
+}
+
+.app-shell.theme-dark .navbar {
+    background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+}
+
+.app-shell.theme-dark .navbar .nav-link {
+    color: rgba(226, 232, 240, 0.85);
+}
+
+.app-shell.theme-dark .navbar .nav-link:hover,
+.app-shell.theme-dark .navbar .nav-link:focus {
+    color: #fff;
+}
+
+.app-shell.theme-dark .navbar .dropdown-menu {
+    background-color: rgba(17, 24, 39, 0.96);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    box-shadow: 0 22px 45px rgba(2, 6, 23, 0.6);
+}
+
+.app-shell.theme-dark .navbar .dropdown-item {
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .navbar .dropdown-item:hover,
+.app-shell.theme-dark .navbar .dropdown-item:focus {
+    background-color: rgba(79, 70, 229, 0.25);
+    color: #fff;
+}
+
+.app-shell.theme-dark .navbar .dropdown-divider {
+    border-color: rgba(148, 163, 184, 0.2);
+}
+
+.app-shell.theme-dark .card-soft,
+.app-shell.theme-dark .step-card {
+    background: rgba(17, 24, 39, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    color: var(--text-color);
+    box-shadow: var(--shadow-soft);
+}
+
+.app-shell.theme-dark .card-soft:hover,
+.app-shell.theme-dark .step-card:hover {
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.6);
+}
+
+.app-shell.theme-dark .section-title {
+    color: #a5b4fc;
+}
+
+.app-shell.theme-dark .lead-hero {
+    color: var(--muted-color);
+}
+
+.app-shell.theme-dark .text-muted {
+    color: var(--muted-color) !important;
+}
+
+.app-shell.theme-dark .app-footer {
+    background: linear-gradient(135deg, #1e1b4b 0%, #0b1120 100%);
+}
+
+.app-shell.theme-dark .table-modern {
+    box-shadow: var(--shadow-soft);
+}
+
+.app-shell.theme-dark .table-modern thead {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.85), rgba(99, 102, 241, 0.85));
+}
+
+.app-shell.theme-dark .table-modern tbody tr:hover {
+    background: rgba(79, 70, 229, 0.18);
+}
+
+.app-shell.theme-dark .table {
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .form-control,
+.app-shell.theme-dark .form-select {
+    background-color: rgba(15, 23, 42, 0.75);
+    border-color: rgba(148, 163, 184, 0.25);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .form-control::placeholder {
+    color: #64748b;
+}
+
+.app-shell.theme-dark .form-control:focus,
+.app-shell.theme-dark .form-select:focus {
+    border-color: rgba(99, 102, 241, 0.7);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+    background-color: rgba(15, 23, 42, 0.85);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .modal-content {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.app-shell.theme-dark .modal-header {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.85), rgba(37, 99, 235, 0.85));
+}
+
+.app-shell.theme-dark .modal-footer {
+    background: rgba(17, 24, 39, 0.92);
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.app-shell.theme-dark .alert-auto {
+    background: rgba(17, 24, 39, 0.92);
+    border: 1px solid rgba(79, 70, 229, 0.25);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .badge-soft {
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark .badge-soft-success {
+    background: rgba(34, 197, 94, 0.18);
+    color: #34d399;
+}
+
+.app-shell.theme-dark .badge-soft-warning {
+    background: rgba(250, 204, 21, 0.18);
+    color: #facc15;
+}
+
+.app-shell.theme-dark .badge-soft-danger {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+}
+
+.app-shell.theme-dark .app-chip,
+.app-shell.theme-dark .app-filter-tag {
+    background: rgba(79, 70, 229, 0.2);
+    color: #c7d2fe;
+}
+
+.app-shell.theme-dark fieldset.scheduler-border {
+    border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+.app-shell.theme-dark legend.scheduler-border {
+    color: #c7d2fe;
 }
 
 @media (max-width: 991px) {
