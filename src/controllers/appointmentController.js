@@ -3,6 +3,7 @@ const { Appointment, User, Room, Procedure } = require('../../database/models');
 const { Op } = require('sequelize');
 const { buildQueryFilters } = require('../utils/queryBuilder');
 
+
 module.exports = {
     // Lista agendamentos
     listAppointments: async (req, res) => {
@@ -54,9 +55,9 @@ module.exports = {
     // Form de criação
     showCreate: async (req, res) => {
         try {
-            // Filtra somente role>1 => profissionais
+            // Filtra usuários com perfil profissional
             const professionals = await User.findAll({
-                where: { role: { [Op.gt]: 1 } }
+                where: { role: { [Op.in]: PROFESSIONAL_ROLES } }
             });
             const rooms = await Room.findAll({ where: { active: true } });
             const procedures = await Procedure.findAll({ where: { active: true } });
@@ -150,7 +151,7 @@ module.exports = {
                 return res.redirect('/appointments');
             }
 
-            const professionals = await User.findAll({ where: { role: { [Op.gt]: 1 } } });
+            const professionals = await User.findAll({ where: { role: { [Op.in]: PROFESSIONAL_ROLES } } });
             const rooms = await Room.findAll({ where: { active: true } });
             const procedures = await Procedure.findAll({ where: { active: true } });
 

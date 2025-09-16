@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         professionalId: {
             type: DataTypes.INTEGER,
-            allowNull: false // usuário profissional (role>1)
+            allowNull: false // usuário profissional (especialista ou superior)
         },
         // Novo campo para cliente
         clientEmail: {

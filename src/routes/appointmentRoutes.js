@@ -18,18 +18,19 @@ router.get(
     ...appointmentFiltersValidation,
     appointmentController.listAppointments
 );
+
 // nova rota p/ tela de criar
-router.get('/create', authMiddleware, permissionMiddleware(2), appointmentController.showCreate);
-router.post('/create', authMiddleware, permissionMiddleware(2), appointmentController.createAppointment);
+router.get('/create', authMiddleware, authorize('specialist'), appointmentController.showCreate);
+router.post('/create', authMiddleware, authorize('specialist'), appointmentController.createAppointment);
 
 // rota p/ tela de edição
-router.get('/edit/:id', authMiddleware, permissionMiddleware(2), appointmentController.showEdit);
-router.put('/update/:id', authMiddleware, permissionMiddleware(2), appointmentController.updateAppointment);
+router.get('/edit/:id', authMiddleware, authorize('specialist'), appointmentController.showEdit);
+router.put('/update/:id', authMiddleware, authorize('specialist'), appointmentController.updateAppointment);
 
-router.delete('/delete/:id', authMiddleware, permissionMiddleware(2), appointmentController.deleteAppointment);
+router.delete('/delete/:id', authMiddleware, authorize('specialist'), appointmentController.deleteAppointment);
 
 // Calendário gigante
-router.get('/calendar', authMiddleware, permissionMiddleware(2), appointmentController.showCalendar);
-router.get('/api/events', authMiddleware, permissionMiddleware(2), appointmentController.apiEvents);
+router.get('/calendar', authMiddleware, authorize('specialist'), appointmentController.showCalendar);
+router.get('/api/events', authMiddleware, authorize('specialist'), appointmentController.apiEvents);
 
 module.exports = router;

@@ -22,11 +22,12 @@ router.get(
     userController.manageUsers
 );
 
+
 // Upload da imagem no create e update
 router.post(
     '/create',
     authMiddleware,
-    permissionMiddleware(4),
+    authorize('admin'),
     upload.single('profileImage'),
     userController.createUser
 );
@@ -34,7 +35,7 @@ router.post(
 router.put(
     '/update/:id',
     authMiddleware,
-    permissionMiddleware(4),
+    authorize('admin'),
     upload.single('profileImage'),
     userController.updateUser
 );
@@ -42,7 +43,7 @@ router.put(
 router.delete(
     '/delete/:id',
     authMiddleware,
-    permissionMiddleware(4),
+    authorize('admin'),
     userController.deleteUser
 );
 

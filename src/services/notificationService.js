@@ -2,6 +2,7 @@
 const { Notification, User, Appointment, Procedure, Room, sequelize } = require('../../database/models');
 const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
+const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
 const { Op } = require('sequelize');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
@@ -39,7 +40,15 @@ const buildUserWhere = (filters = {}) => {
     }
 
     if (Array.isArray(filters.targetRoles) && filters.targetRoles.length) {
-        where.role = { [Op.in]: filters.targetRoles };
+        const roles = sortRolesByHierarchy(
+            filters.targetRoles
+                .map((role) => parseRole(role, null))
+                .filter(Boolean)
+        );
+
+        if (roles.length) {
+            where.role = { [Op.in]: roles };
+        }
     }
 
     if (typeof filters.minimumCreditBalance === 'number') {
@@ -237,7 +246,7 @@ async function processAppointmentNotification(notif) {
             const pseudoUser = {
                 name: appointment.clientEmail.split('@')[0],
                 email: appointment.clientEmail,
-                role: 0
+                role: USER_ROLES.CLIENT
             };
             const payload = buildEmailPayload(notif, pseudoUser, appointment, {
                 fallbackName: pseudoUser.name
