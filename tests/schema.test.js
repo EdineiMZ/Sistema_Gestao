@@ -19,6 +19,7 @@ const migrations = [
   require('../database/migrations/20240907-add-message-html-to-notifications'),
   require('../database/migrations/20240908-convert-user-role-to-enum'),
   require('../database/migrations/20240909-add-status-and-previewtext-to-notifications'),
+  require('../database/migrations/20240911-fix-accent-color-on-notifications'),
 ];
 
 (async () => {
@@ -179,7 +180,29 @@ const migrations = [
       throw new Error('Campo "previewText" deveria limitar o tamanho para 120 caracteres.');
     }
 
-    console.log('Verificação das colunas creditBalance, messageHtml, scheduledAt, status e previewText concluída com sucesso.');
+    if (!notificationsTable.accentColor) {
+      throw new Error('Coluna "accentColor" não encontrada na tabela Notifications.');
+    }
+
+    if (notificationsTable.accentColor.allowNull) {
+      throw new Error('Coluna "accentColor" deveria ser NOT NULL.');
+    }
+
+    const accentDefault = notificationsTable.accentColor.defaultValue;
+    const normalizedAccentDefault = typeof accentDefault === 'string'
+      ? accentDefault.replace(/['"`]/g, '')
+      : accentDefault;
+
+    if (normalizedAccentDefault !== '#0d6efd') {
+      throw new Error('Valor padrão da coluna "accentColor" deveria ser "#0d6efd".');
+    }
+
+    const accentType = (notificationsTable.accentColor.type || '').toLowerCase();
+    if (!accentType.includes('char') && !accentType.includes('string') && !accentType.includes('text')) {
+      throw new Error('Tipo da coluna "accentColor" deveria ser textual.');
+    }
+
+    console.log('Verificação das colunas creditBalance, messageHtml, scheduledAt, status, previewText e accentColor concluída com sucesso.');
   } catch (error) {
     console.error('Teste de schema falhou:', error);
     process.exitCode = 1;
