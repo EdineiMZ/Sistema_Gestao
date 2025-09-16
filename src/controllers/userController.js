@@ -1,7 +1,6 @@
 // src/controllers/userController.js
 const { User } = require('../../database/models');
 const { Op } = require('sequelize');
-const bcrypt = require('bcrypt');
 const { buildQueryFilters } = require('../utils/queryBuilder');
 
 

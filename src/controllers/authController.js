@@ -1,6 +1,6 @@
 // src/controllers/authController.js
 const { User } = require('../../database/models');
-const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
 const { USER_ROLES } = require('../constants/roles');
 
 module.exports = {
@@ -22,7 +22,10 @@ module.exports = {
                 req.flash('error_msg', 'Usuário não encontrado ou inativo.');
                 return res.redirect('/login');
             }
-            const match = await bcrypt.compare(password, user.password);
+            const match = await argon2.verify(user.password, password).catch((error) => {
+                console.error('Falha ao verificar hash Argon2:', error);
+                return false;
+            });
             if (!match) {
                 req.flash('error_msg', 'Senha incorreta.');
                 return res.redirect('/login');
