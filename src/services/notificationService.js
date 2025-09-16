@@ -415,11 +415,15 @@ async function processCustomNotification(notif) {
     const hasAdvancedFilters = Object.keys(filters).some((key) => !['onlyActive', 'includeProfessional', 'includeClient'].includes(key));
 
     if (notif.sendToAll || hasAdvancedFilters) {
-        const where = buildUserWhere(filters, preferenceOptions);
-        const users = await User.findAll({
+        const { where, order } = buildUserWhere(filters, preferenceOptions);
+        const queryOptions = {
             where,
             include: [userPreferenceInclude]
-        });
+        };
+        if (order?.length) {
+            queryOptions.order = order;
+        }
+        const users = await User.findAll(queryOptions);
         users.forEach(enqueueUser);
     }
 
