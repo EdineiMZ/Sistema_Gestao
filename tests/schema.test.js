@@ -14,6 +14,7 @@ const queryInterface = sequelize.getQueryInterface();
 const migrations = [
   require('../database/migrations/20240906-add-credit-balance-to-users'),
   require('../database/migrations/20240907-add-message-html-to-notifications'),
+  require('../database/migrations/20240908-add-scheduled-at-to-notifications'),
 ];
 
 (async () => {
@@ -83,7 +84,19 @@ const migrations = [
       throw new Error('Coluna "messageHtml" não encontrada na tabela Notifications.');
     }
 
-    console.log('Verificação das colunas creditBalance e messageHtml concluída com sucesso.');
+    if (notificationsTable.messageHtml.allowNull !== true) {
+      throw new Error('Coluna "messageHtml" deveria permitir valores nulos.');
+    }
+
+    if (!notificationsTable.scheduledAt) {
+      throw new Error('Coluna "scheduledAt" não encontrada na tabela Notifications.');
+    }
+
+    if (notificationsTable.scheduledAt.allowNull !== true) {
+      throw new Error('Coluna "scheduledAt" deveria permitir valores nulos.');
+    }
+
+    console.log('Verificação das colunas creditBalance, messageHtml e scheduledAt concluída com sucesso.');
   } catch (error) {
     console.error('Teste de schema falhou:', error);
     process.exitCode = 1;
