@@ -1,6 +1,350 @@
 <%- include('../partials/header') %>
 
-<h1>Página Sobre</h1>
-<p>Algum conteúdo...</p>
+<% const heroTitle = pageTitle || 'Contato'; %>
+<% const heroDescription =
+    pageDescription ||
+    'Estamos sempre à disposição para apoiar a sua equipe. Escolha o canal ideal e receba retorno em poucos minutos.'; %>
+
+<section class="py-5 hero-blur">
+    <div class="container-lg">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-7">
+                <span class="app-chip text-uppercase">Relacionamento com o cliente</span>
+                <h1 class="display-5 fw-semibold mt-3 text-gradient"><%= heroTitle %></h1>
+                <p class="lead-hero mb-4"><%= heroDescription %></p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a class="btn btn-gradient" href="mailto:suporte@sistemagestao.com">
+                        <i class="bi bi-envelope-open me-2"></i>
+                        suporte@sistemagestao.com
+                    </a>
+                    <a class="btn btn-soft" href="tel:+551130000000">
+                        <i class="bi bi-telephone-outbound me-2"></i>
+                        +55 (11) 3000-0000
+                    </a>
+                </div>
+                <ul class="list-unstyled d-flex flex-wrap gap-4 mt-4 mb-0">
+                    <li class="d-flex align-items-center gap-2">
+                        <i class="bi bi-shield-lock-fill text-success"></i>
+                        Atendimento monitorado e seguro
+                    </li>
+                    <li class="d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history text-success"></i>
+                        SLA médio de 30 minutos
+                    </li>
+                </ul>
+            </div>
+            <div class="col-lg-5">
+                <div class="card-soft p-4 h-100">
+                    <h2 class="h4 fw-semibold mb-3">Precisou, respondemos.</h2>
+                    <p class="text-muted mb-4">
+                        Acompanhe cada chamado em tempo real pelo painel, receba notificações automáticas e mantenha sua operação sempre em movimento.
+                    </p>
+                    <div class="d-flex flex-column gap-3">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-3">
+                                <i class="bi bi-chat-dots-fill fs-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Chat inteligente integrado</h3>
+                                <p class="text-muted mb-0">Histórico completo de atendimentos com filtros avançados para auditoria e compliance.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="bg-success bg-opacity-10 text-success rounded-3 p-3">
+                                <i class="bi bi-lightning-charge-fill fs-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Escalonamento automático</h3>
+                                <p class="text-muted mb-0">Chamados críticos são encaminhados para especialistas conforme regras de prioridade.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="bg-danger bg-opacity-10 text-danger rounded-3 p-3">
+                                <i class="bi bi-geo-alt-fill fs-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Atendimento híbrido</h3>
+                                <p class="text-muted mb-0">Consultores certificados disponíveis para visitas presenciais e suporte remoto avançado.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row row-cols-1 row-cols-lg-3 g-4">
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-primary bg-opacity-10 text-primary fw-semibold mb-3">E-mail prioritário</span>
+                    <h3 class="h5 fw-semibold">Equipe especializada 24/7</h3>
+                    <p class="text-muted">
+                        Gere chamados diretamente do sistema ou envie anexos sensíveis pelo canal criptografado de suporte.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Triagem em até 15 minutos úteis.
+                        </li>
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Classificação automática por criticidade e produto.
+                        </li>
+                        <li class="d-flex align-items-center gap-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Relatórios semanais de desempenho enviados ao gestor.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-success bg-opacity-10 text-success fw-semibold mb-3">Telefone &amp; WhatsApp</span>
+                    <h3 class="h5 fw-semibold">Suporte humanizado em tempo real</h3>
+                    <p class="text-muted">
+                        Conecte-se com analistas certificados para orientações rápidas, onboarding guiado e resolução de incidentes urgentes.
+                    </p>
+                    <div class="d-flex flex-column gap-2 small text-muted">
+                        <a class="text-decoration-none" href="tel:+551130000000">
+                            <i class="bi bi-telephone-fill text-success me-2"></i>
+                            +55 (11) 3000-0000
+                        </a>
+                        <a class="text-decoration-none" href="https://wa.me/5511988887777" target="_blank" rel="noopener">
+                            <i class="bi bi-whatsapp text-success me-2"></i>
+                            Canal corporativo com autenticação em dois fatores
+                        </a>
+                        <p class="mb-0">
+                            <i class="bi bi-calendar-week text-success me-2"></i>
+                            Plantão especial para janelas de manutenção críticas.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-info bg-opacity-10 text-info fw-semibold mb-3">Central de conhecimento</span>
+                    <h3 class="h5 fw-semibold">Academia de sucesso do cliente</h3>
+                    <p class="text-muted">
+                        Acesse tutoriais interativos, trilhas de capacitação e indicadores de adoção da plataforma.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-journal-code text-info"></i>
+                            Biblioteca de integrações com APIs e webhooks.
+                        </li>
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-person-video3 text-info"></i>
+                            Workshops mensais com especialistas em compliance.
+                        </li>
+                        <li class="d-flex align-items-center gap-2">
+                            <i class="bi bi-activity text-info"></i>
+                            Indicadores de maturidade e benchmark do seu time.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="pb-5">
+    <div class="container-lg">
+        <div class="row g-4 align-items-stretch">
+            <div class="col-lg-6">
+                <div class="card-soft h-100 p-4">
+                    <h2 class="h4 fw-semibold mb-3">Horários de atendimento</h2>
+                    <p class="text-muted">
+                        Nosso time opera em múltiplos fusos horários para garantir respostas rápidas independentemente da sua localização.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-4">
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-calendar-check text-primary"></i>
+                            Segunda a sexta • 08h às 20h (BRT)
+                        </li>
+                        <li class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-calendar4-week text-primary"></i>
+                            Sábados • 09h às 14h para operações críticas
+                        </li>
+                        <li class="d-flex align-items-center gap-2">
+                            <i class="bi bi-activity text-primary"></i>
+                            Monitoramento proativo 24/7 para incidentes de alta severidade
+                        </li>
+                    </ul>
+                    <div class="bg-primary bg-opacity-10 rounded-4 p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-shield-check text-primary fs-3"></i>
+                        <div class="text-muted small">
+                            Certificações ISO 27001 e LGPD-ready com auditoria anual independente.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card-soft h-100 p-4">
+                    <h2 class="h4 fw-semibold mb-3">Abra um chamado em poucos passos</h2>
+                    <ol class="list-unstyled mb-4">
+                        <li class="d-flex align-items-start gap-3 mb-3">
+                            <span class="badge rounded-pill text-bg-primary fw-semibold">1</span>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Defina a categoria correta</h3>
+                                <p class="text-muted mb-0">Seja orientado pelo assistente inteligente para direcionar o chamado ao time ideal.</p>
+                            </div>
+                        </li>
+                        <li class="d-flex align-items-start gap-3 mb-3">
+                            <span class="badge rounded-pill text-bg-primary fw-semibold">2</span>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Adicione contexto e anexos</h3>
+                                <p class="text-muted mb-0">Envie logs, prints ou arquivos com criptografia ponta a ponta diretamente pelo sistema.</p>
+                            </div>
+                        </li>
+                        <li class="d-flex align-items-start gap-3">
+                            <span class="badge rounded-pill text-bg-primary fw-semibold">3</span>
+                            <div>
+                                <h3 class="h6 fw-semibold mb-1">Acompanhe pelo painel</h3>
+                                <p class="text-muted mb-0">Receba notificações automáticas, confirme a solução e avalie o atendimento.</p>
+                            </div>
+                        </li>
+                    </ol>
+                    <div class="d-flex flex-wrap gap-3">
+                        <a class="btn btn-gradient" href="/support/tickets" role="button">Abrir chamado agora</a>
+                        <a class="btn btn-soft" href="/pages/terms">Consultar políticas de atendimento</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <span class="app-chip">Dúvidas frequentes</span>
+                <h2 class="section-title mt-3">Orientações rápidas</h2>
+                <p class="text-muted">
+                    Reunimos as principais respostas para agilizar a comunicação com nosso time. Caso não encontre o que precisa, nossos especialistas assumem a conversa imediatamente.
+                </p>
+                <div class="card-soft p-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <i class="bi bi-headset text-primary fs-3"></i>
+                        <div class="small text-muted">
+                            <strong class="d-block text-dark">Suporte premium incluso</strong>
+                            Contas enterprise contam com gerente dedicado, reuniões trimestrais de sucesso e planos de evolução personalizados.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="accordion" id="contactFaq">
+                    <div class="accordion-item border-0 mb-3 shadow-sm">
+                        <h2 class="accordion-header" id="faqOne">
+                            <button
+                                class="accordion-button"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#faqOneCollapse"
+                                aria-expanded="true"
+                                aria-controls="faqOneCollapse"
+                            >
+                                Qual o prazo médio para solução de chamados críticos?
+                            </button>
+                        </h2>
+                        <div
+                            id="faqOneCollapse"
+                            class="accordion-collapse collapse show"
+                            aria-labelledby="faqOne"
+                            data-bs-parent="#contactFaq"
+                        >
+                            <div class="accordion-body text-muted">
+                                Em média 90 minutos. Incidentes classificados como severidade P1 ativam o plano de contingência com acompanhamento do gerente técnico responsável.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item border-0 mb-3 shadow-sm">
+                        <h2 class="accordion-header" id="faqTwo">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#faqTwoCollapse"
+                                aria-expanded="false"
+                                aria-controls="faqTwoCollapse"
+                            >
+                                Como funciona o suporte fora do horário comercial?
+                            </button>
+                        </h2>
+                        <div
+                            id="faqTwoCollapse"
+                            class="accordion-collapse collapse"
+                            aria-labelledby="faqTwo"
+                            data-bs-parent="#contactFaq"
+                        >
+                            <div class="accordion-body text-muted">
+                                Mantemos equipe de plantão para atender manutenções planejadas, integrações sensíveis e respostas a incidentes críticos 24 horas por dia.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item border-0 mb-3 shadow-sm">
+                        <h2 class="accordion-header" id="faqThree">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#faqThreeCollapse"
+                                aria-expanded="false"
+                                aria-controls="faqThreeCollapse"
+                            >
+                                Existe canal exclusivo para gestores da conta?
+                            </button>
+                        </h2>
+                        <div
+                            id="faqThreeCollapse"
+                            class="accordion-collapse collapse"
+                            aria-labelledby="faqThree"
+                            data-bs-parent="#contactFaq"
+                        >
+                            <div class="accordion-body text-muted">
+                                Sim. Clientes enterprise contam com gerente de sucesso dedicado, reuniões estratégicas trimestrais e relatórios executivos customizados.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item border-0 shadow-sm">
+                        <h2 class="accordion-header" id="faqFour">
+                            <button
+                                class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#faqFourCollapse"
+                                aria-expanded="false"
+                                aria-controls="faqFourCollapse"
+                            >
+                                Quais dados são necessários para abrir um chamado?
+                            </button>
+                        </h2>
+                        <div
+                            id="faqFourCollapse"
+                            class="accordion-collapse collapse"
+                            aria-labelledby="faqFour"
+                            data-bs-parent="#contactFaq"
+                        >
+                            <div class="accordion-body text-muted">
+                                Informe o módulo impactado, horário do incidente, logs anexados (quando disponíveis) e uma breve descrição do impacto. Nosso time analisa em segundos com apoio de IA.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-5">
+            <p class="lead-hero mb-4">Preferimos resolver na primeira interação. Se algo estiver impedindo sua operação, sinalize com prioridade máxima.</p>
+            <a class="btn btn-gradient" href="mailto:suporte@sistemagestao.com?subject=Atendimento%20prioritário">
+                <i class="bi bi-lightning-fill me-2"></i>
+                Solicitar atendimento prioritário
+            </a>
+        </div>
+    </div>
+</section>
 
 <%- include('../partials/footer') %>

@@ -4,6 +4,15 @@
     <div class="container-lg text-center small">
         <p class="mb-1">&copy; <%= new Date().getFullYear() %> <%= appName || 'ES Developers' %>. Todos os direitos reservados.</p>
         <p class="mb-0 text-white-50">Protegemos seus dados com as melhores práticas de segurança.</p>
+        <% if (user) { %>
+            <div class="d-flex flex-wrap gap-3 justify-content-center mt-3">
+                <a class="link-light text-decoration-none" href="/pages/contact">Fale conosco</a>
+                <span class="text-white-50">•</span>
+                <a class="link-light text-decoration-none" href="/pages/sobre">Sobre a plataforma</a>
+                <span class="text-white-50">•</span>
+                <a class="link-light text-decoration-none" href="/pages/terms">Termos de Uso &amp; Privacidade</a>
+            </div>
+        <% } %>
     </div>
 </footer>
 
