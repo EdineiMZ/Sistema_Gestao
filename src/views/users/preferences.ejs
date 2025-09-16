@@ -1,0 +1,104 @@
+<%- include('../partials/header') %>
+
+<% const emailEnabled = !(preference && preference.emailEnabled === false); %>
+<% const scheduledEnabled = !(preference && preference.scheduledEnabled === false); %>
+
+<div class="row justify-content-center py-4 fade-in">
+    <div class="col-xl-7 col-lg-8">
+        <div class="card card-soft p-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                <div>
+                    <h2 class="fw-semibold mb-1">Preferências de notificações</h2>
+                    <p class="text-muted mb-0">Personalize como deseja receber lembretes, campanhas e avisos importantes.</p>
+                </div>
+                <span class="badge-soft badge-soft-primary d-inline-flex align-items-center px-3 py-2">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Seus dados estão protegidos
+                </span>
+            </div>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } else if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <form action="/users/preferences" method="POST" class="row g-4 needs-validation" novalidate>
+                <div class="col-12">
+                    <div class="card border-0 bg-body-tertiary shadow-sm h-100">
+                        <div class="card-body d-flex flex-column gap-3">
+                            <div class="d-flex align-items-center">
+                                <div class="icon icon-lg rounded-circle bg-primary-subtle text-primary me-3">
+                                    <i class="bi bi-envelope-paper-heart"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">Comunicados por e-mail</h5>
+                                    <p class="mb-0 text-muted small">Receba campanhas, novidades e mensagens relevantes da equipe.</p>
+                                </div>
+                            </div>
+                            <div class="form-check form-switch ps-0">
+                                <input
+                                    class="form-check-input ms-3"
+                                    type="checkbox"
+                                    id="userEmailPreference"
+                                    name="notificationEmailEnabled"
+                                    value="true"
+                                    <%= emailEnabled ? 'checked' : '' %>
+                                />
+                                <label class="form-check-label ms-3" for="userEmailPreference">
+                                    Quero continuar recebendo comunicados e dicas por e-mail.
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="card border-0 bg-body-tertiary shadow-sm h-100">
+                        <div class="card-body d-flex flex-column gap-3">
+                            <div class="d-flex align-items-center">
+                                <div class="icon icon-lg rounded-circle bg-success-subtle text-success me-3">
+                                    <i class="bi bi-calendar-event"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">Alertas de agenda</h5>
+                                    <p class="mb-0 text-muted small">Seja avisado sobre novos agendamentos, confirmações e lembretes.</p>
+                                </div>
+                            </div>
+                            <div class="form-check form-switch ps-0">
+                                <input
+                                    class="form-check-input ms-3"
+                                    type="checkbox"
+                                    id="userScheduledPreference"
+                                    name="notificationScheduledEnabled"
+                                    value="true"
+                                    <%= scheduledEnabled ? 'checked' : '' %>
+                                />
+                                <label class="form-check-label ms-3" for="userScheduledPreference">
+                                    Desejo receber lembretes e confirmações de compromissos.
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                        <a class="btn btn-outline-secondary" href="/dashboard">
+                            <i class="bi bi-arrow-left me-2"></i>Voltar para o painel
+                        </a>
+                        <button type="submit" class="btn btn-gradient">
+                            <i class="bi bi-check2-circle me-2"></i>Salvar preferências
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

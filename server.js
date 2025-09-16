@@ -6,15 +6,13 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const methodOverride = require('method-override');
 const path = require('path');
-const cron = require('node-cron'); // para agendamentos de tarefas
-
 const { sequelize, User } = require('./database/models');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
 // Importa o serviço de notificações
-const { processNotifications } = require('./src/services/notificationService');
+const { startWorker } = require('./src/services/notificationWorker');
 const notificationIndicator = require('./src/middlewares/notificationIndicator');
 
 // Rotas
@@ -188,12 +186,13 @@ sequelize
             console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
         });
 
-        // Agendamos a tarefa para rodar a cada 5 minutos
-        // Ajuste o cron pattern conforme necessidade
-        cron.schedule('*/1 * * * *', () => {
-            console.log('Executando processNotifications() a cada 1 minutos...');
-            processNotifications();
-        });
+        if (process.env.NOTIFICATION_WORKER_INLINE === 'true') {
+            try {
+                startWorker({ immediate: true });
+            } catch (workerError) {
+                console.error('Não foi possível iniciar o worker de notificações inline:', workerError);
+            }
+        }
     })
     .catch(err => {
         console.error('Erro ao sincronizar DB:', err);

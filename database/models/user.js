@@ -163,5 +163,14 @@ module.exports = (sequelize, DataTypes) => {
         return this.name.split(' ')[0];
     };
 
+    User.associate = (models) => {
+        User.hasOne(models.UserNotificationPreference, {
+            as: 'notificationPreference',
+            foreignKey: 'userId',
+            onDelete: 'CASCADE',
+            hooks: true
+        });
+    };
+
     return User;
 };

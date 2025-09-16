@@ -1,5 +1,5 @@
 // src/services/notificationService.js
-const { Notification, User, Appointment, Procedure, Room, sequelize } = require('../../database/models');
+const { Notification, User, Appointment, Procedure, Room, UserNotificationPreference, sequelize } = require('../../database/models');
 const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
@@ -7,6 +7,19 @@ const { Op } = require('sequelize');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
+
+const userPreferenceInclude = {
+    model: UserNotificationPreference,
+    as: 'notificationPreference',
+    attributes: ['emailEnabled', 'scheduledEnabled'],
+    required: false
+};
+
+const isEmailOptInEnabled = (user) => user?.notificationPreference?.emailEnabled !== false;
+const isScheduledOptInEnabled = (user) => user?.notificationPreference?.scheduledEnabled !== false;
+const hasRequiredOptIn = (user, { requireScheduledOptIn = false } = {}) => (
+    isEmailOptInEnabled(user) && (!requireScheduledOptIn || isScheduledOptInEnabled(user))
+);
 
 const computeNextTriggerDate = (currentDate, frequency) => {
     const base = currentDate ? new Date(currentDate) : new Date();
@@ -31,9 +44,12 @@ const computeNextTriggerDate = (currentDate, frequency) => {
     return base;
 };
 
-const buildUserWhere = (filters = {}) => {
+const buildUserWhere = (filters = {}, options = {}) => {
     const where = {};
     const andConditions = [];
+    const requireScheduledOptIn = Boolean(
+        options.requireScheduledOptIn ?? filters.requireScheduledOptIn ?? false
+    );
 
     if (filters.onlyActive !== false) {
         where.active = true;
@@ -64,6 +80,26 @@ const buildUserWhere = (filters = {}) => {
             )
         );
     }
+
+    const preferenceConditions = [
+        {
+            [Op.or]: [
+                { '$notificationPreference.emailEnabled$': { [Op.ne]: false } },
+                { '$notificationPreference.emailEnabled$': null }
+            ]
+        }
+    ];
+
+    if (requireScheduledOptIn) {
+        preferenceConditions.push({
+            [Op.or]: [
+                { '$notificationPreference.scheduledEnabled$': { [Op.ne]: false } },
+                { '$notificationPreference.scheduledEnabled$': null }
+            ]
+        });
+    }
+
+    andConditions.push(...preferenceConditions);
 
     if (andConditions.length) {
         where[Op.and] = where[Op.and] ? [...where[Op.and], ...andConditions] : andConditions;
@@ -197,10 +233,13 @@ async function processBirthdayNotification(notif) {
     andConditions.push(sequelize.where(birthdayExpression, today));
     where[Op.and] = andConditions;
 
-    const users = await User.findAll({ where });
+    const users = await User.findAll({
+        where,
+        include: [userPreferenceInclude]
+    });
 
     for (const user of users) {
-        if (!user.email) continue;
+        if (!user.email || !hasRequiredOptIn(user)) continue;
         const payload = buildEmailPayload(notif, user, null);
         await sendEmail(user.email, payload.subject, payload.options);
     }
@@ -263,7 +302,11 @@ async function processAppointmentNotification(notif) {
     const appointments = await Appointment.findAll({
         where,
         include: [
-            { model: User, as: 'professional' },
+            {
+                model: User,
+                as: 'professional',
+                include: [userPreferenceInclude]
+            },
             { model: Procedure, as: 'procedure' },
             { model: Room, as: 'room' }
         ]
@@ -288,6 +331,9 @@ async function processAppointmentNotification(notif) {
             if (filters.onlyActive !== false && professional.active === false) {
                 continue;
             }
+            if (!hasRequiredOptIn(professional, { requireScheduledOptIn: true })) {
+                continue;
+            }
             const payload = buildEmailPayload(notif, professional, appointment);
             await sendEmail(professional.email, payload.subject, payload.options);
         }
@@ -301,10 +347,13 @@ async function processAppointmentNotification(notif) {
  */
 async function processCustomNotification(notif) {
     const filters = getNotificationFilters(notif);
+    const preferenceOptions = {
+        requireScheduledOptIn: Boolean(filters.requireScheduledOptIn)
+    };
     const recipients = new Map();
 
     const enqueueUser = (user) => {
-        if (user && user.email) {
+        if (user && user.email && hasRequiredOptIn(user, preferenceOptions)) {
             recipients.set(user.email, user);
         }
     };
@@ -312,13 +361,18 @@ async function processCustomNotification(notif) {
     const hasAdvancedFilters = Object.keys(filters).some((key) => !['onlyActive', 'includeProfessional', 'includeClient'].includes(key));
 
     if (notif.sendToAll || hasAdvancedFilters) {
-        const where = buildUserWhere(filters);
-        const users = await User.findAll({ where });
+        const where = buildUserWhere(filters, preferenceOptions);
+        const users = await User.findAll({
+            where,
+            include: [userPreferenceInclude]
+        });
         users.forEach(enqueueUser);
     }
 
     if (notif.userId) {
-        const specificUser = await User.findByPk(notif.userId);
+        const specificUser = await User.findByPk(notif.userId, {
+            include: [userPreferenceInclude]
+        });
         if (specificUser) {
             if (filters.onlyActive !== false && specificUser.active === false) {
                 // skip inactive users when filtro exige ativos
@@ -335,11 +389,21 @@ async function processCustomNotification(notif) {
         if (filters.onlyActive !== false && user.active === false) {
             continue;
         }
+        if (!hasRequiredOptIn(user, preferenceOptions)) {
+            continue;
+        }
         const payload = buildEmailPayload(notif, user, null);
         await sendEmail(user.email, payload.subject, payload.options);
     }
 }
 
 module.exports = {
-    processNotifications
+    processNotifications,
+    _internal: {
+        buildUserWhere,
+        processAppointmentNotification,
+        processBirthdayNotification,
+        processCustomNotification,
+        hasRequiredOptIn
+    }
 };
