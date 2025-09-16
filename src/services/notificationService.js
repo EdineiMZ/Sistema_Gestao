@@ -102,12 +102,42 @@ const buildEmailPayload = (notification, user, appointment, extraContext = {}) =
     };
 };
 
+let messageHtmlWarningIssued = false;
+
+const ensureMessageHtmlColumnExists = async () => {
+    const queryInterface = sequelize.getQueryInterface();
+    const columns = await queryInterface.describeTable('Notifications');
+    const hasMessageHtml = Boolean(columns?.messageHtml);
+
+    if (!hasMessageHtml) {
+        if (!messageHtmlWarningIssued) {
+            console.warn(
+                'Aviso: coluna "messageHtml" ausente na tabela "Notifications". ' +
+                'Processamento de notificações interrompido até que a migração seja aplicada.'
+            );
+            messageHtmlWarningIssued = true;
+        }
+        return false;
+    }
+
+    if (messageHtmlWarningIssued) {
+        messageHtmlWarningIssued = false;
+    }
+
+    return true;
+};
+
 /**
  * Processa todas as notificações ativas (não enviadas) que estão agendadas para disparo.
  */
 async function processNotifications() {
     try {
         const now = new Date();
+
+        const hasMessageHtmlColumn = await ensureMessageHtmlColumnExists();
+        if (!hasMessageHtmlColumn) {
+            return;
+        }
 
         // Busca notificações ativas, não enviadas, com triggerDate nulo ou menor ou igual a agora.
         const notifications = await Notification.findAll({

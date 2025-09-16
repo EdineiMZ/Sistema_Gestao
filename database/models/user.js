@@ -1,6 +1,30 @@
 'use strict';
-const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
 const { USER_ROLES, ROLE_ORDER, parseRole } = require('../../src/constants/roles');
+
+const parsePositiveInt = (value, fallback) => {
+    if (value === undefined || value === null || value === '') {
+        return fallback;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const ARGON2_OPTIONS = {
+    type: argon2.argon2id,
+    timeCost: parsePositiveInt(process.env.ARGON2_TIME_COST, 3),
+    memoryCost: parsePositiveInt(process.env.ARGON2_MEMORY_COST, 2 ** 16),
+    parallelism: parsePositiveInt(process.env.ARGON2_PARALLELISM, 1)
+};
+
+const hashPassword = async (user) => {
+    if (!user.password) {
+        throw new Error('Senha é obrigatória.');
+    }
+
+    user.password = await argon2.hash(user.password, ARGON2_OPTIONS);
+};
 
 module.exports = (sequelize, DataTypes) => {
     const User = sequelize.define('User', {
@@ -116,16 +140,11 @@ module.exports = (sequelize, DataTypes) => {
         tableName: 'Users',
         hooks: {
             beforeCreate: async (user) => {
-                if (!user.password) {
-                    throw new Error('Senha é obrigatória.');
-                }
-                const salt = await bcrypt.genSalt(10);
-                user.password = await bcrypt.hash(user.password, salt);
+                await hashPassword(user);
             },
             beforeUpdate: async (user) => {
                 if (user.changed('password')) {
-                    const salt = await bcrypt.genSalt(10);
-                    user.password = await bcrypt.hash(user.password, salt);
+                    await hashPassword(user);
                 }
             }
         },
