@@ -1,86 +1,269 @@
 <%- include('partials/header') %>
 
-<section class="row align-items-center justify-content-between g-5 hero-blur fade-in">
-    <div class="col-lg-6">
-        <% if (success_msg) { %>
-            <div class="alert alert-success alert-auto" role="alert" data-auto-dismiss="6000">
-                <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
-            </div>
-        <% } else if (error_msg) { %>
-            <div class="alert alert-danger alert-auto" role="alert" data-auto-dismiss="6000">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error_msg %>
-            </div>
-        <% } %>
-
-        <span class="app-chip mb-3"><i class="bi bi-stars me-2"></i>Inteligência operacional</span>
-        <h1 class="section-title mb-3">Transforme sua gestão com automações e insights em tempo real.</h1>
-        <p class="lead-hero mb-4">
-            Controle de cadastros, agenda inteligente, notificações personalizadas e finanças em um só lugar.
-            Foco em segurança, desempenho e na melhor experiência para sua equipe e clientes.
-        </p>
-        <div class="d-flex flex-wrap gap-3">
-            <% if (!user) { %>
-                <a href="/register" class="btn btn-gradient">Começar agora</a>
-                <a href="/login" class="btn btn-outline-primary rounded-pill px-4">Já tenho acesso</a>
-            <% } else { %>
-                <a href="/appointments" class="btn btn-gradient">Ir para painel</a>
-                <a href="/notifications" class="btn btn-outline-primary rounded-pill px-4">Automatizar envios</a>
-            <% } %>
-        </div>
+<% if (!user) { %>
+    <div class="landing-cta-floating d-none d-md-flex">
+        <a href="/login" class="btn btn-outline-light shadow-sm">Entrar</a>
+        <a href="/register" class="btn btn-gradient shadow-sm">Criar conta</a>
     </div>
-    <div class="col-lg-5">
-        <div class="card card-soft p-4 shadow-sm">
-            <div class="d-flex align-items-center mb-3">
-                <span class="badge-soft badge-soft-success me-2"><i class="bi bi-shield-lock me-1"></i>Segurança reforçada</span>
-                <span class="badge-soft badge-soft-warning"><i class="bi bi-lightning-charge me-1"></i>Performance</span>
-            </div>
-            <p class="mb-3 text-muted">
-                Monitoramos a saúde da aplicação, criptografamos credenciais sensíveis e aplicamos limites de requisição para proteger sua operação.
+<% } %>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success alert-auto hero-alert" role="alert" data-auto-dismiss="6000">
+        <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
+    </div>
+<% } else if (error_msg) { %>
+    <div class="alert alert-danger alert-auto hero-alert" role="alert" data-auto-dismiss="6000">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error_msg %>
+    </div>
+<% } %>
+
+<section class="landing-hero hero-blur fade-in" id="inicio">
+    <div class="row align-items-center g-5">
+        <div class="col-xl-6">
+            <span class="app-chip mb-3"><i class="bi bi-stars me-2"></i>Inteligência operacional</span>
+            <h1 class="section-title mb-3">Transforme sua gestão com automações e insights em tempo real.</h1>
+            <p class="lead-hero mb-4">
+                Centralize cadastros, agenda inteligente, notificações personalizadas e finanças em uma plataforma
+                robusta. Segurança avançada, performance otimizada e uma experiência moderna para sua equipe e
+                clientes.
             </p>
-            <ul class="list-unstyled mb-0">
-                <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Banco de dados validado com regras robustas</li>
-                <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Mensageria automatizada com filtros inteligentes</li>
-                <li class="mb-0"><i class="bi bi-check-circle text-success me-2"></i>Painéis responsivos com design profissional</li>
-            </ul>
+            <div class="d-flex flex-wrap gap-3 hero-actions">
+                <% if (!user) { %>
+                    <a href="/register" class="btn btn-gradient">Começar agora</a>
+                    <a href="/#solucoes" class="btn btn-soft">Ver soluções</a>
+                <% } else { %>
+                    <a href="/dashboard" class="btn btn-gradient">Ir para dashboard</a>
+                    <a href="/notifications" class="btn btn-soft">Automatizar envios</a>
+                <% } %>
+            </div>
+            <div class="row g-3 hero-metrics mt-4">
+                <div class="col-6 col-sm-4">
+                    <div class="metric-card">
+                        <span class="metric-value">98%</span>
+                        <span class="metric-label">Satisfação dos gestores</span>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4">
+                    <div class="metric-card">
+                        <span class="metric-value">+120</span>
+                        <span class="metric-label">Processos automatizados</span>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4">
+                    <div class="metric-card">
+                        <span class="metric-value">24/7</span>
+                        <span class="metric-label">Monitoramento ativo</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-5 offset-xl-1">
+            <div class="hero-showcase card-soft p-4">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div>
+                        <h5 class="mb-1">Operação em tempo real</h5>
+                        <p class="text-muted mb-0 small">Status consolidado das principais rotinas da sua equipe</p>
+                    </div>
+                    <span class="badge-soft badge-soft-success"><i class="bi bi-shield-lock me-1"></i>Seguro</span>
+                </div>
+                <ul class="list-unstyled mb-4 showcase-list">
+                    <li class="d-flex align-items-start gap-3 mb-3">
+                        <span class="showcase-icon bg-primary-subtle text-primary"><i class="bi bi-calendar2-check"></i></span>
+                        <div>
+                            <h6 class="mb-1">Agenda inteligente</h6>
+                            <p class="text-muted mb-0 small">Regras de horários, confirmação automática e salas otimizadas.</p>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3 mb-3">
+                        <span class="showcase-icon bg-success-subtle text-success"><i class="bi bi-megaphone"></i></span>
+                        <div>
+                            <h6 class="mb-1">Campanhas multicanal</h6>
+                            <p class="text-muted mb-0 small">Envios segmentados com templates responsivos e relatórios claros.</p>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3">
+                        <span class="showcase-icon bg-warning-subtle text-warning"><i class="bi bi-safe2"></i></span>
+                        <div>
+                            <h6 class="mb-1">Finanças protegidas</h6>
+                            <p class="text-muted mb-0 small">Fluxos conciliados, limites de aprovação e auditoria contínua.</p>
+                        </div>
+                    </li>
+                </ul>
+                <div class="showcase-footer">
+                    <div>
+                        <span class="text-muted small">Pronto para escalar sua operação?</span>
+                        <h6 class="mb-0">Ative recursos avançados em minutos.</h6>
+                    </div>
+                    <a href="/register" class="btn btn-outline-primary rounded-pill btn-sm">Solicitar demonstração</a>
+                </div>
+            </div>
         </div>
     </div>
 </section>
 
-<section class="row g-4 mt-4 fade-in">
-    <div class="col-md-4">
-        <div class="step-card h-100">
-            <div class="d-flex align-items-center mb-3">
-                <span class="badge rounded-circle bg-primary-subtle text-primary me-3"><i class="bi bi-calendar2-event"></i></span>
-                <h5 class="mb-0">Agenda inteligente</h5>
+<section class="landing-section fade-in" id="solucoes">
+    <div class="section-heading text-center">
+        <span class="app-chip mb-2"><i class="bi bi-grid me-2"></i>Fluxos completos</span>
+        <h2 class="section-title mb-3">Tudo que sua gestão precisa em um só ambiente</h2>
+        <p class="lead-hero">
+            Da primeira interação ao pós-atendimento, cada etapa foi pensada para entregar precisão, velocidade e
+            segurança ao seu time.
+        </p>
+    </div>
+    <div class="row g-4 mt-2">
+        <div class="col-md-4">
+            <div class="feature-card h-100">
+                <div class="feature-icon bg-primary-subtle text-primary">
+                    <i class="bi bi-people"></i>
+                </div>
+                <h5 class="mb-2">Gestão de cadastros</h5>
+                <p class="text-muted mb-3">Dados centralizados com validações automáticas e histórico completo.</p>
+                <ul class="list-unstyled feature-list mb-0">
+                    <li><i class="bi bi-check-circle-fill"></i>Perfis segmentados por nível de acesso</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Políticas de senha robustas</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Registro de auditoria em cada ação</li>
+                </ul>
             </div>
-            <p class="text-muted mb-3">
-                Centralize agendamentos com controle de salas, profissionais e confirmações de pagamento.
-            </p>
-            <a href="/appointments" class="text-decoration-none">Ver agendamentos <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card h-100">
+                <div class="feature-icon bg-success-subtle text-success">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+                <h5 class="mb-2">Automação de operações</h5>
+                <p class="text-muted mb-3">Orquestração de processos com gatilhos inteligentes e monitoramento.</p>
+                <ul class="list-unstyled feature-list mb-0">
+                    <li><i class="bi bi-check-circle-fill"></i>Fluxos configuráveis por cenário</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Alertas proativos para o time</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Integrações prontas com agenda e salas</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card h-100">
+                <div class="feature-icon bg-warning-subtle text-warning">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+                <h5 class="mb-2">Resultados mensuráveis</h5>
+                <p class="text-muted mb-3">Painéis responsivos com indicadores financeiros e operacionais.</p>
+                <ul class="list-unstyled feature-list mb-0">
+                    <li><i class="bi bi-check-circle-fill"></i>Dashboards customizáveis</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Projeções e comparativos em tempo real</li>
+                    <li><i class="bi bi-check-circle-fill"></i>Exportação segura para análises externas</li>
+                </ul>
+            </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="step-card h-100">
-            <div class="d-flex align-items-center mb-3">
-                <span class="badge rounded-circle bg-success-subtle text-success me-3"><i class="bi bi-envelope-paper"></i></span>
-                <h5 class="mb-0">Notificações personalizadas</h5>
+</section>
+
+<section class="landing-section landing-section-alt fade-in" id="seguranca">
+    <div class="row g-5 align-items-center">
+        <div class="col-lg-5">
+            <div class="card card-soft p-4 mb-4 mb-lg-0">
+                <h3 class="section-title fs-3 mb-3">Segurança e confiabilidade em primeiro lugar</h3>
+                <p class="text-muted mb-0">
+                    Camadas de proteção, monitoramento contínuo e boas práticas implementadas de ponta a ponta para
+                    garantir integridade e disponibilidade da sua operação.
+                </p>
             </div>
-            <p class="text-muted mb-3">
-                Cadastre mensagens ricas, agende envios e aplique filtros por perfil, crédito e status de agendamento.
-            </p>
-            <a href="/notifications" class="text-decoration-none">Automatizar envios <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+        <div class="col-lg-7">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="security-card h-100">
+                        <span class="security-icon bg-primary-subtle text-primary"><i class="bi bi-shield-lock"></i></span>
+                        <h6 class="mb-2">Criptografia avançada</h6>
+                        <p class="text-muted mb-0">Senhas protegidas com Argon2 e políticas fortes de autenticação.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="security-card h-100">
+                        <span class="security-icon bg-success-subtle text-success"><i class="bi bi-hdd-network"></i></span>
+                        <h6 class="mb-2">Infra preparada para escala</h6>
+                        <p class="text-muted mb-0">Rate limit, proteção contra ataques e monitoramento 24/7.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="security-card h-100">
+                        <span class="security-icon bg-warning-subtle text-warning"><i class="bi bi-journal-check"></i></span>
+                        <h6 class="mb-2">Auditoria completa</h6>
+                        <p class="text-muted mb-0">Rastreabilidade de ações críticas para conformidade e governança.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="security-card h-100">
+                        <span class="security-icon bg-danger-subtle text-danger"><i class="bi bi-person-lock"></i></span>
+                        <h6 class="mb-2">Gestão de acessos</h6>
+                        <p class="text-muted mb-0">Perfis por hierarquia e autorização granular por módulo.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="step-card h-100">
-            <div class="d-flex align-items-center mb-3">
-                <span class="badge rounded-circle bg-warning-subtle text-warning me-3"><i class="bi bi-bar-chart-line"></i></span>
-                <h5 class="mb-0">Governança financeira</h5>
+</section>
+
+<section class="landing-section fade-in" id="recursos">
+    <div class="section-heading text-center">
+        <span class="app-chip mb-2"><i class="bi bi-lightning-charge me-2"></i>Recursos estratégicos</span>
+        <h2 class="section-title mb-3">Uma jornada integrada para equipes de alta performance</h2>
+        <p class="lead-hero">
+            Mapear oportunidades, engajar clientes e acompanhar resultados nunca foi tão simples. Veja como a plataforma
+            conduz cada etapa.
+        </p>
+    </div>
+    <div class="row g-4 mt-2">
+        <div class="col-lg-4">
+            <div class="journey-step h-100">
+                <span class="journey-index">1</span>
+                <h5>Diagnóstico e onboarding</h5>
+                <p class="text-muted">Importação assistida de dados, verificação de integridade e configuração guiada.</p>
+                <ul class="list-unstyled journey-list mb-0">
+                    <li><i class="bi bi-check-circle"></i>Templates prontos por segmento</li>
+                    <li><i class="bi bi-check-circle"></i>Checklist de segurança inicial</li>
+                </ul>
             </div>
-            <p class="text-muted mb-3">
-                Acompanhe receitas, despesas e recorrências com consistência de dados e validações aprimoradas.
-            </p>
-            <a href="/finance" class="text-decoration-none">Explorar finanças <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+        <div class="col-lg-4">
+            <div class="journey-step h-100">
+                <span class="journey-index">2</span>
+                <h5>Operação contínua</h5>
+                <p class="text-muted">Automatize fluxos, acione alertas e mantenha o time focado no que importa.</p>
+                <ul class="list-unstyled journey-list mb-0">
+                    <li><i class="bi bi-check-circle"></i>Workflows com aprovações hierárquicas</li>
+                    <li><i class="bi bi-check-circle"></i>Módulos conectados em tempo real</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="journey-step h-100">
+                <span class="journey-index">3</span>
+                <h5>Análise e evolução</h5>
+                <p class="text-muted">Insights automáticos, métricas comparativas e recomendações acionáveis.</p>
+                <ul class="list-unstyled journey-list mb-0">
+                    <li><i class="bi bi-check-circle"></i>Relatórios executivos em um clique</li>
+                    <li><i class="bi bi-check-circle"></i>Metas acompanhadas continuamente</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="landing-section landing-cta text-center fade-in">
+    <div class="card card-soft p-5">
+        <span class="app-chip mb-3"><i class="bi bi-rocket-takeoff me-2"></i>Pronto para o próximo nível</span>
+        <h2 class="section-title mb-3">Impulsione sua operação com uma plataforma confiável</h2>
+        <p class="lead-hero mb-4">
+            Equipes de alta performance contam com a nossa infraestrutura para manter processos rodando com segurança e
+            transparência. Faça parte desse movimento.
+        </p>
+        <div class="d-flex flex-column flex-sm-row justify-content-center gap-3">
+            <% if (!user) { %>
+                <a href="/register" class="btn btn-gradient px-4">Criar minha conta</a>
+                <a href="/login" class="btn btn-soft px-4">Já sou cliente</a>
+            <% } else { %>
+                <a href="/dashboard" class="btn btn-gradient px-4">Acessar painel</a>
+                <a href="/notifications" class="btn btn-soft px-4">Configurar campanhas</a>
+            <% } %>
         </div>
     </div>
 </section>
