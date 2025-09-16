@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const models = require('../../../database/models');
 const { processNotifications } = require('../notificationService');
 
-const { Notification, sequelize } = models;
+const { Notification, NotificationDispatchLog, sequelize } = models;
 
 test('processNotifications aborta quando coluna messageHtml está ausente', async (t) => {
     let describeCalls = 0;
@@ -23,11 +23,16 @@ test('processNotifications aborta quando coluna messageHtml está ausente', asyn
     sequelize.getQueryInterface = () => queryInterface;
 
     const originalFindAll = Notification.findAll;
+    const originalDispatchFindAll = NotificationDispatchLog.findAll;
+    const originalDispatchCreate = NotificationDispatchLog.create;
     let findAllCalled = false;
     Notification.findAll = async () => {
         findAllCalled = true;
         return [];
     };
+
+    NotificationDispatchLog.findAll = async () => [];
+    NotificationDispatchLog.create = async () => {};
 
     const warnings = [];
     const originalConsoleWarn = console.warn;
@@ -38,6 +43,8 @@ test('processNotifications aborta quando coluna messageHtml está ausente', asyn
     t.after(() => {
         sequelize.getQueryInterface = originalGetQueryInterface;
         Notification.findAll = originalFindAll;
+        NotificationDispatchLog.findAll = originalDispatchFindAll;
+        NotificationDispatchLog.create = originalDispatchCreate;
         console.warn = originalConsoleWarn;
     });
 

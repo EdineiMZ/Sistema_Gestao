@@ -1,6 +1,7 @@
 // src/services/notificationService.js
 const {
     Notification,
+    NotificationDispatchLog,
     User,
     Appointment,
     Procedure,
@@ -8,6 +9,7 @@ const {
     UserNotificationPreference,
     sequelize
 } = require('../../database/models');
+const crypto = require('node:crypto');
 const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
@@ -15,6 +17,197 @@ const { Op } = require('sequelize');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
+
+const normalizeRecipient = (value) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized || null;
+};
+
+const safeDateToISOString = (value) => {
+    if (!value) {
+        return null;
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const safeTimestamp = (value) => {
+    if (!value) {
+        return null;
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    const timestamp = date.getTime();
+    return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const stableStringify = (value) => {
+    if (value === null || value === undefined) {
+        return 'null';
+    }
+
+    if (typeof value === 'string') {
+        return JSON.stringify(value);
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return JSON.stringify(value);
+    }
+
+    if (typeof value === 'bigint') {
+        return value.toString();
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+    }
+
+    if (typeof value === 'object') {
+        const keys = Object.keys(value).sort();
+        const serialized = keys
+            .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+            .join(',');
+        return `{${serialized}}`;
+    }
+
+    return JSON.stringify(String(value));
+};
+
+const buildFingerprint = (value) => {
+    try {
+        return crypto.createHash('sha1').update(stableStringify(value ?? null)).digest('hex');
+    } catch (error) {
+        return crypto.createHash('sha1').update(String(value)).digest('hex');
+    }
+};
+
+const buildCycleKey = (notification, now = new Date()) => {
+    if (!notification) {
+        return `unknown:${Date.now()}`;
+    }
+
+    const baseId = notification.id || 'unknown';
+    const repeatFrequency = (notification.repeatFrequency || 'none').toLowerCase();
+    const triggerTimestamp = safeTimestamp(notification.triggerDate);
+
+    if (repeatFrequency === 'none') {
+        if (triggerTimestamp) {
+            return `single:${baseId}:${triggerTimestamp}`;
+        }
+        const reference = safeTimestamp(notification.updatedAt)
+            ?? safeTimestamp(notification.createdAt)
+            ?? safeTimestamp(now)
+            ?? Date.now();
+        return `single:${baseId}:immediate:${reference}`;
+    }
+
+    if (triggerTimestamp) {
+        return `repeat:${baseId}:${repeatFrequency}:${triggerTimestamp}`;
+    }
+
+    const nowTimestamp = safeTimestamp(now) ?? Date.now();
+    const bucket = Math.floor(nowTimestamp / 60000);
+    return `repeat:${baseId}:${repeatFrequency}:bucket-${bucket}`;
+};
+
+const createDispatchTracker = async (notification, { now = new Date() } = {}) => {
+    if (!notification || !notification.id) {
+        return {
+            cycleKey: buildCycleKey(notification, now),
+            async dispatch(recipient, context, sendFn) {
+                if (typeof sendFn !== 'function') {
+                    return { skipped: true, reason: 'missing-handler' };
+                }
+                await sendFn({ normalizedRecipient: normalizeRecipient(recipient), contextPayload: context || {} });
+                return { skipped: false };
+            }
+        };
+    }
+
+    const cycleKey = buildCycleKey(notification, now);
+    const baseContext = {
+        cycleKey,
+        notificationId: notification.id,
+        notificationType: notification.type || 'custom',
+        repeatFrequency: notification.repeatFrequency || 'none',
+        triggerDate: safeDateToISOString(notification.triggerDate),
+        updatedAt: safeDateToISOString(notification.updatedAt),
+        filtersFingerprint: buildFingerprint(notification.filters || {}),
+        segmentFiltersFingerprint: buildFingerprint(notification.segmentFilters || {})
+    };
+
+    let existingLogs = [];
+    try {
+        existingLogs = await NotificationDispatchLog.findAll({
+            where: {
+                notificationId: notification.id,
+                cycleKey
+            },
+            attributes: ['recipient', 'contextHash'],
+            raw: true
+        });
+    } catch (error) {
+        console.error('Erro ao carregar histórico de envios da notificação:', error);
+        existingLogs = [];
+    }
+
+    const sentSet = new Set(existingLogs.map((entry) => `${entry.recipient}|${entry.contextHash}`));
+
+    const dispatch = async (recipient, context, sendFn) => {
+        const normalizedRecipient = normalizeRecipient(recipient);
+        if (!normalizedRecipient) {
+            return { skipped: true, reason: 'invalid-recipient' };
+        }
+
+        if (typeof sendFn !== 'function') {
+            return { skipped: true, reason: 'missing-handler' };
+        }
+
+        const contextPayload = {
+            ...baseContext,
+            ...(context || {})
+        };
+
+        const contextHash = crypto.createHash('sha256')
+            .update(stableStringify(contextPayload))
+            .digest('hex');
+        const dedupeKey = `${normalizedRecipient}|${contextHash}`;
+
+        if (sentSet.has(dedupeKey)) {
+            return { skipped: true, reason: 'duplicate' };
+        }
+
+        const result = await sendFn({ normalizedRecipient, contextPayload });
+
+        try {
+            await NotificationDispatchLog.create({
+                notificationId: notification.id,
+                recipient: normalizedRecipient,
+                cycleKey,
+                contextHash,
+                context: contextPayload,
+                sentAt: new Date()
+            });
+            sentSet.add(dedupeKey);
+        } catch (error) {
+            if (error?.name === 'SequelizeUniqueConstraintError') {
+                sentSet.add(dedupeKey);
+                console.warn(
+                    `Envio duplicado detectado para notificação ${notification.id} e destinatário ${normalizedRecipient}. ` +
+                    'Registro já existente.'
+                );
+            } else {
+                throw error;
+            }
+        }
+
+        return { skipped: false, result };
+    };
+
+    return { cycleKey, dispatch };
+};
 
 const getCaseInsensitiveOperator = () => (sequelize.getDialect() === 'postgres' ? Op.iLike : Op.like);
 
@@ -245,12 +438,20 @@ async function processNotifications() {
 
         for (const notif of notifications) {
             try {
+                const tracker = await createDispatchTracker(notif, { now });
+                const runtimeContext = {
+                    now,
+                    tracker,
+                    cycleKey: tracker.cycleKey,
+                    currentTriggerDate: notif.triggerDate ? new Date(notif.triggerDate) : null
+                };
+
                 if (notif.type === 'birthday') {
-                    await processBirthdayNotification(notif);
+                    await processBirthdayNotification(notif, runtimeContext);
                 } else if (notif.type === 'appointment') {
-                    await processAppointmentNotification(notif);
+                    await processAppointmentNotification(notif, runtimeContext);
                 } else {
-                    await processCustomNotification(notif);
+                    await processCustomNotification(notif, runtimeContext);
                 }
 
                 if (notif.repeatFrequency && notif.repeatFrequency !== 'none') {
@@ -272,10 +473,13 @@ async function processNotifications() {
  * Processa notificações do tipo 'birthday'
  * Envia e-mail somente para os usuários cujo aniversário (mês e dia) coincide com a data atual.
  */
-async function processBirthdayNotification(notif) {
+async function processBirthdayNotification(notif, runtimeContext = {}) {
+    const now = runtimeContext.now instanceof Date ? runtimeContext.now : new Date();
+    const tracker = runtimeContext.tracker || await createDispatchTracker(notif, { now });
+
     const filters = getNotificationFilters(notif);
     const { where, order } = buildUserWhere(filters);
-    const today = new Date().toISOString().slice(5, 10);
+    const today = now.toISOString().slice(5, 10);
 
     const dialect = sequelize.getDialect();
     const birthdayExpression = dialect === 'postgres'
@@ -286,16 +490,30 @@ async function processBirthdayNotification(notif) {
     andConditions.push(sequelize.where(birthdayExpression, today));
     where[Op.and] = andConditions;
 
-    const users = await User.findAll({
+    const queryOptions = {
         where,
         include: [userPreferenceInclude]
-    });
+    };
 
+    if (order?.length) {
+        queryOptions.order = order;
+    }
+
+    const users = await User.findAll(queryOptions);
 
     for (const user of users) {
         if (!user.email || !hasRequiredOptIn(user)) continue;
-        const payload = buildEmailPayload(notif, user, null);
-        await sendEmail(user.email, payload.subject, payload.options);
+
+        const context = {
+            contextType: 'birthday',
+            userId: user.id ?? null,
+            cycleDate: today
+        };
+
+        await tracker.dispatch(user.email, context, async () => {
+            const payload = buildEmailPayload(notif, user, null);
+            await sendEmail(user.email, payload.subject, payload.options);
+        });
     }
 }
 
@@ -303,14 +521,15 @@ async function processBirthdayNotification(notif) {
  * Processa notificações do tipo 'appointment'
  * Exemplo: envia lembrete para agendamentos que começam em até 1 hora.
  */
-async function processAppointmentNotification(notif) {
+async function processAppointmentNotification(notif, runtimeContext = {}) {
+    const now = runtimeContext.now instanceof Date ? runtimeContext.now : new Date();
+    const tracker = runtimeContext.tracker || await createDispatchTracker(notif, { now });
+
     const filters = getNotificationFilters(notif);
     const minutesWindow = Number.parseInt(filters.timeWindowMinutes, 10);
     const windowMinutes = Number.isInteger(minutesWindow) && minutesWindow > 0
         ? minutesWindow
         : DEFAULT_APPOINTMENT_WINDOW_MINUTES;
-
-    const now = new Date();
     const defaultEnd = new Date(now.getTime() + windowMinutes * 60000);
 
     let startWindow = filters.dateRangeStart ? new Date(filters.dateRangeStart) : now;
@@ -375,10 +594,21 @@ async function processAppointmentNotification(notif) {
                 email: appointment.clientEmail,
                 role: USER_ROLES.CLIENT
             };
-            const payload = buildEmailPayload(notif, pseudoUser, appointment, {
-                fallbackName: pseudoUser.name
+
+            const context = {
+                contextType: 'appointment',
+                recipientRole: 'client',
+                appointmentId: appointment.id ?? null,
+                appointmentStart: safeDateToISOString(appointment.start),
+                appointmentStatus: appointment.status || null
+            };
+
+            await tracker.dispatch(appointment.clientEmail, context, async () => {
+                const payload = buildEmailPayload(notif, pseudoUser, appointment, {
+                    fallbackName: pseudoUser.name
+                });
+                await sendEmail(appointment.clientEmail, payload.subject, payload.options);
             });
-            await sendEmail(appointment.clientEmail, payload.subject, payload.options);
         }
 
         if (filters.includeProfessional !== false && professional?.email) {
@@ -388,8 +618,20 @@ async function processAppointmentNotification(notif) {
             if (!hasRequiredOptIn(professional, { requireScheduledOptIn: true })) {
                 continue;
             }
-            const payload = buildEmailPayload(notif, professional, appointment);
-            await sendEmail(professional.email, payload.subject, payload.options);
+
+            const context = {
+                contextType: 'appointment',
+                recipientRole: 'professional',
+                appointmentId: appointment.id ?? null,
+                appointmentStart: safeDateToISOString(appointment.start),
+                appointmentStatus: appointment.status || null,
+                userId: professional.id ?? null
+            };
+
+            await tracker.dispatch(professional.email, context, async () => {
+                const payload = buildEmailPayload(notif, professional, appointment);
+                await sendEmail(professional.email, payload.subject, payload.options);
+            });
         }
     }
 }
@@ -399,7 +641,10 @@ async function processAppointmentNotification(notif) {
  * Se sendToAll for verdadeiro, envia para todos os usuários ativos;
  * caso contrário, envia para o usuário específico definido em notif.userId.
  */
-async function processCustomNotification(notif) {
+async function processCustomNotification(notif, runtimeContext = {}) {
+    const now = runtimeContext.now instanceof Date ? runtimeContext.now : new Date();
+    const tracker = runtimeContext.tracker || await createDispatchTracker(notif, { now });
+
     const filters = getNotificationFilters(notif);
     const preferenceOptions = {
         requireScheduledOptIn: Boolean(filters.requireScheduledOptIn)
@@ -407,9 +652,24 @@ async function processCustomNotification(notif) {
     const recipients = new Map();
 
     const enqueueUser = (user) => {
-        if (user && user.email && hasRequiredOptIn(user, preferenceOptions)) {
-            recipients.set(user.email, user);
+        if (!user) {
+            return;
         }
+
+        const normalizedEmail = normalizeRecipient(user.email);
+        if (!normalizedEmail) {
+            return;
+        }
+
+        if (!hasRequiredOptIn(user, preferenceOptions)) {
+            return;
+        }
+
+        if (recipients.has(normalizedEmail)) {
+            return;
+        }
+
+        recipients.set(normalizedEmail, user);
     };
 
     const hasAdvancedFilters = Object.keys(filters).some((key) => !['onlyActive', 'includeProfessional', 'includeClient'].includes(key));
@@ -443,15 +703,24 @@ async function processCustomNotification(notif) {
         }
     }
 
-    for (const user of recipients.values()) {
+    for (const [, user] of recipients) {
         if (filters.onlyActive !== false && user.active === false) {
             continue;
         }
         if (!hasRequiredOptIn(user, preferenceOptions)) {
             continue;
         }
-        const payload = buildEmailPayload(notif, user, null);
-        await sendEmail(user.email, payload.subject, payload.options);
+        const context = {
+            contextType: 'custom',
+            recipientRole: user.role || null,
+            userId: user.id ?? null,
+            sendToAll: Boolean(notif.sendToAll)
+        };
+
+        await tracker.dispatch(user.email, context, async () => {
+            const payload = buildEmailPayload(notif, user, null);
+            await sendEmail(user.email, payload.subject, payload.options);
+        });
     }
 }
 
