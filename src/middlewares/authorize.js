@@ -1,39 +1,49 @@
-const ROLE_LEVELS = {
-    admin: 4,
-    administrator: 4,
-    gestor: 3,
-    manager: 3,
-    especialista: 2,
-    specialist: 2,
-    colaborador: 1,
-    collaborator: 1,
-    staff: 1,
-    cliente: 0,
-    client: 0,
-    user: 0,
-    usuario: 0
+const { parseRole, getRoleLevel, USER_ROLES } = require('../constants/roles');
+
+const ROLE_ALIASES = {
+    admin: USER_ROLES.ADMIN,
+    administrator: USER_ROLES.ADMIN,
+    gestor: USER_ROLES.MANAGER,
+    manager: USER_ROLES.MANAGER,
+    especialista: USER_ROLES.SPECIALIST,
+    specialist: USER_ROLES.SPECIALIST,
+    colaborador: USER_ROLES.COLLABORATOR,
+    collaborator: USER_ROLES.COLLABORATOR,
+    staff: USER_ROLES.COLLABORATOR,
+    cliente: USER_ROLES.CLIENT,
+    client: USER_ROLES.CLIENT,
+    user: USER_ROLES.CLIENT,
+    usuario: USER_ROLES.CLIENT
 };
 
-const normalizeRole = (role) => {
-    if (typeof role === 'number' && Number.isFinite(role)) {
-        return Math.trunc(role);
+const resolveRoleToken = (value) => {
+    if (value === undefined || value === null) {
+        return null;
     }
 
-    if (typeof role === 'string') {
-        const trimmed = role.trim();
-        if (trimmed === '') {
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
             return null;
         }
 
-        const numericRole = Number.parseInt(trimmed, 10);
-        if (!Number.isNaN(numericRole)) {
-            return numericRole;
+        if (Object.prototype.hasOwnProperty.call(ROLE_ALIASES, normalized)) {
+            return ROLE_ALIASES[normalized];
         }
+    }
 
-        const normalized = trimmed.toLowerCase();
-        if (Object.prototype.hasOwnProperty.call(ROLE_LEVELS, normalized)) {
-            return ROLE_LEVELS[normalized];
-        }
+    return parseRole(value, null);
+};
+
+const resolveRoleLevel = (value) => {
+    const token = resolveRoleToken(value);
+    if (token) {
+        return getRoleLevel(token);
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const truncated = Math.trunc(value);
+        return truncated >= 0 ? truncated : null;
     }
 
     return null;
@@ -44,16 +54,16 @@ module.exports = (allowedRoles = []) => {
     const allowedLevels = new Set();
 
     rolesArray.forEach((role) => {
-        const mapped = normalizeRole(role);
-        if (mapped !== null && mapped !== undefined) {
-            allowedLevels.add(mapped);
+        const level = resolveRoleLevel(role);
+        if (typeof level === 'number' && !Number.isNaN(level) && level >= 0) {
+            allowedLevels.add(level);
         }
     });
 
     const highestAllowed = allowedLevels.size ? Math.max(...allowedLevels) : null;
 
     return (req, res, next) => {
-        const user = req.session.user;
+        const user = (req.user && req.user.active !== undefined) ? req.user : req.session.user;
 
         if (!user || !user.active) {
             req.flash('error_msg', 'Você precisa estar autenticado para acessar esta área.');
@@ -64,7 +74,17 @@ module.exports = (allowedRoles = []) => {
             return next();
         }
 
-        if (allowedLevels.has(user.role) || (highestAllowed !== null && user.role > highestAllowed)) {
+        const userLevel = resolveRoleLevel(user.role);
+
+        if (typeof userLevel !== 'number' || Number.isNaN(userLevel)) {
+            req.flash('error_msg', 'Seu perfil de acesso é inválido. Faça login novamente.');
+            if (req.session) {
+                req.session.user = null;
+            }
+            return res.redirect('/login');
+        }
+
+        if (allowedLevels.has(userLevel) || (highestAllowed !== null && userLevel >= highestAllowed)) {
             return next();
         }
 
