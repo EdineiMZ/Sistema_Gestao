@@ -36,9 +36,43 @@
                     <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
                     <p class="text-muted mb-0">Monitoramento contínuo de receitas, despesas e recorrências.</p>
                 </div>
-                <span class="badge rounded-pill bg-light text-muted">
-                    <i class="bi bi-shield-lock me-2"></i>Auditoria ativa
-                </span>
+                <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-end gap-2 text-sm-end">
+                    <span class="badge rounded-pill bg-light text-muted">
+                        <i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Auditoria ativa
+                    </span>
+                    <div
+                        class="d-flex flex-wrap align-items-center justify-content-end gap-2"
+                        role="group"
+                        aria-label="Exportar lançamentos financeiros"
+                    >
+                        <a
+                            class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
+                            href="/finance/export/pdf"
+                            data-export-target="/finance/export/pdf"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="top"
+                            title="Exportar lançamentos filtrados em PDF"
+                            aria-label="Exportar lançamentos filtrados em PDF"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-filetype-pdf" aria-hidden="true"></i>
+                            <span>Exportar PDF</span>
+                        </a>
+                        <a
+                            class="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-2"
+                            href="/finance/export/excel"
+                            data-export-target="/finance/export/excel"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="top"
+                            title="Exportar lançamentos filtrados em Excel"
+                            aria-label="Exportar lançamentos filtrados em Excel"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+                            <span>Exportar Excel</span>
+                        </a>
+                    </div>
+                </div>
             </div>
             <div class="table-responsive table-modern responsive-table">
                 <table class="table align-middle mb-0">
@@ -277,5 +311,66 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const exportLinks = document.querySelectorAll('[data-export-target]');
+        if (!exportLinks.length) {
+            return;
+        }
+
+        const buildFiltersQuery = () => {
+            if (typeof URLSearchParams === 'undefined') {
+                return window.location.search ? window.location.search.replace(/^\?/, '') : '';
+            }
+
+            const params = new URLSearchParams(window.location.search || '');
+            const filterForms = document.querySelectorAll('[data-filter-form]');
+
+            filterForms.forEach((form) => {
+                const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+                fields.forEach((field) => {
+                    const { name } = field;
+                    if (!name) {
+                        return;
+                    }
+
+                    const rawValue = typeof field.value === 'string' ? field.value.trim() : field.value;
+                    if (rawValue) {
+                        params.set(name, rawValue);
+                    } else {
+                        params.delete(name);
+                    }
+                });
+            });
+
+            return params.toString();
+        };
+
+        const applyQueryToLink = (link) => {
+            const baseUrl = link.getAttribute('data-export-target');
+            if (!baseUrl) {
+                return;
+            }
+
+            const queryString = buildFiltersQuery();
+            const finalUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+            link.setAttribute('href', finalUrl);
+        };
+
+        exportLinks.forEach((link) => {
+            applyQueryToLink(link);
+
+            link.addEventListener('focus', () => applyQueryToLink(link));
+            link.addEventListener('mouseenter', () => applyQueryToLink(link));
+            link.addEventListener('click', () => applyQueryToLink(link));
+            link.addEventListener('auxclick', (event) => {
+                if (event.button === 1) {
+                    applyQueryToLink(link);
+                }
+            });
+        });
+    });
+</script>
 
 <%- include('../partials/footer') %>
