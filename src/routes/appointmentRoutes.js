@@ -3,9 +3,21 @@ const router = express.Router();
 const appointmentController = require('../controllers/appointmentController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
+
+const appointmentFiltersValidation = createFilterValidation({
+    allowedStatuses: ['scheduled', 'completed', 'cancelled', 'no-show', 'pending-confirmation'],
+    redirectTo: '/appointments'
+});
 
 // role >= 2 para listar/criar
-router.get('/', authMiddleware, permissionMiddleware(2), appointmentController.listAppointments);
+router.get(
+    '/',
+    authMiddleware,
+    permissionMiddleware(2),
+    ...appointmentFiltersValidation,
+    appointmentController.listAppointments
+);
 // nova rota p/ tela de criar
 router.get('/create', authMiddleware, permissionMiddleware(2), appointmentController.showCreate);
 router.post('/create', authMiddleware, permissionMiddleware(2), appointmentController.createAppointment);

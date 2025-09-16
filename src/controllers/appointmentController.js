@@ -1,26 +1,41 @@
 // src/controllers/appointmentController.js
 const { Appointment, User, Room, Procedure } = require('../../database/models');
 const { Op } = require('sequelize');
+const { buildQueryFilters } = require('../utils/queryBuilder');
 
 module.exports = {
     // Lista agendamentos
     listAppointments: async (req, res) => {
         try {
-            const { search } = req.query;
-            let whereClause = {};
+            const normalizedQuery = {
+                ...req.query,
+                keyword: req.query.keyword || req.query.search
+            };
 
-            if (search) {
-                whereClause = {
-                    [Op.or]: [
-                        { id: search },
-                        { description: { [Op.iLike]: `%${search}%` } },
-                        { clientEmail: { [Op.iLike]: `%${search}%` } }
-                    ]
-                };
+            const { where, filters, metadata } = buildQueryFilters(normalizedQuery, {
+                statusField: 'status',
+                statusMap: {
+                    scheduled: 'scheduled',
+                    completed: 'completed',
+                    cancelled: 'cancelled',
+                    'no-show': 'no-show',
+                    'pending-confirmation': 'pending-confirmation'
+                },
+                allowedStatuses: ['scheduled', 'completed', 'cancelled', 'no-show', 'pending-confirmation'],
+                dateField: 'start',
+                keywordFields: ['description', 'clientEmail']
+            });
+
+            if (metadata.keywordNumeric !== null) {
+                metadata.orConditions.push({ id: metadata.keywordNumeric });
+            }
+
+            if (metadata.orConditions.length) {
+                where[Op.or] = metadata.orConditions;
             }
 
             const appointments = await Appointment.findAll({
-                where: whereClause,
+                where,
                 include: [
                     { model: User, as: 'professional' },
                     { model: Room, as: 'room' },
@@ -28,7 +43,7 @@ module.exports = {
                 ]
             });
 
-            res.render('appointments/manageAppointments', { appointments });
+            res.render('appointments/manageAppointments', { appointments, filters });
         } catch (err) {
             console.error(err);
             req.flash('error_msg', 'Erro ao listar agendamentos.');
