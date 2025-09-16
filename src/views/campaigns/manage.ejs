@@ -1,0 +1,259 @@
+<%- include('../partials/header') %>
+
+<%
+    const currentFilters = filters || {};
+    const statusOptionsList = statusOptions || [];
+    const statusBadge = {
+        draft: 'badge-soft-secondary',
+        scheduled: 'badge-soft-info',
+        queued: 'badge-soft-primary',
+        sending: 'badge-soft-warning',
+        sent: 'badge-soft-success',
+        failed: 'badge-soft-danger',
+        cancelled: 'badge-soft-dark'
+    };
+    function formatDateTime(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleString('pt-BR');
+    }
+    function formatDateInput(value) {
+        if (!value) return '';
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const pad = (num) => String(num).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+    function formatDateTimeLocal(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const pad = (num) => String(num).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+%>
+
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Campanhas automatizadas</h2>
+                <p class="text-muted mb-0">Acompanhe agendamentos, status e alcance das campanhas enviadas aos usuários.</p>
+            </div>
+            <a href="/campaigns/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>Nova campanha</a>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <div class="card card-soft p-4 mb-4">
+            <form action="/campaigns" method="GET" class="row g-3 align-items-end" data-filter-form>
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">Palavra-chave</label>
+                    <div class="input-group input-group-flat">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control border-start-0"
+                            name="keyword"
+                            maxlength="120"
+                            placeholder="Busque por título, mensagem ou ID"
+                            value="<%= currentFilters.keyword || '' %>"
+                        />
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" name="status">
+                        <option value="all" <%= (currentFilters.status || 'all') === 'all' ? 'selected' : '' %>>Todos</option>
+                        <% statusOptionsList.forEach(option => { %>
+                            <option value="<%= option.value %>" <%= currentFilters.status === option.value ? 'selected' : '' %>>
+                                <%= option.label %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Agendadas a partir de</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="startDate"
+                        value="<%= formatDateInput(currentFilters.startDate) %>"
+                        max="<%= formatDateInput(currentFilters.endDate) %>"
+                    />
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Até</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="endDate"
+                        value="<%= formatDateInput(currentFilters.endDate) %>"
+                        min="<%= formatDateInput(currentFilters.startDate) %>"
+                    />
+                </div>
+                <div class="col-lg-1 col-md-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-gradient flex-grow-1" data-submit-filters>
+                        <i class="bi bi-funnel me-2"></i>Filtrar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-reset-filters>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card card-soft p-4">
+            <div class="table-responsive table-modern">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Campanha</th>
+                            <th>Status</th>
+                            <th>Programação</th>
+                            <th>Estimativa</th>
+                            <th>Segmentação</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (!campaigns || !campaigns.length) { %>
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">Nenhuma campanha encontrada com os filtros atuais.</td>
+                            </tr>
+                        <% } %>
+                        <% campaigns.forEach((campaign) => { %>
+                            <tr>
+                                <td><strong><%= campaign.id %></strong></td>
+                                <td>
+                                    <div class="fw-semibold"><%= campaign.title %></div>
+                                    <small class="text-muted d-block text-truncate" style="max-width: 360px;">
+                                        <%= campaign.previewText || campaign.message %>
+                                    </small>
+                                    <small class="text-muted">Atualizado em <%= formatDateTime(campaign.updatedAt || campaign.createdAt) %></small>
+                                </td>
+                                <td>
+                                    <span class="badge <%= statusBadge[campaign.status] || 'badge-soft-secondary' %>"><%= campaign.statusLabel %></span>
+                                </td>
+                                <td>
+                                    <% if (campaign.scheduledAt) { %>
+                                        <i class="bi bi-clock-history me-2"></i><%= formatDateTime(campaign.scheduledAt) %>
+                                    <% } else { %>
+                                        <span class="text-muted">Sem agendamento</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (Number.isFinite(campaign.recipientEstimate)) { %>
+                                        <span class="badge bg-soft-primary">~ <%= campaign.recipientEstimate %> destinatários</span>
+                                    <% } else { %>
+                                        <span class="text-muted">Indefinido</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (campaign.segmentSummary && campaign.segmentSummary.length) { %>
+                                        <% campaign.segmentSummary.forEach((summary) => { %>
+                                            <span class="app-filter-tag mb-1"><i class="bi bi-funnel me-2"></i><%= summary %></span>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <span class="app-filter-tag"><i class="bi bi-funnel me-2"></i>Base ativa completa</span>
+                                    <% } %>
+                                </td>
+                                <td class="text-end">
+                                    <form
+                                        action="/campaigns/<%= campaign.id %>/queue"
+                                        method="POST"
+                                        class="d-flex flex-wrap align-items-center justify-content-end gap-2"
+                                    >
+                                        <input
+                                            type="datetime-local"
+                                            name="scheduledAt"
+                                            class="form-control form-control-sm"
+                                            style="max-width: 210px;"
+                                            value="<%= formatDateTimeLocal(campaign.scheduledAt || new Date()) %>"
+                                        />
+                                        <div class="btn-group">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary">Fila</button>
+                                            <button type="submit" class="btn btn-sm btn-primary" name="dispatchNow" value="true">Fila e enviar</button>
+                                        </div>
+                                    </form>
+                                    <form
+                                        action="/campaigns/<%= campaign.id %>/dispatch"
+                                        method="POST"
+                                        class="d-inline"
+                                    >
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary mt-2"><i class="bi bi-send"></i> Enviar agora</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const filterForms = document.querySelectorAll('[data-filter-form]');
+
+        const buildQueryFromForm = (form) => {
+            const params = new URLSearchParams();
+            const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+            fields.forEach((field) => {
+                const value = typeof field.value === 'string' ? field.value.trim() : field.value;
+                if (value) {
+                    params.append(field.name, value);
+                }
+            });
+            return params.toString();
+        };
+
+        filterForms.forEach((form) => {
+            const action = form.getAttribute('action');
+
+            const submitFilters = () => {
+                const queryString = buildQueryFromForm(form);
+                const targetUrl = queryString ? `${action}?${queryString}` : action;
+                window.location.assign(targetUrl);
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitFilters();
+            });
+
+            const submitButton = form.querySelector('[data-submit-filters]');
+            if (submitButton) {
+                submitButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    submitFilters();
+                });
+            }
+
+            const resetButton = form.querySelector('[data-reset-filters]');
+            if (resetButton) {
+                resetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    form.reset();
+                    window.location.assign(action);
+                });
+            }
+        });
+    });
+</script>
+
+<%- include('../partials/footer') %>

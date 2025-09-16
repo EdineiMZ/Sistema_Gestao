@@ -31,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             defaultValue: {}
         },
+        segmentFilters: {
+            type: DataTypes.JSON,
+            allowNull: true,
+            defaultValue: {}
+        },
         repeatFrequency: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -39,6 +44,26 @@ module.exports = (sequelize, DataTypes) => {
                 isIn: {
                     args: [['none', 'daily', 'weekly', 'monthly']],
                     msg: 'Frequência de repetição inválida.'
+                }
+            }
+        },
+        scheduledAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+            validate: {
+                isDate: {
+                    msg: 'Data de agendamento inválida.'
+                }
+            }
+        },
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'draft',
+            validate: {
+                isIn: {
+                    args: [['draft', 'scheduled', 'queued', 'sending', 'sent', 'failed', 'cancelled']],
+                    msg: 'Status de campanha inválido.'
                 }
             }
         },
