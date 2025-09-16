@@ -3,6 +3,7 @@ const router = express.Router();
 const appointmentController = require('../controllers/appointmentController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const authorize = require('../middlewares/authorize');
 const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
 
 const appointmentFiltersValidation = createFilterValidation({

@@ -5,10 +5,144 @@ process.env.DB_STORAGE = process.env.DB_STORAGE || ':memory:';
 process.env.EMAIL_DISABLED = 'true';
 process.env.APP_NAME = process.env.APP_NAME || 'Sistema de Gestão - Teste';
 
+const path = require('path');
+const { spawn } = require('child_process');
+
 const { sequelize, User, Notification, Procedure, Room, Appointment } = require('../database/models');
 const argon2 = require('argon2');
 const { processNotifications } = require('../src/services/notificationService');
 const { USER_ROLES } = require('../src/constants/roles');
+
+const TEST_SERVER_PORT = Number.parseInt(process.env.TEST_SERVER_PORT || '3456', 10);
+
+const SERVER_START_TIMEOUT = Number.parseInt(process.env.TEST_SERVER_START_TIMEOUT || '12000', 10);
+
+function waitForServerReady(server, port, timeout = SERVER_START_TIMEOUT) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+
+        const handleStdout = (chunk) => {
+            const text = chunk.toString();
+            if (text.includes('Servidor rodando')) {
+                settled = true;
+                cleanup();
+                resolve();
+            }
+        };
+
+        const handleStderr = (chunk) => {
+            const text = chunk.toString();
+            process.stderr.write(`[server:test] ${text}`);
+        };
+
+        const handleExit = (code) => {
+            if (!settled) {
+                cleanup();
+                reject(new Error(`Servidor de teste finalizou antes de estar pronto (código ${code}).`));
+            }
+        };
+
+        const handleError = (error) => {
+            if (!settled) {
+                cleanup();
+                reject(error);
+            }
+        };
+
+        const cleanup = () => {
+            clearTimeout(timer);
+            server.stdout.off('data', handleStdout);
+            server.stderr.off('data', handleStderr);
+            server.off('exit', handleExit);
+            server.off('error', handleError);
+        };
+
+        const timer = setTimeout(() => {
+            if (!settled) {
+                cleanup();
+                reject(new Error(`Tempo limite ao aguardar servidor de teste na porta ${port}.`));
+            }
+        }, timeout);
+
+        server.stdout.on('data', handleStdout);
+        server.stderr.on('data', handleStderr);
+        server.on('exit', handleExit);
+        server.on('error', handleError);
+    });
+}
+
+function stopServer(server) {
+    return new Promise((resolve) => {
+        if (!server) {
+            return resolve();
+        }
+
+        const finalize = () => {
+            clearTimeout(forceKillTimer);
+            resolve();
+        };
+
+        const forceKillTimer = setTimeout(() => {
+            if (!server.killed) {
+                server.kill('SIGKILL');
+            }
+        }, 3000);
+
+        if (server.exitCode !== null || server.signalCode) {
+            finalize();
+            return;
+        }
+
+        server.once('exit', finalize);
+        server.kill();
+    });
+}
+
+async function ensureNoNotificationBadge(url) {
+    const response = await fetch(url, { headers: { accept: 'text/html' } });
+    if (!response.ok) {
+        throw new Error(`Falha ao acessar ${url}: status ${response.status}`);
+    }
+
+    const body = await response.text();
+    if (body.includes('data-testid="notification-badge"')) {
+        throw new Error(`Balão de notificações encontrado em ${url}`);
+    }
+}
+
+async function runNotificationBadgeE2E() {
+    if (typeof fetch !== 'function') {
+        throw new Error('Fetch API indisponível no ambiente de teste.');
+    }
+
+    const serverPath = path.join(__dirname, '..', 'server.js');
+    const env = {
+        ...process.env,
+        PORT: String(TEST_SERVER_PORT),
+        NODE_ENV: 'test',
+        DB_DIALECT: 'sqlite',
+        DB_STORAGE: ':memory:',
+        SESSION_SECRET: process.env.SESSION_SECRET || 'test-session-secret',
+        EMAIL_DISABLED: 'true',
+        APP_NAME: process.env.APP_NAME || 'Sistema de Gestão - Teste'
+    };
+
+    const server = spawn(process.execPath, [serverPath], {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    try {
+        await waitForServerReady(server, TEST_SERVER_PORT);
+
+        await ensureNoNotificationBadge(`http://127.0.0.1:${TEST_SERVER_PORT}/login`);
+        await ensureNoNotificationBadge(`http://127.0.0.1:${TEST_SERVER_PORT}/register`);
+
+        console.log('Teste E2E das páginas públicas executado com sucesso.');
+    } finally {
+        await stopServer(server);
+    }
+}
 
 async function run() {
     try {
@@ -99,6 +233,8 @@ async function run() {
         });
 
         await processNotifications();
+
+        await runNotificationBadgeE2E();
 
         console.log('Health check executado com sucesso.');
     } catch (error) {
