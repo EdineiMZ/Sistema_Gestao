@@ -2,6 +2,13 @@
 const { Appointment, User, Room, Procedure } = require('../../database/models');
 const { Op } = require('sequelize');
 const { buildQueryFilters } = require('../utils/queryBuilder');
+const { USER_ROLES } = require('../constants/roles');
+
+const PROFESSIONAL_ROLES = [
+    USER_ROLES.SPECIALIST,
+    USER_ROLES.MANAGER,
+    USER_ROLES.ADMIN
+];
 
 
 module.exports = {
