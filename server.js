@@ -28,6 +28,7 @@ const appointmentRoutes = require('./src/routes/appointmentRoutes');
 const financeRoutes = require('./src/routes/financeRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const auditRoutes = require('./src/routes/auditRoutes');
+const campaignRoutes = require('./src/routes/campaignRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -132,6 +133,7 @@ app.use('/rooms', roomRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/finance', financeRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/campaigns', campaignRoutes);
 app.use('/audit', auditRoutes);
 
 // Conexão DB
