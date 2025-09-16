@@ -34,6 +34,26 @@ const computeNextTriggerDate = (currentDate, frequency) => {
 const buildUserWhere = (filters = {}) => {
     const where = {};
     const andConditions = [];
+    const order = [];
+
+    const dialect = typeof sequelize.getDialect === 'function' ? sequelize.getDialect() : 'sqlite';
+    const likeOperator = dialect === 'postgres' ? Op.iLike : Op.like;
+
+    const buildCaseInsensitiveMatch = (column, value, { exact = false } = {}) => {
+        if (dialect === 'postgres') {
+            if (exact) {
+                return sequelize.where(sequelize.col(column), { [Op.iLike]: value });
+            }
+            return sequelize.where(sequelize.col(column), { [Op.iLike]: `%${value}%` });
+        }
+
+        const normalized = value.toLowerCase();
+        const comparator = exact ? normalized : `%${normalized}%`;
+        return sequelize.where(
+            sequelize.fn('lower', sequelize.col(column)),
+            exact ? normalized : { [Op.like]: comparator }
+        );
+    };
 
     if (filters.onlyActive !== false) {
         where.active = true;
@@ -48,6 +68,15 @@ const buildUserWhere = (filters = {}) => {
 
         if (roles.length) {
             where.role = { [Op.in]: roles };
+
+            const caseClauses = roles
+                .map((role, index) => `WHEN '${role}' THEN ${index}`)
+                .join(' ');
+            order.push([
+                sequelize.literal(`CASE "User"."role" ${caseClauses} ELSE ${roles.length} END`),
+                'ASC'
+            ]);
+            order.push(['name', 'ASC']);
         }
     }
 
@@ -55,21 +84,51 @@ const buildUserWhere = (filters = {}) => {
         where.creditBalance = { [Op.gte]: filters.minimumCreditBalance };
     }
 
+    if (Array.isArray(filters.targetNames) && filters.targetNames.length) {
+        const nameConditions = filters.targetNames.map((name) =>
+            buildCaseInsensitiveMatch('name', name)
+        );
+        andConditions.push({ [Op.or]: nameConditions });
+    }
+
+    if (Array.isArray(filters.targetEmails) && filters.targetEmails.length) {
+        const emailConditions = filters.targetEmails.map((email) =>
+            buildCaseInsensitiveMatch('email', email, { exact: true })
+        );
+        andConditions.push({ [Op.or]: emailConditions });
+    }
+
+    if (Array.isArray(filters.targetEmailFragments) && filters.targetEmailFragments.length) {
+        const fragmentConditions = filters.targetEmailFragments.map((fragment) =>
+            buildCaseInsensitiveMatch('email', fragment)
+        );
+        andConditions.push({ [Op.or]: fragmentConditions });
+    }
+
     if (filters.clientEmailDomain) {
         const domain = String(filters.clientEmailDomain).replace(/^@/, '').toLowerCase();
-        andConditions.push(
-            sequelize.where(
-                sequelize.fn('lower', sequelize.col('email')),
-                { [Op.like]: `%@${domain}` }
-            )
-        );
+        if (domain) {
+            const pattern = `%@${domain}`;
+            if (likeOperator === Op.iLike) {
+                andConditions.push(
+                    sequelize.where(sequelize.col('email'), { [Op.iLike]: pattern })
+                );
+            } else {
+                andConditions.push(
+                    sequelize.where(
+                        sequelize.fn('lower', sequelize.col('email')),
+                        { [Op.like]: pattern }
+                    )
+                );
+            }
+        }
     }
 
     if (andConditions.length) {
         where[Op.and] = where[Op.and] ? [...where[Op.and], ...andConditions] : andConditions;
     }
 
-    return where;
+    return { where, order };
 };
 
 const getNotificationFilters = (notification) => notification.filters || {};
@@ -185,7 +244,7 @@ async function processNotifications() {
  */
 async function processBirthdayNotification(notif) {
     const filters = getNotificationFilters(notif);
-    const where = buildUserWhere(filters);
+    const { where, order } = buildUserWhere(filters);
     const today = new Date().toISOString().slice(5, 10);
 
     const dialect = sequelize.getDialect();
@@ -197,7 +256,7 @@ async function processBirthdayNotification(notif) {
     andConditions.push(sequelize.where(birthdayExpression, today));
     where[Op.and] = andConditions;
 
-    const users = await User.findAll({ where });
+    const users = await User.findAll({ where, order });
 
     for (const user of users) {
         if (!user.email) continue;
@@ -312,8 +371,8 @@ async function processCustomNotification(notif) {
     const hasAdvancedFilters = Object.keys(filters).some((key) => !['onlyActive', 'includeProfessional', 'includeClient'].includes(key));
 
     if (notif.sendToAll || hasAdvancedFilters) {
-        const where = buildUserWhere(filters);
-        const users = await User.findAll({ where });
+        const { where, order } = buildUserWhere(filters);
+        const users = await User.findAll({ where, order });
         users.forEach(enqueueUser);
     }
 
@@ -341,5 +400,6 @@ async function processCustomNotification(notif) {
 }
 
 module.exports = {
-    processNotifications
+    processNotifications,
+    buildUserWhere
 };
