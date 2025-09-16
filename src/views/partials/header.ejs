@@ -137,7 +137,7 @@
                         </li>
                     <% } %>
                 <% } %>
-                <% if (user && notifications && notifications.length) { %>
+                <% if (user && Array.isArray(notifications) && notifications.length) { %>
                     <li class="nav-item ms-lg-2 mt-3 mt-lg-0">
                         <a
                             class="nav-link position-relative nav-notification px-2"
