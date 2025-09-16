@@ -13,6 +13,15 @@
         />
     </div>
     <div class="mb-3">
+        <label class="form-label">E-mail do Cliente</label>
+        <input
+                type="email"
+                class="form-control"
+                name="clientEmail"
+                value="<%= appointment.clientEmail || '' %>"
+        />
+    </div>
+    <div class="mb-3">
         <label class="form-label">Profissional</label>
         <select class="form-select" name="professionalId">
             <% professionals.forEach(p => { %>
@@ -68,6 +77,19 @@
             <option value="completed" <%= appointment.status === 'completed' ? 'selected' : '' %>>Concluído</option>
             <option value="canceled" <%= appointment.status === 'canceled' ? 'selected' : '' %>>Cancelado</option>
         </select>
+    </div>
+    <div class="form-check form-switch mb-3">
+        <input type="hidden" name="paymentConfirmed" value="false" />
+        <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="paymentConfirmed"
+                name="paymentConfirmed"
+                value="true"
+                <%= appointment.paymentConfirmed ? 'checked' : '' %>
+        />
+        <label class="form-check-label" for="paymentConfirmed">Pagamento confirmado</label>
     </div>
     <button type="submit" class="btn btn-primary">Salvar</button>
 </form>
