@@ -1,0 +1,191 @@
+<%- include('../partials/header') %>
+
+<div class="row justify-content-center g-4">
+    <div class="col-12">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+            <div>
+                <h1 class="h3 fw-semibold mb-0 text-primary">Monitoramento de auditoria</h1>
+                <p class="text-muted mb-0">Acompanhe ações críticas realizadas por usuários privilegiados.</p>
+            </div>
+            <div class="text-md-end">
+                <span class="badge rounded-pill text-bg-dark px-3 py-2 shadow-sm">
+                    <i class="bi bi-shield-check me-2"></i>
+                    <span>Total de registros: <%= pagination.totalItems %></span>
+                </span>
+            </div>
+        </div>
+
+        <% if (error_msg && error_msg.length) { %>
+            <div class="alert alert-danger shadow-sm"><%= error_msg %></div>
+        <% } %>
+        <% if (success_msg && success_msg.length) { %>
+            <div class="alert alert-success shadow-sm"><%= success_msg %></div>
+        <% } %>
+    </div>
+
+    <div class="col-12">
+        <form method="GET" class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 pb-0">
+                <h2 class="h5 fw-semibold mb-0"><i class="bi bi-filter-circle me-2 text-primary"></i>Filtros inteligentes</h2>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label text-muted">Data inicial</label>
+                        <input
+                            type="date"
+                            name="startDate"
+                            value="<%= filters.startDate %>"
+                            class="form-control"
+                            max="<%= filters.endDate || '' %>"
+                        />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-muted">Data final</label>
+                        <input
+                            type="date"
+                            name="endDate"
+                            value="<%= filters.endDate %>"
+                            class="form-control"
+                            min="<%= filters.startDate || '' %>"
+                        />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-muted">Usuário responsável</label>
+                        <select class="form-select" name="userId">
+                            <option value="">Todos</option>
+                            <% users.forEach((userItem) => { %>
+                                <option
+                                    value="<%= userItem.id %>"
+                                    <%= filters.userId == userItem.id ? 'selected' : '' %>
+                                >
+                                    <%= userItem.name %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-muted">Ação</label>
+                        <select class="form-select" name="action">
+                            <option value="">Todas</option>
+                            <% actions.forEach((actionItem) => { %>
+                                <option
+                                    value="<%= actionItem %>"
+                                    <%= filters.action === actionItem ? 'selected' : '' %>
+                                >
+                                    <%= actionItem %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label text-muted">Por página</label>
+                        <select class="form-select" name="pageSize">
+                            <% [10, 20, 50, 100].forEach((size) => { %>
+                                <option value="<%= size %>" <%= pagination.pageSize === size ? 'selected' : '' %>>
+                                    <%= size %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-0 d-flex justify-content-between flex-column flex-md-row gap-2">
+                <div class="text-muted small d-flex align-items-center gap-2">
+                    <i class="bi bi-info-circle"></i>
+                    Ajuste os filtros para identificar padrões e auditorias específicas.
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/audit/logs" class="btn btn-light border">Limpar</a>
+                    <button type="submit" class="btn btn-primary shadow-sm">
+                        <i class="bi bi-search me-1"></i>Aplicar filtros
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-nowrap mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data e hora</th>
+                                <th>Usuário</th>
+                                <th>Ação</th>
+                                <th>Recurso</th>
+                                <th>Origem (IP)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!logs.length) { %>
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">
+                                        <i class="bi bi-inboxes me-2"></i>Nenhum log encontrado para os filtros selecionados.
+                                    </td>
+                                </tr>
+                            <% } else { %>
+                                <% logs.forEach((log) => { %>
+                                    <tr>
+                                        <td class="text-nowrap">
+                                            <i class="bi bi-clock-history text-primary me-1"></i>
+                                            <%= new Date(log.createdAt).toLocaleString('pt-BR') %>
+                                        </td>
+                                        <td>
+                                            <% if (log.user) { %>
+                                                <div class="fw-semibold"><%= log.user.name %></div>
+                                                <div class="text-muted small"><%= log.user.email %></div>
+                                            <% } else { %>
+                                                <span class="badge text-bg-secondary">Sistema</span>
+                                            <% } %>
+                                        </td>
+                                        <td>
+                                            <span class="badge text-bg-info text-uppercase fw-semibold">
+                                                <i class="bi bi-activity me-1"></i><%= log.action %>
+                                            </span>
+                                        </td>
+                                        <td class="text-break">
+                                            <code class="small"><%= log.resource %></code>
+                                        </td>
+                                        <td class="text-nowrap"><%= log.ip || '—' %></td>
+                                    </tr>
+                                <% }) %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-0 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+                <div class="small text-muted">
+                    Exibindo <strong><%= logs.length %></strong> de <strong><%= pagination.totalItems %></strong> registros
+                    monitorados.
+                </div>
+                <nav aria-label="Paginação de auditoria">
+                    <ul class="pagination mb-0">
+                        <li class="page-item <%= pagination.currentPage === 1 ? 'disabled' : '' %>">
+                            <a class="page-link" href="?<%= pagination.buildQuery(pagination.currentPage - 1) %>">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        <% pagination.pages.forEach((pageNumber) => { %>
+                            <li class="page-item <%= pageNumber === pagination.currentPage ? 'active' : '' %>">
+                                <a class="page-link" href="?<%= pagination.buildQuery(pageNumber) %>">
+                                    <%= pageNumber %>
+                                </a>
+                            </li>
+                        <% }) %>
+                        <li class="page-item <%= pagination.currentPage >= pagination.totalPages ? 'disabled' : '' %>">
+                            <a class="page-link" href="?<%= pagination.buildQuery(pagination.currentPage + 1) %>">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

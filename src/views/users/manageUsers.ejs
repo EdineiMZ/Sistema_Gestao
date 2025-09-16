@@ -1,6 +1,8 @@
 <%- include('../partials/header') %>
 
-<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
+<% const availableRoles = roleOptions || []; %>
+
+<% const currentFilters = filters || {}; %>
 
 <div class="row gy-4 fade-in">
     <div class="col-12">
@@ -20,6 +22,68 @@
                 <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
             </div>
         <% } %>
+
+        <div class="card card-soft p-4 mb-4">
+            <form
+                action="/users/manage"
+                method="GET"
+                class="row g-3 align-items-end"
+                data-filter-form
+            >
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">Palavra-chave</label>
+                    <div class="input-group input-group-flat">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control border-start-0"
+                            name="keyword"
+                            maxlength="120"
+                            placeholder="Busque por nome, e-mail ou ID"
+                            value="<%= currentFilters.keyword || '' %>"
+                        />
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" name="status">
+                        <option value="active" <%= (currentFilters.status || 'active') === 'active' ? 'selected' : '' %>>Ativos</option>
+                        <option value="inactive" <%= currentFilters.status === 'inactive' ? 'selected' : '' %>>Inativos</option>
+                        <option value="all" <%= currentFilters.status === 'all' ? 'selected' : '' %>>Todos</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Início</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="startDate"
+                        value="<%= currentFilters.startDate || '' %>"
+                        max="<%= currentFilters.endDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Encerramento</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="endDate"
+                        value="<%= currentFilters.endDate || '' %>"
+                        min="<%= currentFilters.startDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-1 col-md-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-gradient flex-grow-1" data-submit-filters>
+                        <i class="bi bi-funnel me-2"></i>Filtrar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-reset-filters>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
 
         <div class="card card-soft p-4 mb-4">
             <div class="table-responsive table-modern">
@@ -47,7 +111,7 @@
                             <td><%= userItem.address || '—' %></td>
                             <td>
                                 <span class="badge-soft badge-soft-warning">
-                                    <%= roleLabels[userItem.role] || 'Usuário' %>
+                                    <%= roleLabels && userItem.role ? (roleLabels[userItem.role] || 'Usuário') : 'Usuário' %>
                                 </span>
                             </td>
                             <td>R$ <%= Number(userItem.creditBalance || 0).toFixed(2) %></td>
@@ -116,7 +180,13 @@
                                                     </div>
                                                     <div class="col-md-4">
                                                         <label class="form-label">Nível</label>
-                                                        <input type="number" class="form-control" name="role" min="0" max="4" value="<%= userItem.role %>" />
+                                                        <select class="form-select" name="role">
+                                                            <% availableRoles.forEach((option) => { %>
+                                                                <option value="<%= option.value %>" <%= option.value === userItem.role ? 'selected' : '' %>>
+                                                                    <%= option.label %>
+                                                                </option>
+                                                            <% }) %>
+                                                        </select>
                                                     </div>
                                                     <div class="col-md-4">
                                                         <label class="form-label">Crédito</label>
@@ -182,7 +252,11 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Nível</label>
-                        <input type="number" class="form-control" name="role" min="0" max="4" />
+                        <select class="form-select" name="role">
+                            <% availableRoles.forEach((option) => { %>
+                                <option value="<%= option.value %>"><%= option.label %></option>
+                            <% }) %>
+                        </select>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Crédito inicial</label>
@@ -198,5 +272,55 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const filterForms = document.querySelectorAll('[data-filter-form]');
+
+        const buildQueryFromForm = (form) => {
+            const params = new URLSearchParams();
+            const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+            fields.forEach((field) => {
+                const value = typeof field.value === 'string' ? field.value.trim() : field.value;
+                if (value) {
+                    params.append(field.name, value);
+                }
+            });
+            return params.toString();
+        };
+
+        filterForms.forEach((form) => {
+            const action = form.getAttribute('action');
+
+            const submitFilters = () => {
+                const queryString = buildQueryFromForm(form);
+                const targetUrl = queryString ? `${action}?${queryString}` : action;
+                window.location.assign(targetUrl);
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitFilters();
+            });
+
+            const submitButton = form.querySelector('[data-submit-filters]');
+            if (submitButton) {
+                submitButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    submitFilters();
+                });
+            }
+
+            const resetButton = form.querySelector('[data-reset-filters]');
+            if (resetButton) {
+                resetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    form.reset();
+                    window.location.assign(action);
+                });
+            }
+        });
+    });
+</script>
 
 <%- include('../partials/footer') %>

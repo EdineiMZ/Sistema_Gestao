@@ -9,6 +9,7 @@ const path = require('path');
 const cron = require('node-cron'); // para agendamentos de tarefas
 
 const { sequelize, User } = require('./database/models');
+const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
@@ -25,6 +26,7 @@ const roomRoutes = require('./src/routes/roomRoutes');
 const appointmentRoutes = require('./src/routes/appointmentRoutes');
 const financeRoutes = require('./src/routes/financeRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const auditRoutes = require('./src/routes/auditRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +55,8 @@ app.use(session({
 app.use(flash());
 
 // Variáveis locais
+const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
+
 app.use((req, res, next) => {
     res.locals.success_msg = req.flash('success_msg');
     res.locals.error_msg = req.flash('error_msg');
@@ -60,28 +64,51 @@ app.use((req, res, next) => {
     res.locals.user = null;
     res.locals.appName = APP_NAME;
     res.locals.pageTitle = APP_NAME;
+    res.locals.roles = USER_ROLES;
+    res.locals.roleLabels = ROLE_LABELS;
+    res.locals.roleOptions = roleOptions;
+    res.locals.getRoleLevel = getRoleLevel;
     next();
 });
 
 // Recuperar User logado
 app.use(async (req, res, next) => {
-    if (req.session.user) {
-        try {
-            const dbUser = await User.findByPk(req.session.user.id);
-            if (dbUser) {
-                res.locals.user = {
-                    id: dbUser.id,
-                    name: dbUser.name,
-                    role: dbUser.role,
-                    active: dbUser.active,
-                    profileImage: dbUser.profileImage
-                };
-            }
-        } catch (error) {
-            console.error('Erro ao buscar user no middleware:', error);
-        }
+    req.user = null;
+
+    if (!req.session.user) {
+        return next();
     }
-    next();
+
+    try {
+        const dbUser = await User.findByPk(req.session.user.id);
+        if (dbUser && dbUser.active) {
+            const sanitizedUser = {
+                id: dbUser.id,
+                name: dbUser.name,
+                role: dbUser.role,
+                active: dbUser.active,
+                profileImage: dbUser.profileImage
+            };
+
+            req.user = sanitizedUser;
+            res.locals.user = sanitizedUser;
+            req.session.user = {
+                id: dbUser.id,
+                name: dbUser.name,
+                email: dbUser.email,
+                role: dbUser.role,
+                active: dbUser.active
+            };
+        } else {
+            req.session.user = null;
+            res.locals.user = null;
+        }
+    } catch (error) {
+        console.error('Erro ao buscar user no middleware:', error);
+        res.locals.user = null;
+    }
+
+    return next();
 });
 
 // EJS
@@ -101,6 +128,7 @@ app.use('/rooms', roomRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/finance', financeRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/audit', auditRoutes);
 
 // Conexão DB
 sequelize

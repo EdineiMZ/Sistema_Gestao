@@ -73,6 +73,7 @@ module.exports = (allowedRoles = []) => {
         }
 
         req.flash('error_msg', 'Você não tem permissão para acessar este recurso.');
+
         return res.redirect('/');
     };
 };
