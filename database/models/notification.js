@@ -107,5 +107,12 @@ module.exports = (sequelize, DataTypes) => {
         tableName: 'Notifications'
     });
 
+    Notification.associate = (models) => {
+        Notification.hasMany(models.NotificationDispatchLog, {
+            as: 'dispatchLogs',
+            foreignKey: 'notificationId'
+        });
+    };
+
     return Notification;
 };

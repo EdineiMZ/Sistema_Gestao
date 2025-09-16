@@ -16,6 +16,22 @@ const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 const { startWorker } = require('./src/services/notificationWorker');
 const notificationIndicator = require('./src/middlewares/notificationIndicator');
 
+const parseInlineWorkerPreference = () => {
+    const rawValue = (process.env.NOTIFICATION_WORKER_INLINE || '').trim().toLowerCase();
+
+    if (!rawValue) {
+        return true;
+    }
+
+    if (['false', '0', 'no', 'off', 'disable', 'disabled'].includes(rawValue)) {
+        return false;
+    }
+
+    return true;
+};
+
+const shouldStartNotificationWorker = parseInlineWorkerPreference();
+
 // Rotas
 const authRoutes = require('./src/routes/authRoutes');
 const userRoutes = require('./src/routes/userRoutes');
@@ -194,12 +210,15 @@ sequelize
             console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
         });
 
-        if (process.env.NOTIFICATION_WORKER_INLINE === 'true') {
+        if (shouldStartNotificationWorker) {
             try {
                 startWorker({ immediate: true });
+                console.log('Worker de notificações executando inline com intervalo de 1 minuto.');
             } catch (workerError) {
                 console.error('Não foi possível iniciar o worker de notificações inline:', workerError);
             }
+        } else {
+            console.log('Worker de notificações inline desativado via NOTIFICATION_WORKER_INLINE.');
         }
     })
     .catch(err => {
