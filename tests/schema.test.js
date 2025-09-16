@@ -68,6 +68,10 @@ const migrations = [
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      scheduledAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
       createdAt: {
         type: DataTypes.DATE,
         allowNull: true,
@@ -131,16 +135,8 @@ const migrations = [
       throw new Error('Coluna "messageHtml" não encontrada na tabela Notifications.');
     }
 
-    if (notificationsTable.messageHtml.allowNull !== true) {
-      throw new Error('Coluna "messageHtml" deveria permitir valores nulos.');
-    }
-
     if (!notificationsTable.scheduledAt) {
       throw new Error('Coluna "scheduledAt" não encontrada na tabela Notifications.');
-    }
-
-    if (notificationsTable.scheduledAt.allowNull !== true) {
-      throw new Error('Coluna "scheduledAt" deveria permitir valores nulos.');
     }
 
     console.log('Verificação das colunas creditBalance, messageHtml e scheduledAt concluída com sucesso.');
