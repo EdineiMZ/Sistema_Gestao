@@ -57,10 +57,25 @@
             <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
                 <% if (!user) { %>
                     <li class="nav-item">
-                        <a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right me-1"></i>Login</a>
+                        <a class="nav-link" href="/#solucoes">Soluções</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/register"><i class="bi bi-person-plus me-1"></i>Registrar</a>
+                        <a class="nav-link" href="/#seguranca">Segurança</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#recursos">Recursos</a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <a class="btn btn-outline-light nav-cta" href="/login">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>
+                            Entrar
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-light nav-cta" href="/register">
+                            <i class="bi bi-person-plus me-2"></i>
+                            Criar conta
+                        </a>
                     </li>
                 <% } else { %>
                     <li class="nav-item dropdown">
@@ -126,6 +141,11 @@
                     <% } %>
 
                     <% if (userRoleLevel >= adminLevel) { %>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin">
+                                <i class="bi bi-shield-check me-1"></i>Administração
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/users/manage">Usuários</a>
                         </li>

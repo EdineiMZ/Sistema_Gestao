@@ -29,6 +29,7 @@ const financeRoutes = require('./src/routes/financeRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const auditRoutes = require('./src/routes/auditRoutes');
 const campaignRoutes = require('./src/routes/campaignRoutes');
+const adminRoutes = require('./src/routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,9 +61,43 @@ app.use(flash());
 const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
 
 app.use((req, res, next) => {
-    res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg');
-    res.locals.error = req.flash('error');
+    const normalizeFlashMessages = (messages) => {
+        if (!messages) {
+            return null;
+        }
+
+        const values = (Array.isArray(messages) ? messages : [messages])
+            .map((message) => {
+                if (typeof message === 'string') {
+                    return message.trim();
+                }
+
+                if (message && typeof message.message === 'string') {
+                    return message.message.trim();
+                }
+
+                if (message && typeof message.toString === 'function') {
+                    return message.toString().trim();
+                }
+
+                return '';
+            })
+            .filter((message) => Boolean(message));
+
+        if (!values.length) {
+            return null;
+        }
+
+        return values.join(' ');
+    };
+
+    const successFlash = normalizeFlashMessages(req.flash('success_msg'));
+    const errorFlash = normalizeFlashMessages(req.flash('error_msg'));
+    const genericErrorFlash = normalizeFlashMessages(req.flash('error'));
+
+    res.locals.success_msg = successFlash;
+    res.locals.error_msg = errorFlash || genericErrorFlash;
+    res.locals.error = genericErrorFlash;
     res.locals.user = null;
     res.locals.userRoleLevel = -1;
     res.locals.appName = APP_NAME;
@@ -141,6 +176,7 @@ app.use('/finance', financeRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/campaigns', campaignRoutes);
 app.use('/audit', auditRoutes);
+app.use('/admin', adminRoutes);
 
 // Conexão DB
 sequelize
