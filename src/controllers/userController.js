@@ -1,6 +1,9 @@
 // src/controllers/userController.js
 const { User } = require('../../database/models');
+const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
+const { buildQueryFilters } = require('../utils/queryBuilder');
+
 
 const parseDecimal = (value, fallback = 0) => {
     if (value === undefined || value === null || value === '') {
@@ -16,22 +19,39 @@ const normalizeDate = (value) => {
     return Number.isNaN(date.getTime()) ? null : value;
 };
 
-const parseRole = (value, fallback = 0) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isInteger(parsed) ? parsed : fallback;
-};
-
 module.exports = {
     // Exibe a página de gerenciamento de usuários (somente ativos)
     manageUsers: async (req, res) => {
         try {
+            const { where, filters, metadata } = buildQueryFilters(req.query, {
+                statusField: 'active',
+                statusMap: {
+                    active: true,
+                    inactive: false
+                },
+                allowedStatuses: [true, false],
+                defaultStatus: 'active',
+                dateField: 'createdAt',
+                keywordFields: ['name', 'email']
+            });
+
+            if (metadata.keywordNumeric !== null) {
+                metadata.orConditions.push({ id: metadata.keywordNumeric });
+            }
+
+            if (metadata.orConditions.length) {
+                where[Op.or] = metadata.orConditions;
+            }
+
             const users = await User.findAll({
-                where: { active: true },
+                where,
                 order: [['name', 'ASC']]
             });
+
             res.render('users/manageUsers', {
                 pageTitle: 'Gestão de usuários',
-                users
+                users,
+                filters
             });
         } catch (err) {
             console.error(err);
@@ -44,7 +64,7 @@ module.exports = {
     createUser: async (req, res) => {
         try {
             const { name, email, password, phone, address, dateOfBirth, role, creditBalance } = req.body;
-            const currentUser = req.session.user || {};
+            const currentUser = req.user || req.session.user || {};
 
             // Verificar se já existe email
             const existingUser = await User.findOne({ where: { email } });
@@ -53,8 +73,10 @@ module.exports = {
                 return res.redirect('/users/manage');
             }
 
-            // Se quem está criando for admin (role=4), define a role; caso contrário, 0
-            const newUserRole = currentUser.role === 4 ? parseRole(role, 0) : 0;
+            // Apenas administradores podem definir o perfil do novo usuário
+            const newUserRole = roleAtLeast(currentUser.role, USER_ROLES.ADMIN)
+                ? parseRole(role, USER_ROLES.CLIENT)
+                : USER_ROLES.CLIENT;
             const credit = parseDecimal(creditBalance, 0);
 
             const payload = {
@@ -64,7 +86,7 @@ module.exports = {
                 phone,
                 address,
                 dateOfBirth: normalizeDate(dateOfBirth),
-                role: Number.isInteger(newUserRole) ? newUserRole : 0,
+                role: newUserRole,
                 creditBalance: credit
             };
 
@@ -89,7 +111,7 @@ module.exports = {
             const { id } = req.params;
             const { name, email, password, phone, address, dateOfBirth, role, active, creditBalance } = req.body;
 
-            const currentUser = req.session.user;
+            const currentUser = req.user || req.session.user || {};
             const user = await User.findByPk(id);
 
             if (!user) {
@@ -106,7 +128,7 @@ module.exports = {
             user.address = address;
             user.dateOfBirth = normalizeDate(dateOfBirth);
 
-            if (currentUser.role === 4) {
+            if (roleAtLeast(currentUser.role, USER_ROLES.ADMIN)) {
                 user.role = parseRole(role, user.role);
                 user.active = (active === 'true');
                 user.creditBalance = parseDecimal(creditBalance, 0);

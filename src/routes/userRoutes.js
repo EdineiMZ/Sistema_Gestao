@@ -8,8 +8,16 @@ const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
 const audit = require('../middlewares/audit');
 
+
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
-router.get('/manage', authMiddleware, permissionMiddleware(4), userController.manageUsers);
+router.get(
+    '/manage',
+    authMiddleware,
+    permissionMiddleware(4),
+    ...manageUsersValidation,
+    userController.manageUsers
+);
+
 
 // Upload da imagem no create e update
 router.post(

@@ -1,6 +1,7 @@
 // src/controllers/authController.js
 const { User } = require('../../database/models');
 const bcrypt = require('bcrypt');
+const { USER_ROLES } = require('../constants/roles');
 
 module.exports = {
     // Renderiza a página de login
@@ -75,7 +76,7 @@ module.exports = {
                 phone,
                 address,
                 dateOfBirth,
-                role: 0,
+                role: USER_ROLES.CLIENT,
                 profileImage: profileBuffer
             });
 

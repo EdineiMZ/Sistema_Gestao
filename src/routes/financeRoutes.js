@@ -29,4 +29,5 @@ router.delete(
     financeController.deleteFinanceEntry
 );
 
+
 module.exports = router;
