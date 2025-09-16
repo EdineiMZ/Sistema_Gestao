@@ -8,6 +8,7 @@ const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
 const audit = require('../middlewares/audit');
 const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
+const { USER_ROLES } = require('../constants/roles');
 
 
 const manageUsersValidation = createFilterValidation({
@@ -15,11 +16,11 @@ const manageUsersValidation = createFilterValidation({
     redirectTo: '/users/manage'
 });
 
-// Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
+// Todas as rotas de gerenciamento de usuários requerem login e perfil de administrador
 router.get(
     '/manage',
     authMiddleware,
-    permissionMiddleware(4),
+    permissionMiddleware(USER_ROLES.ADMIN),
     ...manageUsersValidation,
     userController.manageUsers
 );
@@ -29,7 +30,7 @@ router.get(
 router.post(
     '/create',
     authMiddleware,
-    permissionMiddleware(4),
+    permissionMiddleware(USER_ROLES.ADMIN),
     upload.single('profileImage'),
     audit('user.create', (req) => `User:${req.body?.email || 'novo'}`),
     userController.createUser
@@ -38,7 +39,7 @@ router.post(
 router.put(
     '/update/:id',
     authMiddleware,
-    permissionMiddleware(4),
+    permissionMiddleware(USER_ROLES.ADMIN),
     upload.single('profileImage'),
     audit('user.update', (req) => `User:${req.params.id}`),
     userController.updateUser
@@ -47,7 +48,7 @@ router.put(
 router.delete(
     '/delete/:id',
     authMiddleware,
-    permissionMiddleware(4),
+    permissionMiddleware(USER_ROLES.ADMIN),
     audit('user.delete', (req) => `User:${req.params.id}`),
     userController.deleteUser
 );
