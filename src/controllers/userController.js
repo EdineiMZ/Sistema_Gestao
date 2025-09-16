@@ -1,6 +1,7 @@
 // src/controllers/userController.js
 const { User } = require('../../database/models');
 const bcrypt = require('bcrypt');
+const { USER_ROLES, parseRole, roleAtLeast } = require('../constants/roles');
 
 const parseDecimal = (value, fallback = 0) => {
     if (value === undefined || value === null || value === '') {
@@ -14,11 +15,6 @@ const normalizeDate = (value) => {
     if (!value) return null;
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? null : value;
-};
-
-const parseRole = (value, fallback = 0) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isInteger(parsed) ? parsed : fallback;
 };
 
 module.exports = {
@@ -44,7 +40,7 @@ module.exports = {
     createUser: async (req, res) => {
         try {
             const { name, email, password, phone, address, dateOfBirth, role, creditBalance } = req.body;
-            const currentUser = req.session.user || {};
+            const currentUser = req.user || req.session.user || {};
 
             // Verificar se já existe email
             const existingUser = await User.findOne({ where: { email } });
@@ -53,8 +49,10 @@ module.exports = {
                 return res.redirect('/users/manage');
             }
 
-            // Se quem está criando for admin (role=4), define a role; caso contrário, 0
-            const newUserRole = currentUser.role === 4 ? parseRole(role, 0) : 0;
+            // Apenas administradores podem definir o perfil do novo usuário
+            const newUserRole = roleAtLeast(currentUser.role, USER_ROLES.ADMIN)
+                ? parseRole(role, USER_ROLES.CLIENT)
+                : USER_ROLES.CLIENT;
             const credit = parseDecimal(creditBalance, 0);
 
             const payload = {
@@ -64,7 +62,7 @@ module.exports = {
                 phone,
                 address,
                 dateOfBirth: normalizeDate(dateOfBirth),
-                role: Number.isInteger(newUserRole) ? newUserRole : 0,
+                role: newUserRole,
                 creditBalance: credit
             };
 
@@ -89,7 +87,7 @@ module.exports = {
             const { id } = req.params;
             const { name, email, password, phone, address, dateOfBirth, role, active, creditBalance } = req.body;
 
-            const currentUser = req.session.user;
+            const currentUser = req.user || req.session.user || {};
             const user = await User.findByPk(id);
 
             if (!user) {
@@ -106,7 +104,7 @@ module.exports = {
             user.address = address;
             user.dateOfBirth = normalizeDate(dateOfBirth);
 
-            if (currentUser.role === 4) {
+            if (roleAtLeast(currentUser.role, USER_ROLES.ADMIN)) {
                 user.role = parseRole(role, user.role);
                 user.active = (active === 'true');
                 user.creditBalance = parseDecimal(creditBalance, 0);

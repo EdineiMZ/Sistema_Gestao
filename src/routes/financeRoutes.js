@@ -2,12 +2,12 @@ const express = require('express');
 const router = express.Router();
 const financeController = require('../controllers/financeController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const authorize = require('../middlewares/authorize');
 
-// Geralmente admin ou financeiro teria role >= 3 ou 4
-router.get('/', authMiddleware, permissionMiddleware(4), financeController.listFinanceEntries);
-router.post('/create', authMiddleware, permissionMiddleware(4), financeController.createFinanceEntry);
-router.put('/update/:id', authMiddleware, permissionMiddleware(4), financeController.updateFinanceEntry);
-router.delete('/delete/:id', authMiddleware, permissionMiddleware(4), financeController.deleteFinanceEntry);
+// Acesso restrito a administradores
+router.get('/', authMiddleware, authorize('admin'), financeController.listFinanceEntries);
+router.post('/create', authMiddleware, authorize('admin'), financeController.createFinanceEntry);
+router.put('/update/:id', authMiddleware, authorize('admin'), financeController.updateFinanceEntry);
+router.delete('/delete/:id', authMiddleware, authorize('admin'), financeController.deleteFinanceEntry);
 
 module.exports = router;

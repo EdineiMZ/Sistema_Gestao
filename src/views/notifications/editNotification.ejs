@@ -1,6 +1,6 @@
 <%- include('../partials/header') %>
 
-<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
+<% const availableRoles = roleOptions || []; %>
 <% const filters = notif.filters || {}; %>
 <% const toDateTimeLocal = (value) => {
     if (!value) return '';
@@ -108,8 +108,13 @@
                         <div class="col-md-4">
                             <label class="form-label">Perfis alvo</label>
                             <select class="form-select" name="targetRoles" multiple>
-                                <% roleLabels.forEach((label, index) => { %>
-                                    <option value="<%= index %>" <%= filters.targetRoles && filters.targetRoles.includes(index) ? 'selected' : '' %>><%= label %></option>
+                                <% availableRoles.forEach((option) => { %>
+                                    <option
+                                        value="<%= option.value %>"
+                                        <%= filters.targetRoles && filters.targetRoles.includes(option.value) ? 'selected' : '' %>
+                                    >
+                                        <%= option.label %>
+                                    </option>
                                 <% }) %>
                             </select>
                         </div>
