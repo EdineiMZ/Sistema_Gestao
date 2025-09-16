@@ -7,7 +7,7 @@ const upload = require('../middlewares/uploadMiddleware'); // multer config
 
 // Página inicial
 router.get('/', (req, res) => {
-    res.render('index');
+    res.render('index', { pageTitle: 'Visão geral' });
 });
 
 

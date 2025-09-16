@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 module.exports = {
     // Renderiza a página de login
     showLogin: (req, res) => {
-        res.render('auth/login');
+        res.render('auth/login', { pageTitle: 'Entrar na plataforma' });
     },
 
     // Lida com o POST de login
@@ -44,13 +44,12 @@ module.exports = {
 
     // Renderiza a página de registro
     showRegister: (req, res) => {
-        res.render('auth/register');
+        res.render('auth/register', { pageTitle: 'Criar conta' });
     },
 
     // Lida com o POST de registro
     register: async (req, res) => {
         try {
-            console.log('Dados recebidos em req.body:', req.body);
             const { name, email, password, phone, address, dateOfBirth } = req.body;
 
             if (!email) {

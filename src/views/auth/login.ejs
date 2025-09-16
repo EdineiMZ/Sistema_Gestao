@@ -1,44 +1,64 @@
 <%- include('../partials/header') %>
 
-<div class="row">
-    <div class="col-md-6 offset-md-3">
-        <h2>Login</h2>
-
-        <!-- Exibe mensagem de sucesso somente se success_msg existir e não for vazio -->
-        <% if (success_msg && success_msg.length) { %>
-            <div class="alert alert-success"><%= success_msg %></div>
-        <% } %>
-
-        <!-- Exibe mensagem de erro somente se error_msg existir e não for vazio -->
-        <% if (error_msg && error_msg.length) { %>
-            <div class="alert alert-danger"><%= error_msg %></div>
-        <% } %>
-
-        <form action="/login" method="POST">
-            <div class="mb-3">
-                <label for="email" class="form-label">E-mail</label>
-                <input
-                        required
-                        type="email"
-                        class="form-control"
-                        name="email"
-                        id="email"
-                />
+<div class="row justify-content-center fade-in">
+    <div class="col-lg-5 col-md-7">
+        <div class="card card-soft p-4">
+            <div class="mb-4 text-center">
+                <h2 class="fw-semibold mb-1">Bem-vindo de volta</h2>
+                <p class="text-muted mb-0">Acesse sua conta com segurança reforçada.</p>
             </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Senha</label>
-                <input
-                        required
-                        type="password"
-                        class="form-control"
-                        name="password"
-                        id="password"
-                />
-            </div>
-            <button type="submit" class="btn btn-primary">
-                Entrar
-            </button>
-        </form>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } %>
+
+            <% if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <form action="/login" method="POST" class="needs-validation" novalidate>
+                <div class="mb-3">
+                    <label for="email" class="form-label">E-mail corporativo</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                        <input
+                            required
+                            type="email"
+                            class="form-control"
+                            name="email"
+                            id="email"
+                            placeholder="usuario@empresa.com"
+                        />
+                        <div class="invalid-feedback">Informe um e-mail válido.</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input
+                            required
+                            type="password"
+                            class="form-control"
+                            name="password"
+                            id="password"
+                            placeholder="Digite sua senha"
+                            minlength="6"
+                        />
+                        <div class="invalid-feedback">A senha deve conter pelo menos 6 caracteres.</div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-gradient w-100">Entrar com segurança</button>
+            </form>
+
+            <p class="text-center text-muted mt-4 mb-0">
+                Novo por aqui? <a href="/register">Crie uma conta</a>
+            </p>
+        </div>
     </div>
 </div>
 

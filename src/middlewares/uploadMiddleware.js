@@ -3,8 +3,8 @@
 const multer = require('multer');
 const path = require('path');
 
-// Limite de 5MB
-const MAX_SIZE = 50 * 1024 * 1024;
+// Limite real de 5MB para uploads de imagem
+const MAX_SIZE = 5 * 1024 * 1024;
 
 // Configuração na memória (buffer) - pois vamos salvar no DB
 const storage = multer.memoryStorage();
@@ -17,10 +17,10 @@ const upload = multer({
         const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg'];
         if (allowedMimes.includes(file.mimetype)) {
             cb(null, true);
-        } else {
-            cb(new Error('Tipo de arquivo inválido. Envie uma imagem PNG/JPEG.'));
+            return;
         }
-    },
+        cb(new Error('Tipo de arquivo inválido. Envie uma imagem PNG ou JPEG.'));
+    }
 });
 
 module.exports = upload;

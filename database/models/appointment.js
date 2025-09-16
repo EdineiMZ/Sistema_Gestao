@@ -1,7 +1,19 @@
 'use strict';
 module.exports = (sequelize, DataTypes) => {
     const Appointment = sequelize.define('Appointment', {
-        description: DataTypes.STRING,
+        description: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            validate: {
+                notEmpty: {
+                    msg: 'Descrição do agendamento é obrigatória.'
+                },
+                len: {
+                    args: [3, 255],
+                    msg: 'Descrição deve conter entre 3 e 255 caracteres.'
+                }
+            }
+        },
         professionalId: {
             type: DataTypes.INTEGER,
             allowNull: false // usuário profissional (role>1)
@@ -24,15 +36,31 @@ module.exports = (sequelize, DataTypes) => {
         },
         start: {
             type: DataTypes.DATE,
-            allowNull: false
+            allowNull: false,
+            validate: {
+                isDate: {
+                    msg: 'Data de início inválida.'
+                }
+            }
         },
         end: {
             type: DataTypes.DATE,
-            allowNull: false
+            allowNull: false,
+            validate: {
+                isDate: {
+                    msg: 'Data de término inválida.'
+                }
+            }
         },
         status: {
             type: DataTypes.STRING,
-            defaultValue: 'scheduled'
+            defaultValue: 'scheduled',
+            validate: {
+                isIn: {
+                    args: [['scheduled', 'completed', 'cancelled', 'no-show', 'pending-confirmation']],
+                    msg: 'Status de agendamento inválido.'
+                }
+            }
         },
         // Novo campo para confirmar se o pagamento foi realizado
         paymentConfirmed: {
@@ -40,7 +68,14 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: false
         }
     }, {
-        tableName: 'Appointments'
+        tableName: 'Appointments',
+        validate: {
+            endAfterStart() {
+                if (this.start && this.end && new Date(this.end) <= new Date(this.start)) {
+                    throw new Error('A data de término deve ser posterior à data de início.');
+                }
+            }
+        }
     });
 
     return Appointment;

@@ -1,34 +1,88 @@
 <%- include('partials/header') %>
 
-<div class="row">
-    <div class="col-12">
-        <h1 class="text-center">Bem-vindo ao Meu Site!</h1>
-        <p class="text-center">
-            <em>Sistema de Login Avançado em Node.js</em>
-        </p>
-
-        <!-- Se há success_msg, exibe e ignora error_msg -->
+<section class="row align-items-center justify-content-between g-5 hero-blur fade-in">
+    <div class="col-lg-6">
         <% if (success_msg) { %>
-            <div id="flashMessage" class="alert alert-success">
-                <%= success_msg %>
+            <div class="alert alert-success alert-auto" role="alert" data-auto-dismiss="6000">
+                <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
             </div>
-            <!-- Se não há success_msg, mas há error_msg, exibe a vermelha -->
         <% } else if (error_msg) { %>
-            <div id="flashMessage" class="alert alert-danger">
-                <%= error_msg %>
+            <div class="alert alert-danger alert-auto" role="alert" data-auto-dismiss="6000">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error_msg %>
             </div>
         <% } %>
 
-        <script>
-            // Após 5 segundos, esconde a div de mensagem
-            setTimeout(() => {
-                const flashEl = document.getElementById('flashMessage');
-                if (flashEl) {
-                    flashEl.style.display = 'none';
-                }
-            }, 5000);
-        </script>
+        <span class="app-chip mb-3"><i class="bi bi-stars me-2"></i>Inteligência operacional</span>
+        <h1 class="section-title mb-3">Transforme sua gestão com automações e insights em tempo real.</h1>
+        <p class="lead-hero mb-4">
+            Controle de cadastros, agenda inteligente, notificações personalizadas e finanças em um só lugar.
+            Foco em segurança, desempenho e na melhor experiência para sua equipe e clientes.
+        </p>
+        <div class="d-flex flex-wrap gap-3">
+            <% if (!user) { %>
+                <a href="/register" class="btn btn-gradient">Começar agora</a>
+                <a href="/login" class="btn btn-outline-primary rounded-pill px-4">Já tenho acesso</a>
+            <% } else { %>
+                <a href="/appointments" class="btn btn-gradient">Ir para painel</a>
+                <a href="/notifications" class="btn btn-outline-primary rounded-pill px-4">Automatizar envios</a>
+            <% } %>
+        </div>
     </div>
-</div>
+    <div class="col-lg-5">
+        <div class="card card-soft p-4 shadow-sm">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge-soft badge-soft-success me-2"><i class="bi bi-shield-lock me-1"></i>Segurança reforçada</span>
+                <span class="badge-soft badge-soft-warning"><i class="bi bi-lightning-charge me-1"></i>Performance</span>
+            </div>
+            <p class="mb-3 text-muted">
+                Monitoramos a saúde da aplicação, criptografamos credenciais sensíveis e aplicamos limites de requisição para proteger sua operação.
+            </p>
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Banco de dados validado com regras robustas</li>
+                <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Mensageria automatizada com filtros inteligentes</li>
+                <li class="mb-0"><i class="bi bi-check-circle text-success me-2"></i>Painéis responsivos com design profissional</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="row g-4 mt-4 fade-in">
+    <div class="col-md-4">
+        <div class="step-card h-100">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-primary-subtle text-primary me-3"><i class="bi bi-calendar2-event"></i></span>
+                <h5 class="mb-0">Agenda inteligente</h5>
+            </div>
+            <p class="text-muted mb-3">
+                Centralize agendamentos com controle de salas, profissionais e confirmações de pagamento.
+            </p>
+            <a href="/appointments" class="text-decoration-none">Ver agendamentos <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="step-card h-100">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-success-subtle text-success me-3"><i class="bi bi-envelope-paper"></i></span>
+                <h5 class="mb-0">Notificações personalizadas</h5>
+            </div>
+            <p class="text-muted mb-3">
+                Cadastre mensagens ricas, agende envios e aplique filtros por perfil, crédito e status de agendamento.
+            </p>
+            <a href="/notifications" class="text-decoration-none">Automatizar envios <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="step-card h-100">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-warning-subtle text-warning me-3"><i class="bi bi-bar-chart-line"></i></span>
+                <h5 class="mb-0">Governança financeira</h5>
+            </div>
+            <p class="text-muted mb-3">
+                Acompanhe receitas, despesas e recorrências com consistência de dados e validações aprimoradas.
+            </p>
+            <a href="/finance" class="text-decoration-none">Explorar finanças <i class="bi bi-arrow-right-short"></i></a>
+        </div>
+    </div>
+</section>
 
 <%- include('partials/footer') %>

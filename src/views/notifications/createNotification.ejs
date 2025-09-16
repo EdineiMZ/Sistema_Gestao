@@ -1,60 +1,192 @@
 <%- include('../partials/header') %>
 
-<h2>Criar Notificação</h2>
+<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
 
-<% if (success_msg) { %>
-    <div class="alert alert-success"><%= success_msg %></div>
-<% } else if (error_msg) { %>
-    <div class="alert alert-danger"><%= error_msg %></div>
-<% } %>
+<div class="row justify-content-center fade-in">
+    <div class="col-12 col-xl-10">
+        <div class="card card-soft p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="fw-semibold mb-1">Nova notificação automatizada</h2>
+                    <p class="text-muted mb-0">Configure conteúdo, filtros e agendamento com total flexibilidade.</p>
+                </div>
+                <a href="/notifications" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-arrow-left"></i> Voltar</a>
+            </div>
 
-<form action="/notifications/create" method="POST">
-    <div class="mb-3">
-        <label class="form-label">Título</label>
-        <input type="text" class="form-control" name="title" required />
-    </div>
-    <div class="mb-3">
-        <label class="form-label">Mensagem (placeholders ex: %USUARIO%, %AGENDAMENTO_NOME%)</label>
-        <textarea class="form-control" name="message" rows="3" required></textarea>
-    </div>
-    <div class="mb-3">
-        <label class="form-label">Tipo</label>
-        <select class="form-select" name="type">
-            <option value="custom">Custom</option>
-            <option value="birthday">Birthday</option>
-            <option value="appointment">Appointment</option>
-        </select>
-    </div>
-    <div class="mb-3">
-        <label class="form-label">Data/Hora de Disparo (opcional)</label>
-        <input type="datetime-local" class="form-control" name="triggerDate" />
-    </div>
-    <div class="mb-3 form-check">
-        <input class="form-check-input" type="checkbox" name="active" value="true" checked />
-        <label class="form-check-label" for="active">Ativa?</label>
-    </div>
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } else if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
 
-    <!-- Selecionar userId ou mandar para todos -->
-    <div class="mb-3">
-        <label class="form-label">Enviar para Usuário (opcional)</label>
-        <select class="form-select" name="userId">
-            <option value="">Nenhum</option>
-            <% users.forEach(u => { %>
-                <option value="<%= u.id %>"><%= u.name %></option>
-            <% }) %>
-        </select>
-        <small class="form-text text-muted">Se "Para Todos" estiver marcado, este campo será ignorado.</small>
-    </div>
+            <form action="/notifications/create" method="POST" class="needs-validation" novalidate>
+                <fieldset class="scheduler-border">
+                    <legend class="scheduler-border">Conteúdo</legend>
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Título / assunto</label>
+                            <input type="text" class="form-control" name="title" required placeholder="Informe um título impactante" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Cor de destaque</label>
+                            <input type="color" class="form-control form-control-color" name="accentColor" value="#4361ee" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Mensagem (texto plano com placeholders)</label>
+                            <textarea class="form-control" name="message" rows="3" required placeholder="Olá %USUARIO%, ..."></textarea>
+                            <div class="form-text">Use placeholders como %USUARIO%, %AGENDAMENTO_DATA%, %USER_CREDIT%, %ORGANIZACAO%.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Mensagem rica (HTML opcional)</label>
+                            <textarea class="form-control" name="messageHtml" rows="4" placeholder="<p>Olá &lt;strong&gt;%USUARIO%&lt;/strong&gt;...</p>"></textarea>
+                            <div class="form-text">O conteúdo é sanitizado automaticamente para evitar scripts maliciosos.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Texto de pré-visualização (até 120 caracteres)</label>
+                            <input type="text" class="form-control" name="previewText" maxlength="120" placeholder="Resumo exibido na caixa de entrada" />
+                        </div>
+                    </div>
+                </fieldset>
 
-    <div class="mb-3 form-check">
-        <input class="form-check-input" type="checkbox" name="sendToAll" value="true" id="sendToAll">
-        <label class="form-check-label" for="sendToAll">
-            Enviar para TODOS os usuários
-        </label>
-    </div>
+                <fieldset class="scheduler-border">
+                    <legend class="scheduler-border">Agendamento</legend>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Data e hora de disparo (opcional)</label>
+                            <input type="datetime-local" class="form-control" name="triggerDate" />
+                            <div class="form-text" data-schedule-preview>Disparo imediato após salvar</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Recorrência</label>
+                            <select class="form-select" name="repeatFrequency">
+                                <% Object.entries(frequencyLabels).forEach(([value, label]) => { %>
+                                    <option value="<%= value %>"><%= label %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" name="type">
+                                <option value="custom">Custom</option>
+                                <option value="birthday">Aniversário</option>
+                                <option value="appointment">Agendamento</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Enviar para usuário específico (opcional)</label>
+                            <select class="form-select" name="userId">
+                                <option value="">Nenhum</option>
+                                <% users.forEach(u => { %>
+                                    <option value="<%= u.id %>"><%= u.name %> (ID <%= u.id %>)</option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="sendToAll" name="sendToAll" value="true" />
+                                <label class="form-check-label" for="sendToAll">Enviar para todos os usuários</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="active" name="active" value="true" checked />
+                                <label class="form-check-label" for="active">Notificação ativa</label>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
 
-    <button type="submit" class="btn btn-primary">Criar</button>
-    <a href="/notifications" class="btn btn-secondary">Cancelar</a>
-</form>
+                <fieldset class="scheduler-border">
+                    <legend class="scheduler-border">Filtros avançados</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Perfis (segure CTRL para múltiplos)</label>
+                            <select class="form-select" name="targetRoles" multiple>
+                                <% roleLabels.forEach((label, index) => { %>
+                                    <option value="<%= index %>"><%= label %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Crédito mínimo</label>
+                            <input type="number" step="0.01" class="form-control" name="minimumCreditBalance" placeholder="Ex.: 50.00" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Domínio de e-mail do cliente</label>
+                            <input type="text" class="form-control" name="clientEmailDomain" placeholder="exemplo.com" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Status do agendamento</label>
+                            <select class="form-select" name="appointmentStatus" multiple>
+                                <option value="scheduled">Agendado</option>
+                                <option value="completed">Concluído</option>
+                                <option value="cancelled">Cancelado</option>
+                                <option value="no-show">Não compareceu</option>
+                                <option value="pending-confirmation">Pendente de confirmação</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Janela (minutos)</label>
+                            <input type="number" class="form-control" name="timeWindowMinutes" min="5" step="5" value="<%= defaultFilters.timeWindowMinutes %>" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Procedimento específico</label>
+                            <select class="form-select" name="procedureId">
+                                <option value="">Todos</option>
+                                <% procedures.forEach(proc => { %>
+                                    <option value="<%= proc.id %>"><%= proc.name %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sala específica</label>
+                            <select class="form-select" name="roomId">
+                                <option value="">Todas</option>
+                                <% rooms.forEach(room => { %>
+                                    <option value="<%= room.id %>"><%= room.name %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Início do período</label>
+                            <input type="datetime-local" class="form-control" name="dateRangeStart" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fim do período</label>
+                            <input type="datetime-local" class="form-control" name="dateRangeEnd" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch me-4">
+                                <input class="form-check-input" type="checkbox" role="switch" id="onlyActive" name="onlyActive" value="true" <%= defaultFilters.onlyActive ? 'checked' : '' %> />
+                                <label class="form-check-label" for="onlyActive">Somente usuários ativos</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch me-4">
+                                <input class="form-check-input" type="checkbox" role="switch" id="includeProfessional" name="includeProfessional" value="true" <%= defaultFilters.includeProfessional ? 'checked' : '' %> />
+                                <label class="form-check-label" for="includeProfessional">Enviar ao profissional</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="includeClient" name="includeClient" value="true" <%= defaultFilters.includeClient ? 'checked' : '' %> />
+                                <label class="form-check-label" for="includeClient">Enviar ao cliente</label>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="d-flex justify-content-end gap-3">
+                    <a href="/notifications" class="btn btn-outline-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-gradient">Salvar notificação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <%- include('../partials/footer') %>

@@ -2,14 +2,37 @@
 const { User } = require('../../database/models');
 const bcrypt = require('bcrypt');
 
+const parseDecimal = (value, fallback = 0) => {
+    if (value === undefined || value === null || value === '') {
+        return fallback;
+    }
+    const parsed = Number.parseFloat(String(value).replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeDate = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : value;
+};
+
+const parseRole = (value, fallback = 0) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) ? parsed : fallback;
+};
+
 module.exports = {
     // Exibe a página de gerenciamento de usuários (somente ativos)
     manageUsers: async (req, res) => {
         try {
             const users = await User.findAll({
-                where: { active: true }
+                where: { active: true },
+                order: [['name', 'ASC']]
             });
-            res.render('users/manageUsers', { users });
+            res.render('users/manageUsers', {
+                pageTitle: 'Gestão de usuários',
+                users
+            });
         } catch (err) {
             console.error(err);
             req.flash('error_msg', 'Erro ao listar usuários.');
@@ -21,7 +44,7 @@ module.exports = {
     createUser: async (req, res) => {
         try {
             const { name, email, password, phone, address, dateOfBirth, role, creditBalance } = req.body;
-            const currentUser = req.session.user;
+            const currentUser = req.session.user || {};
 
             // Verificar se já existe email
             const existingUser = await User.findOne({ where: { email } });
@@ -31,19 +54,25 @@ module.exports = {
             }
 
             // Se quem está criando for admin (role=4), define a role; caso contrário, 0
-            const newUserRole = (currentUser.role === 4) ? role : 0;
+            const newUserRole = currentUser.role === 4 ? parseRole(role, 0) : 0;
+            const credit = parseDecimal(creditBalance, 0);
 
-            await User.create({
+            const payload = {
                 name,
                 email,
                 password,
                 phone,
                 address,
-                dateOfBirth,
-                role: newUserRole || 0,
-                // NOVO: define creditBalance
-                creditBalance: creditBalance || 0
-            });
+                dateOfBirth: normalizeDate(dateOfBirth),
+                role: Number.isInteger(newUserRole) ? newUserRole : 0,
+                creditBalance: credit
+            };
+
+            if (req.file) {
+                payload.profileImage = req.file.buffer;
+            }
+
+            await User.create(payload);
 
             req.flash('success_msg', 'Usuário criado com sucesso!');
             return res.redirect('/users/manage');
@@ -75,13 +104,16 @@ module.exports = {
             }
             user.phone = phone;
             user.address = address;
-            user.dateOfBirth = dateOfBirth;
+            user.dateOfBirth = normalizeDate(dateOfBirth);
 
             if (currentUser.role === 4) {
-                user.role = role;
+                user.role = parseRole(role, user.role);
                 user.active = (active === 'true');
-                // NOVO: define ou altera creditBalance
-                user.creditBalance = creditBalance || 0;
+                user.creditBalance = parseDecimal(creditBalance, 0);
+            }
+
+            if (req.file) {
+                user.profileImage = req.file.buffer;
             }
 
             await user.save();

@@ -9,17 +9,33 @@ const config = require('../../config/config')[env] || {};
 const db = {};
 
 let sequelize;
-sequelize = new Sequelize(
-    config.database,
-    config.username,
-    config.password,
-    {
-        host: config.host,
-        dialect: config.dialect,
-        port: config.port,
-        logging: false
-    }
-);
+
+if (config.use_env_variable) {
+    sequelize = new Sequelize(process.env[config.use_env_variable], config);
+} else if ((config.dialect || '').toLowerCase() === 'sqlite') {
+    sequelize = new Sequelize({
+        dialect: 'sqlite',
+        storage: config.storage || ':memory:',
+        logging: config.logging ?? false,
+        define: config.define,
+        pool: config.pool
+    });
+} else {
+    sequelize = new Sequelize(
+        config.database,
+        config.username,
+        config.password,
+        {
+            host: config.host,
+            dialect: config.dialect,
+            port: config.port,
+            logging: config.logging ?? false,
+            define: config.define,
+            pool: config.pool,
+            dialectOptions: config.dialectOptions
+        }
+    );
+}
 
 // Carrega todos os arquivos de model *.js, exceto este index.js
 fs
