@@ -1,0 +1,158 @@
+<%- include('../partials/header') %>
+
+<section id="dashboardRoot" class="dashboard-root fade-in">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+        <div>
+            <span class="app-chip"><i class="bi bi-speedometer2 me-2"></i>Monitoramento avançado</span>
+            <h1 class="dashboard-title mt-3 mb-2">Visão gerencial inteligente</h1>
+            <p class="dashboard-subtitle mb-0">
+                Acompanhe compromissos, fluxo financeiro e a evolução da equipe em tempo real com foco em performance e segurança.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <button type="button" id="refreshDashboard" class="btn btn-gradient">
+                <i class="bi bi-arrow-repeat me-2"></i>Atualizar agora
+            </button>
+            <div class="text-muted small text-end">
+                Última atualização<br />
+                <span class="fw-semibold" data-dashboard-updated>--</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-danger d-none" role="alert" data-dashboard-alert></div>
+
+    <div class="row g-4">
+        <div class="col-xl-3 col-md-6">
+            <article class="card metric-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="metric-icon bg-primary-subtle text-primary"><i class="bi bi-calendar-event"></i></span>
+                        <span class="badge rounded-pill bg-primary-subtle text-primary">Hoje</span>
+                    </div>
+                    <h2 class="metric-value" data-metric="appointmentsToday">--</h2>
+                    <p class="metric-label mb-3">Agendamentos confirmados</p>
+                    <p class="metric-footnote mb-0 text-muted">
+                        <i class="bi bi-arrow-right-circle me-1 text-primary"></i>
+                        Próximos 7 dias: <span class="fw-semibold" data-metric="upcomingWeek">--</span>
+                    </p>
+                </div>
+            </article>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <article class="card metric-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="metric-icon bg-success-subtle text-success"><i class="bi bi-cash-coin"></i></span>
+                        <span class="badge rounded-pill bg-success-subtle text-success">Receitas</span>
+                    </div>
+                    <h2 class="metric-value" data-metric="monthlyRevenue">--</h2>
+                    <p class="metric-label mb-3">Receita confirmada no mês</p>
+                    <p class="metric-footnote mb-0 text-muted">
+                        <i class="bi bi-shield-check me-1 text-success"></i>
+                        Valores conciliados via lançamentos pagos
+                    </p>
+                </div>
+            </article>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <article class="card metric-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="metric-icon bg-warning-subtle text-warning"><i class="bi bi-exclamation-triangle"></i></span>
+                        <span class="badge rounded-pill bg-warning-subtle text-warning">Atenção</span>
+                    </div>
+                    <h2 class="metric-value" data-metric="pendingPayables">--</h2>
+                    <p class="metric-label mb-3">Despesas pendentes no mês</p>
+                    <p class="metric-footnote mb-0 text-muted">
+                        <i class="bi bi-info-circle me-1 text-warning"></i>
+                        Inclui compromissos com status pendente ou em atraso
+                    </p>
+                </div>
+            </article>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <article class="card metric-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="metric-icon bg-info-subtle text-info"><i class="bi bi-people"></i></span>
+                        <span class="badge rounded-pill bg-info-subtle text-info">Equipe</span>
+                    </div>
+                    <h2 class="metric-value" data-metric="activeUsers">--</h2>
+                    <p class="metric-label mb-3">Colaboradores ativos</p>
+                    <p class="metric-footnote mb-0 text-muted">
+                        <i class="bi bi-person-plus-fill me-1 text-info"></i>
+                        <span data-submetric="newUsersMonth">-- novos neste mês</span>
+                    </p>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-1">
+        <div class="col-xxl-8">
+            <article class="card chart-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="chart-title mb-1">Fluxo financeiro</h5>
+                            <p class="chart-subtitle mb-0 text-muted">Receitas e despesas monitoradas nos últimos 6 meses.</p>
+                        </div>
+                        <span class="badge rounded-pill bg-light text-muted"><i class="bi bi-clock-history me-1"></i>Atualização automática</span>
+                    </div>
+                    <canvas id="financeTrendChart" height="260" aria-label="Gráfico de desempenho financeiro" role="img"></canvas>
+                </div>
+            </article>
+        </div>
+        <div class="col-xxl-4">
+            <article class="card upcoming-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="chart-title mb-1">Próximos atendimentos</h5>
+                            <p class="chart-subtitle mb-0 text-muted">Monitoramento preventivo de atrasos e ausências.</p>
+                        </div>
+                        <span class="badge rounded-pill bg-light text-muted"><i class="bi bi-bell"></i></span>
+                    </div>
+                    <ul class="list-unstyled mb-0" data-upcoming-list>
+                        <li class="text-muted small">Carregando dados atualizados...</li>
+                    </ul>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-1">
+        <div class="col-xl-6">
+            <article class="card chart-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="chart-title mb-1">Status dos agendamentos</h5>
+                            <p class="chart-subtitle mb-0 text-muted">Distribuição do mês corrente por status operacional.</p>
+                        </div>
+                    </div>
+                    <canvas id="appointmentStatusChart" height="280" aria-label="Distribuição de status de agendamentos" role="img"></canvas>
+                </div>
+            </article>
+        </div>
+        <div class="col-xl-6">
+            <article class="card chart-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="chart-title mb-1">Crescimento da equipe</h5>
+                            <p class="chart-subtitle mb-0 text-muted">Novos colaboradores cadastrados por mês.</p>
+                        </div>
+                    </div>
+                    <canvas id="userGrowthChart" height="280" aria-label="Crescimento de usuários" role="img"></canvas>
+                </div>
+            </article>
+        </div>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" referrerpolicy="no-referrer" defer></script>
+<script src="/js/dashboard.js" defer></script>
+
+<%- include('../partials/footer') %>
