@@ -19,30 +19,29 @@ jest.mock('../../src/middlewares/permissionMiddleware', () => () => (req, res, n
 jest.mock('../../src/middlewares/audit', () => () => (req, res, next) => next());
 
 jest.mock('pdfkit', () => {
-    return class PDFDocumentMock {
+    const instances = [];
+
+    class PDFDocumentMock {
         constructor() {
             this.stream = null;
+            this.page = {
+                width: 595.28,
+                margins: {
+                    left: 40,
+                    right: 40
+                }
+            };
+            this.fontSize = jest.fn(() => this);
+            this.text = jest.fn(() => this);
+            this.moveDown = jest.fn(() => this);
+            this.fillColor = jest.fn(() => this);
+            this.image = jest.fn(() => this);
+            instances.push(this);
         }
 
         pipe(stream) {
             this.stream = stream;
             return stream;
-        }
-
-        fontSize() {
-            return this;
-        }
-
-        text() {
-            return this;
-        }
-
-        moveDown() {
-            return this;
-        }
-
-        fillColor() {
-            return this;
         }
 
         end() {
@@ -55,19 +54,48 @@ jest.mock('pdfkit', () => {
                 }
             }
         }
-    };
+    }
+
+    PDFDocumentMock.__mockInstances = instances;
+
+    return PDFDocumentMock;
 });
 
 jest.mock('exceljs', () => {
+    const workbookInstances = [];
+
     class WorksheetMock {
-        constructor() {
+        constructor(name) {
+            this.name = name;
             this.columns = [];
             this.rows = [];
+            this.images = [];
+            this._cells = new Map();
+            this.mergeCells = jest.fn();
+            this.addImage = jest.fn((imageId, rangeOrOptions) => {
+                this.images.push({ imageId, rangeOrOptions });
+                return rangeOrOptions;
+            });
         }
 
         addRow(data) {
             this.rows.push(data);
-            return data;
+            return { number: this.rows.length, values: data };
+        }
+
+        get rowCount() {
+            return this.rows.length;
+        }
+
+        getCell(address) {
+            if (!this._cells.has(address)) {
+                this._cells.set(address, {
+                    value: undefined,
+                    alignment: undefined,
+                    font: undefined
+                });
+            }
+            return this._cells.get(address);
         }
     }
 
@@ -76,6 +104,12 @@ jest.mock('exceljs', () => {
             this.creator = null;
             this.created = null;
             this.worksheets = [];
+            this.images = [];
+            this.addImage = jest.fn((options) => {
+                const id = this.images.length + 1;
+                this.images.push({ id, options });
+                return id;
+            });
             this.xlsx = {
                 write: jest.fn(async (stream) => {
                     if (typeof stream.write === 'function') {
@@ -86,20 +120,38 @@ jest.mock('exceljs', () => {
                     }
                 })
             };
+            workbookInstances.push(this);
         }
 
-        addWorksheet() {
-            const sheet = new WorksheetMock();
+        addWorksheet(name) {
+            const sheet = new WorksheetMock(name);
             this.worksheets.push(sheet);
             return sheet;
         }
     }
 
-    return { Workbook: WorkbookMock };
+    WorkbookMock.__mockInstances = workbookInstances;
+
+    return { Workbook: WorkbookMock, __mockInstances: workbookInstances };
 });
+
+const chartBuffer = Buffer.from('chart-image');
+const chartImageMock = {
+    buffer: chartBuffer,
+    width: 800,
+    height: 400,
+    dataUrl: `data:image/png;base64,${chartBuffer.toString('base64')}`
+};
+
+jest.mock('../../src/services/reportChartService', () => ({
+    generateFinanceReportChart: jest.fn()
+}));
 
 const financeRoutes = require('../../src/routes/financeRoutes');
 const financeReportingService = require('../../src/services/financeReportingService');
+const reportChartService = require('../../src/services/reportChartService');
+const PDFDocumentMock = require('pdfkit');
+const ExcelJSMock = require('exceljs');
 const { FinanceEntry, sequelize } = require('../../database/models');
 
 const buildTestApp = () => {
@@ -160,6 +212,9 @@ describe('FinanceController export endpoints', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        PDFDocumentMock.__mockInstances.length = 0;
+        ExcelJSMock.__mockInstances.length = 0;
+        reportChartService.generateFinanceReportChart.mockResolvedValue(chartImageMock);
         app = buildTestApp();
         findAllSpy = jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(sampleEntries);
         summarySpy = jest.spyOn(financeReportingService, 'getFinanceSummary').mockResolvedValue(summaryResponse);
@@ -168,6 +223,7 @@ describe('FinanceController export endpoints', () => {
     afterEach(() => {
         findAllSpy.mockRestore();
         summarySpy.mockRestore();
+        reportChartService.generateFinanceReportChart.mockReset();
     });
 
     afterAll(async () => {
@@ -199,6 +255,17 @@ describe('FinanceController export endpoints', () => {
             { startDate: '2024-01-01', endDate: '2024-01-31' },
             expect.objectContaining({ entries: sampleEntries })
         );
+        expect(reportChartService.generateFinanceReportChart).toHaveBeenCalledWith(summaryResponse);
+
+        const pdfInstance = PDFDocumentMock.__mockInstances[0];
+        expect(pdfInstance).toBeDefined();
+        expect(pdfInstance.image).toHaveBeenCalledWith(
+            chartImageMock.buffer,
+            expect.objectContaining({
+                width: expect.any(Number),
+                align: 'center'
+            })
+        );
     });
 
     it('retorna um Excel com os lançamentos filtrados', async () => {
@@ -225,6 +292,23 @@ describe('FinanceController export endpoints', () => {
         expect(financeReportingService.getFinanceSummary).toHaveBeenCalledWith(
             { startDate: '2024-02-01', endDate: '2024-02-28' },
             expect.objectContaining({ entries: sampleEntries })
+        );
+        expect(reportChartService.generateFinanceReportChart).toHaveBeenCalledWith(summaryResponse, {
+            width: 720,
+            height: 360
+        });
+
+        const workbookInstance = ExcelJSMock.__mockInstances[0];
+        expect(workbookInstance).toBeDefined();
+        expect(workbookInstance.addImage).toHaveBeenCalledWith(expect.objectContaining({
+            buffer: chartImageMock.buffer,
+            extension: 'png'
+        }));
+
+        const summarySheet = workbookInstance.worksheets[0];
+        expect(summarySheet.addImage).toHaveBeenCalledWith(
+            expect.any(Number),
+            expect.stringMatching(/^A\d+:H\d+$/)
         );
     });
 });
