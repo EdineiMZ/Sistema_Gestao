@@ -1,253 +1,201 @@
 <%- include('../partials/header') %>
 
-<div class="row">
-    <div class="col-12">
-        <h2>Gerenciar Usuários</h2>
+<% const roleLabels = ['Cliente', 'Colaborador', 'Especialista', 'Gestor', 'Administrador']; %>
 
-        <!-- Renderiza condicionalmente apenas um tipo de mensagem -->
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Gestão de usuários</h2>
+                <p class="text-muted mb-0">Atualize perfis, revise acessos e mantenha os dados sempre consistentes.</p>
+            </div>
+        </div>
+
         <% if (success_msg) { %>
-            <div id="flashMessage" class="alert alert-success">
-                <%= success_msg %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
             </div>
         <% } else if (error_msg) { %>
-            <div id="flashMessage" class="alert alert-danger">
-                <%= error_msg %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
             </div>
         <% } %>
 
-        <!-- Script para ocultar a mensagem após 5 segundos -->
-        <script>
-            setTimeout(() => {
-                const flashEl = document.getElementById('flashMessage');
-                if (flashEl) {
-                    flashEl.style.display = 'none';
-                }
-            }, 5000);
-        </script>
-
-        <!-- Listagem de Usuários -->
-        <table class="table table-bordered table-striped">
-            <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>E-mail</th>
-                <th>Telefone</th>
-                <th>Endereço</th>
-                <th>Nível</th>
-                <th>Ativo</th>
-                <th>Ações</th>
-            </tr>
-            </thead>
-            <tbody>
-            <% users.forEach(user => { %>
-                <tr>
-                    <td><%= user.id %></td>
-                    <td><%= user.name %></td>
-                    <td><%= user.email %></td>
-                    <td><%= user.phone %></td>
-                    <td><%= user.address %></td>
-                    <td><%= user.role %></td>
-                    <td><%= user.active ? 'Sim' : 'Não' %></td>
-                    <td>
-                        <!-- Formulário para exclusão lógica -->
-                        <form
-                                action="/users/delete/<%= user.id %>?_method=DELETE"
-                                method="POST"
-                                style="display: inline-block;"
-                        >
-                            <button class="btn btn-danger btn-sm" type="submit">Excluir</button>
-                        </form>
-
-                        <!-- Botão para abrir modal de edição -->
-                        <button
-                                type="button"
-                                class="btn btn-warning btn-sm"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editModal<%= user.id %>"
-                        >
-                            Editar
-                        </button>
-
-                        <!-- Modal de edição -->
-                        <div class="modal fade" id="editModal<%= user.id %>" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <!-- Importante: multipart/form-data -->
+        <div class="card card-soft p-4 mb-4">
+            <div class="table-responsive table-modern">
+                <table class="table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>E-mail</th>
+                        <th>Telefone</th>
+                        <th>Endereço</th>
+                        <th>Nível</th>
+                        <th>Crédito</th>
+                        <th>Status</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <% users.forEach(userItem => { %>
+                        <tr>
+                            <td class="fw-semibold"><%= userItem.id %></td>
+                            <td><%= userItem.name %></td>
+                            <td><%= userItem.email %></td>
+                            <td><%= userItem.phone || '—' %></td>
+                            <td><%= userItem.address || '—' %></td>
+                            <td>
+                                <span class="badge-soft badge-soft-warning">
+                                    <%= roleLabels[userItem.role] || 'Usuário' %>
+                                </span>
+                            </td>
+                            <td>R$ <%= Number(userItem.creditBalance || 0).toFixed(2) %></td>
+                            <td>
+                                <span class="badge-soft <%= userItem.active ? 'badge-soft-success' : 'badge-soft-danger' %>">
+                                    <%= userItem.active ? 'Ativo' : 'Inativo' %>
+                                </span>
+                            </td>
+                            <td class="text-end">
                                 <form
-                                        action="/users/update/<%= user.id %>?_method=PUT"
-                                        method="POST"
-                                        class="modal-content"
-                                        enctype="multipart/form-data"
+                                    action="/users/delete/<%= userItem.id %>?_method=DELETE"
+                                    method="POST"
+                                    class="d-inline"
                                 >
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">Editar Usuário</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <input type="hidden" name="id" value="<%= user.id %>" />
-
-                                        <div class="mb-3">
-                                            <label for="name<%= user.id %>" class="form-label">Nome</label>
-                                            <input
-                                                    type="text"
-                                                    class="form-control"
-                                                    name="name"
-                                                    id="name<%= user.id %>"
-                                                    value="<%= user.name %>"
-                                                    required
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="email<%= user.id %>" class="form-label">E-mail</label>
-                                            <input
-                                                    type="email"
-                                                    class="form-control"
-                                                    name="email"
-                                                    id="email<%= user.id %>"
-                                                    value="<%= user.email %>"
-                                                    required
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="password<%= user.id %>" class="form-label">Nova Senha (opcional)</label>
-                                            <input
-                                                    type="password"
-                                                    class="form-control"
-                                                    name="password"
-                                                    id="password<%= user.id %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="phone<%= user.id %>" class="form-label">Telefone</label>
-                                            <input
-                                                    type="text"
-                                                    class="form-control"
-                                                    name="phone"
-                                                    id="phone<%= user.id %>"
-                                                    value="<%= user.phone %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="address<%= user.id %>" class="form-label">Endereço</label>
-                                            <input
-                                                    type="text"
-                                                    class="form-control"
-                                                    name="address"
-                                                    id="address<%= user.id %>"
-                                                    value="<%= user.address %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="dateOfBirth<%= user.id %>" class="form-label">Data de Nascimento</label>
-                                            <input
-                                                    type="date"
-                                                    class="form-control"
-                                                    name="dateOfBirth"
-                                                    id="dateOfBirth<%= user.id %>"
-                                                    value="<%= user.dateOfBirth %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="role<%= user.id %>" class="form-label">Nível (0=User, 4=Admin)</label>
-                                            <input
-                                                    type="number"
-                                                    class="form-control"
-                                                    name="role"
-                                                    id="role<%= user.id %>"
-                                                    min="0"
-                                                    max="4"
-                                                    value="<%= user.role %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="active<%= user.id %>" class="form-label">Ativo</label>
-                                            <select
-                                                    class="form-select"
-                                                    name="active"
-                                                    id="active<%= user.id %>"
-                                            >
-                                                <option value="true" <%= user.active ? 'selected' : ''%>>Sim</option>
-                                                <option value="false" <%= !user.active ? 'selected' : ''%>>Não</option>
-                                            </select>
-                                        </div>
-
-                                        <!-- Campo para alterar a imagem de perfil -->
-                                        <div class="mb-3">
-                                            <label for="profileImage<%= user.id %>" class="form-label">Alterar Foto de Perfil (até 5MB)</label>
-                                            <input
-                                                    type="file"
-                                                    class="form-control"
-                                                    name="profileImage"
-                                                    id="profileImage<%= user.id %>"
-                                                    accept="image/*"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                            Cancelar
-                                        </button>
-                                        <button type="submit" class="btn btn-primary">Salvar</button>
-                                    </div>
+                                    <button class="btn btn-sm btn-outline-danger" type="submit" data-bs-toggle="tooltip" title="Desativar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </form>
-                            </div>
-                        </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary ms-2"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editModal<%= userItem.id %>"
+                                >
+                                    <i class="bi bi-pencil"></i>
+                                </button>
 
-                    </td>
-                </tr>
-            <% }) %>
-            </tbody>
-        </table>
+                                <div class="modal fade" id="editModal<%= userItem.id %>" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg">
+                                        <form
+                                            action="/users/update/<%= userItem.id %>?_method=PUT"
+                                            method="POST"
+                                            class="modal-content needs-validation"
+                                            enctype="multipart/form-data"
+                                            novalidate
+                                        >
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Editar usuário #<%= userItem.id %></h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Nome</label>
+                                                        <input type="text" class="form-control" name="name" value="<%= userItem.name %>" required />
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">E-mail</label>
+                                                        <input type="email" class="form-control" name="email" value="<%= userItem.email %>" required />
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Nova senha (opcional)</label>
+                                                        <input type="password" class="form-control" name="password" minlength="6" />
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Telefone</label>
+                                                        <input type="text" class="form-control" name="phone" value="<%= userItem.phone || '' %>" />
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Endereço</label>
+                                                        <input type="text" class="form-control" name="address" value="<%= userItem.address || '' %>" />
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Data de nascimento</label>
+                                                        <input type="date" class="form-control" name="dateOfBirth" value="<%= userItem.dateOfBirth || '' %>" />
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Nível</label>
+                                                        <input type="number" class="form-control" name="role" min="0" max="4" value="<%= userItem.role %>" />
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Crédito</label>
+                                                        <input type="number" step="0.01" class="form-control" name="creditBalance" value="<%= userItem.creditBalance || 0 %>" />
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Status</label>
+                                                        <select class="form-select" name="active">
+                                                            <option value="true" <%= userItem.active ? 'selected' : '' %>>Ativo</option>
+                                                            <option value="false" <%= !userItem.active ? 'selected' : '' %>>Inativo</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label class="form-label">Atualizar foto de perfil</label>
+                                                        <input type="file" class="form-control" name="profileImage" accept="image/*" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-gradient">Salvar alterações</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-        <!-- Formulário para criar novo usuário (admin) -->
-        <h3>Criar Novo Usuário</h3>
-        <!-- Importante: multipart/form-data -->
-        <form action="/users/create" method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="name" class="form-label">Nome</label>
-                <input required type="text" class="form-control" name="name" />
-            </div>
-            <div class="mb-3">
-                <label for="email" class="form-label">E-mail</label>
-                <input required type="email" class="form-control" name="email" />
-            </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Senha</label>
-                <input required type="password" class="form-control" name="password" />
-            </div>
-            <div class="mb-3">
-                <label for="phone" class="form-label">Telefone</label>
-                <input type="text" class="form-control" name="phone" />
-            </div>
-            <div class="mb-3">
-                <label for="address" class="form-label">Endereço</label>
-                <input type="text" class="form-control" name="address" />
-            </div>
-            <div class="mb-3">
-                <label for="dateOfBirth" class="form-label">Data de Nascimento</label>
-                <input type="date" class="form-control" name="dateOfBirth" />
-            </div>
-            <div class="mb-3">
-                <label for="role" class="form-label">Nível (0=User, 4=Admin)</label>
-                <input type="number" class="form-control" name="role" min="0" max="4" />
-            </div>
-
-            <!-- Campo para enviar imagem -->
-            <div class="mb-3">
-                <label for="profileImage" class="form-label">Foto de Perfil (até 5MB)</label>
-                <input
-                        type="file"
-                        class="form-control"
-                        name="profileImage"
-                        id="profileImage"
-                        accept="image/*"
-                />
-            </div>
-
-            <button type="submit" class="btn btn-success">Criar Usuário</button>
-        </form>
-
+    <div class="col-12 fade-in">
+        <div class="card card-soft p-4">
+            <h3 class="fw-semibold mb-3">Criar novo usuário</h3>
+            <form action="/users/create" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Nome</label>
+                        <input required type="text" class="form-control" name="name" minlength="3" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">E-mail</label>
+                        <input required type="email" class="form-control" name="email" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Senha</label>
+                        <input required type="password" class="form-control" name="password" minlength="6" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" class="form-control" name="phone" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" class="form-control" name="address" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Nascimento</label>
+                        <input type="date" class="form-control" name="dateOfBirth" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Nível</label>
+                        <input type="number" class="form-control" name="role" min="0" max="4" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Crédito inicial</label>
+                        <input type="number" class="form-control" name="creditBalance" step="0.01" value="0" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Foto de perfil (até 5MB)</label>
+                        <input type="file" class="form-control" name="profileImage" accept="image/*" />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-gradient mt-4">Cadastrar usuário</button>
+            </form>
+        </div>
     </div>
 </div>
 

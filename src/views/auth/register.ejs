@@ -1,95 +1,114 @@
 <%- include('../partials/header') %>
 
-<div class="row">
-    <div class="col-md-8 offset-md-2">
-        <h2>Registrar</h2>
+<div class="row justify-content-center fade-in">
+    <div class="col-lg-7">
+        <div class="card card-soft p-4">
+            <div class="mb-4 text-center">
+                <h2 class="fw-semibold mb-1">Crie sua conta</h2>
+                <p class="text-muted mb-0">Personalize seu perfil e comece a otimizar sua operação.</p>
+            </div>
 
-        <!-- Exibe mensagem de sucesso -->
-        <% if (success_msg && success_msg.length) { %>
-            <div class="alert alert-success"><%= success_msg %></div>
-        <% } %>
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } %>
 
-        <!-- Exibe mensagem de erro -->
-        <% if (error_msg && error_msg.length) { %>
-            <div class="alert alert-danger"><%= error_msg %></div>
-        <% } %>
+            <% if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
 
-        <!-- Formulário para cadastro -->
-        <form action="/register" method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="name" class="form-label">Nome</label>
-                <input
-                        type="text"
-                        class="form-control"
-                        name="name"
-                        id="name"
-                        required
-                        placeholder="Seu nome completo"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="email" class="form-label">E-mail</label>
-                <input
-                        type="email"
-                        class="form-control"
-                        name="email"
-                        id="email"
-                        required
-                        placeholder="seuemail@exemplo.com"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Senha</label>
-                <input
-                        type="password"
-                        class="form-control"
-                        name="password"
-                        id="password"
-                        required
-                        placeholder="Digite sua senha"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="phone" class="form-label">Telefone</label>
-                <input
-                        type="text"
-                        class="form-control"
-                        name="phone"
-                        id="phone"
-                        placeholder="(XX) XXXXX-XXXX"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="address" class="form-label">Endereço</label>
-                <input
-                        type="text"
-                        class="form-control"
-                        name="address"
-                        id="address"
-                        placeholder="Seu endereço completo"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="dateOfBirth" class="form-label">Data de Nascimento</label>
-                <input
-                        type="date"
-                        class="form-control"
-                        name="dateOfBirth"
-                        id="dateOfBirth"
-                />
-            </div>
-            <div class="mb-3">
-                <label for="profileImage" class="form-label">Foto de Perfil (até 5MB)</label>
-                <input
-                        type="file"
-                        class="form-control"
-                        name="profileImage"
-                        id="profileImage"
-                        accept="image/*"
-                />
-            </div>
-            <button type="submit" class="btn btn-success">Registrar</button>
-        </form>
+            <form action="/register" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Nome completo</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="name"
+                            id="name"
+                            required
+                            minlength="3"
+                            placeholder="Seu nome"
+                        />
+                        <div class="invalid-feedback">Informe um nome com pelo menos 3 caracteres.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">E-mail</label>
+                        <input
+                            type="email"
+                            class="form-control"
+                            name="email"
+                            id="email"
+                            required
+                            placeholder="seuemail@empresa.com"
+                        />
+                        <div class="invalid-feedback">Informe um e-mail válido.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="password" class="form-label">Senha</label>
+                        <input
+                            type="password"
+                            class="form-control"
+                            name="password"
+                            id="password"
+                            required
+                            minlength="6"
+                            placeholder="Defina uma senha segura"
+                        />
+                        <div class="invalid-feedback">A senha precisa ter ao menos 6 caracteres.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">Telefone</label>
+                        <input
+                            type="tel"
+                            class="form-control"
+                            name="phone"
+                            id="phone"
+                            placeholder="(XX) XXXXX-XXXX"
+                        />
+                    </div>
+                    <div class="col-md-8">
+                        <label for="address" class="form-label">Endereço</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="address"
+                            id="address"
+                            placeholder="Rua, número, cidade"
+                        />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="dateOfBirth" class="form-label">Data de nascimento</label>
+                        <input
+                            type="date"
+                            class="form-control"
+                            name="dateOfBirth"
+                            id="dateOfBirth"
+                        />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="profileImage" class="form-label">Foto de perfil (até 5MB)</label>
+                        <input
+                            type="file"
+                            class="form-control"
+                            name="profileImage"
+                            id="profileImage"
+                            accept="image/*"
+                        />
+                        <div class="form-text">Formatos aceitos: PNG ou JPEG.</div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-gradient mt-4 w-100">Criar conta com segurança</button>
+            </form>
+
+            <p class="text-center text-muted mt-4 mb-0">
+                Já possui credenciais? <a href="/login">Faça login</a>
+            </p>
+        </div>
     </div>
 </div>
 

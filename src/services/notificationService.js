@@ -1,8 +1,97 @@
 // src/services/notificationService.js
-const { Notification, User, Appointment, sequelize } = require('../../database/models');
+const { Notification, User, Appointment, Procedure, Room, sequelize } = require('../../database/models');
 const { sendEmail } = require('../utils/email');
-const { replacePlaceholders } = require('../utils/placeholderUtils');
+const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { Op } = require('sequelize');
+
+const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
+const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
+
+const computeNextTriggerDate = (currentDate, frequency) => {
+    const base = currentDate ? new Date(currentDate) : new Date();
+    if (Number.isNaN(base.getTime())) {
+        return new Date(Date.now() + DEFAULT_APPOINTMENT_WINDOW_MINUTES * 60000);
+    }
+
+    switch (frequency) {
+        case 'daily':
+            base.setDate(base.getDate() + 1);
+            break;
+        case 'weekly':
+            base.setDate(base.getDate() + 7);
+            break;
+        case 'monthly':
+            base.setMonth(base.getMonth() + 1);
+            break;
+        default:
+            base.setMinutes(base.getMinutes() + DEFAULT_APPOINTMENT_WINDOW_MINUTES);
+    }
+
+    return base;
+};
+
+const buildUserWhere = (filters = {}) => {
+    const where = {};
+    const andConditions = [];
+
+    if (filters.onlyActive !== false) {
+        where.active = true;
+    }
+
+    if (Array.isArray(filters.targetRoles) && filters.targetRoles.length) {
+        where.role = { [Op.in]: filters.targetRoles };
+    }
+
+    if (typeof filters.minimumCreditBalance === 'number') {
+        where.creditBalance = { [Op.gte]: filters.minimumCreditBalance };
+    }
+
+    if (filters.clientEmailDomain) {
+        const domain = String(filters.clientEmailDomain).replace(/^@/, '').toLowerCase();
+        andConditions.push(
+            sequelize.where(
+                sequelize.fn('lower', sequelize.col('email')),
+                { [Op.like]: `%@${domain}` }
+            )
+        );
+    }
+
+    if (andConditions.length) {
+        where[Op.and] = where[Op.and] ? [...where[Op.and], ...andConditions] : andConditions;
+    }
+
+    return where;
+};
+
+const getNotificationFilters = (notification) => notification.filters || {};
+
+const buildEmailPayload = (notification, user, appointment, extraContext = {}) => {
+    const context = {
+        user,
+        appointment,
+        extras: {
+            organizationName: ORGANIZATION_NAME,
+            fallbackName: user?.name,
+            professionalName: appointment?.professional?.name,
+            procedureName: appointment?.procedure?.name,
+            roomName: appointment?.room?.name,
+            userRoleLabel: buildRoleLabel(user?.role),
+            ...extraContext
+        }
+    };
+
+    const content = buildEmailContent(notification, context);
+    return {
+        subject: content.subject,
+        options: {
+            text: content.text,
+            html: content.html,
+            headers: content.previewText
+                ? { 'X-Entity-Preview': content.previewText }
+                : undefined
+        }
+    };
+};
 
 /**
  * Processa todas as notificações ativas (não enviadas) que estão agendadas para disparo.
@@ -15,7 +104,10 @@ async function processNotifications() {
         const notifications = await Notification.findAll({
             where: {
                 active: true,
-                sent: false,
+                [Op.or]: [
+                    { sent: false },
+                    { repeatFrequency: { [Op.ne]: 'none' } }
+                ],
                 [Op.or]: [
                     { triggerDate: null },
                     { triggerDate: { [Op.lte]: now } }
@@ -24,15 +116,24 @@ async function processNotifications() {
         });
 
         for (const notif of notifications) {
-            if (notif.type === 'birthday') {
-                await processBirthdayNotification(notif);
-            } else if (notif.type === 'appointment') {
-                await processAppointmentNotification(notif);
-            } else {
-                await processCustomNotification(notif);
+            try {
+                if (notif.type === 'birthday') {
+                    await processBirthdayNotification(notif);
+                } else if (notif.type === 'appointment') {
+                    await processAppointmentNotification(notif);
+                } else {
+                    await processCustomNotification(notif);
+                }
+
+                if (notif.repeatFrequency && notif.repeatFrequency !== 'none') {
+                    const nextTrigger = computeNextTriggerDate(notif.triggerDate || now, notif.repeatFrequency);
+                    await notif.update({ triggerDate: nextTrigger, sent: false });
+                } else {
+                    await notif.update({ sent: true });
+                }
+            } catch (notificationError) {
+                console.error(`Erro ao processar notificação ${notif.id}:`, notificationError);
             }
-            // Após o envio, marca a notificação como enviada
-            await notif.update({ sent: true });
         }
     } catch (err) {
         console.error('Erro ao processar notificações:', err);
@@ -44,21 +145,25 @@ async function processNotifications() {
  * Envia e-mail somente para os usuários cujo aniversário (mês e dia) coincide com a data atual.
  */
 async function processBirthdayNotification(notif) {
-    const now = new Date();
-    // Formata a data atual no formato MM-DD
-    const today = now.toISOString().slice(5, 10); // Ex: "04-15"
+    const filters = getNotificationFilters(notif);
+    const where = buildUserWhere(filters);
+    const today = new Date().toISOString().slice(5, 10);
 
-    // Busca usuários ativos cujo dateOfBirth (formato 'YYYY-MM-DD') tem o mesmo MM-DD
-    const users = await User.findAll({
-        where: sequelize.where(
-            sequelize.fn('to_char', sequelize.col('dateOfBirth'), 'MM-DD'),
-            today
-        )
-    });
+    const dialect = sequelize.getDialect();
+    const birthdayExpression = dialect === 'postgres'
+        ? sequelize.fn('to_char', sequelize.col('dateOfBirth'), 'MM-DD')
+        : sequelize.fn('strftime', '%m-%d', sequelize.col('dateOfBirth'));
 
-    for (const u of users) {
-        const finalMsg = replacePlaceholders(notif.message, u, null);
-        await sendEmail(u.email, notif.title, finalMsg);
+    const andConditions = where[Op.and] ? [...where[Op.and]] : [];
+    andConditions.push(sequelize.where(birthdayExpression, today));
+    where[Op.and] = andConditions;
+
+    const users = await User.findAll({ where });
+
+    for (const user of users) {
+        if (!user.email) continue;
+        const payload = buildEmailPayload(notif, user, null);
+        await sendEmail(user.email, payload.subject, payload.options);
     }
 }
 
@@ -67,24 +172,85 @@ async function processBirthdayNotification(notif) {
  * Exemplo: envia lembrete para agendamentos que começam em até 1 hora.
  */
 async function processAppointmentNotification(notif) {
-    const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
+    const filters = getNotificationFilters(notif);
+    const minutesWindow = Number.parseInt(filters.timeWindowMinutes, 10);
+    const windowMinutes = Number.isInteger(minutesWindow) && minutesWindow > 0
+        ? minutesWindow
+        : DEFAULT_APPOINTMENT_WINDOW_MINUTES;
+
+    const now = new Date();
+    const defaultEnd = new Date(now.getTime() + windowMinutes * 60000);
+
+    let startWindow = filters.dateRangeStart ? new Date(filters.dateRangeStart) : now;
+    if (Number.isNaN(startWindow.getTime()) || startWindow < now) {
+        startWindow = now;
+    }
+
+    let endWindow = filters.dateRangeEnd ? new Date(filters.dateRangeEnd) : defaultEnd;
+    if (Number.isNaN(endWindow.getTime())) {
+        endWindow = defaultEnd;
+    } else if (!filters.dateRangeEnd) {
+        endWindow = defaultEnd;
+    } else {
+        endWindow.setHours(23, 59, 59, 999);
+    }
+
+    const where = {
+        start: { [Op.between]: [startWindow, endWindow] },
+        status: filters.appointmentStatus?.length
+            ? { [Op.in]: filters.appointmentStatus }
+            : 'scheduled'
+    };
+
+    if (filters.procedureId) {
+        where.procedureId = filters.procedureId;
+    }
+
+    if (filters.roomId) {
+        where.roomId = filters.roomId;
+    }
+
+    if (filters.clientEmailDomain) {
+        const domain = String(filters.clientEmailDomain).replace(/^@/, '').toLowerCase();
+        where[Op.and] = where[Op.and] || [];
+        where[Op.and].push(
+            sequelize.where(
+                sequelize.fn('lower', sequelize.col('Appointment.clientEmail')),
+                { [Op.like]: `%@${domain}` }
+            )
+        );
+    }
 
     const appointments = await Appointment.findAll({
-        where: {
-            start: { [Op.lte]: oneHourFromNow },
-            status: 'scheduled'
-        },
-        include: [{ model: User, as: 'professional' }]
+        where,
+        include: [
+            { model: User, as: 'professional' },
+            { model: Procedure, as: 'procedure' },
+            { model: Room, as: 'room' }
+        ]
     });
 
-    for (const app of appointments) {
-        if (app.clientEmail) {
-            const finalMsg = replacePlaceholders(notif.message, null, app);
-            await sendEmail(app.clientEmail, notif.title, finalMsg);
+    for (const appointment of appointments) {
+        const professional = appointment.professional;
+
+        if (filters.includeClient !== false && appointment.clientEmail) {
+            const pseudoUser = {
+                name: appointment.clientEmail.split('@')[0],
+                email: appointment.clientEmail,
+                role: 0
+            };
+            const payload = buildEmailPayload(notif, pseudoUser, appointment, {
+                fallbackName: pseudoUser.name
+            });
+            await sendEmail(appointment.clientEmail, payload.subject, payload.options);
         }
-        if (app.professional) {
-            const finalMsgPro = replacePlaceholders(notif.message, app.professional, app);
-            await sendEmail(app.professional.email, notif.title, finalMsgPro);
+
+        if (filters.includeProfessional !== false && professional?.email) {
+            if (filters.onlyActive !== false && professional.active === false) {
+                continue;
+            }
+            const payload = buildEmailPayload(notif, professional, appointment);
+            await sendEmail(professional.email, payload.subject, payload.options);
         }
     }
 }
@@ -95,18 +261,43 @@ async function processAppointmentNotification(notif) {
  * caso contrário, envia para o usuário específico definido em notif.userId.
  */
 async function processCustomNotification(notif) {
-    if (notif.sendToAll) {
-        const allUsers = await User.findAll({ where: { active: true } });
-        for (const u of allUsers) {
-            const finalMsg = replacePlaceholders(notif.message, u, null);
-            await sendEmail(u.email, notif.title, finalMsg);
+    const filters = getNotificationFilters(notif);
+    const recipients = new Map();
+
+    const enqueueUser = (user) => {
+        if (user && user.email) {
+            recipients.set(user.email, user);
         }
-    } else if (notif.userId) {
-        const user = await User.findByPk(notif.userId);
-        if (user) {
-            const finalMsg = replacePlaceholders(notif.message, user, null);
-            await sendEmail(user.email, notif.title, finalMsg);
+    };
+
+    const hasAdvancedFilters = Object.keys(filters).some((key) => !['onlyActive', 'includeProfessional', 'includeClient'].includes(key));
+
+    if (notif.sendToAll || hasAdvancedFilters) {
+        const where = buildUserWhere(filters);
+        const users = await User.findAll({ where });
+        users.forEach(enqueueUser);
+    }
+
+    if (notif.userId) {
+        const specificUser = await User.findByPk(notif.userId);
+        if (specificUser) {
+            if (filters.onlyActive !== false && specificUser.active === false) {
+                // skip inactive users when filtro exige ativos
+                if (!notif.sendToAll && !hasAdvancedFilters) {
+                    return;
+                }
+            } else {
+                enqueueUser(specificUser);
+            }
         }
+    }
+
+    for (const user of recipients.values()) {
+        if (filters.onlyActive !== false && user.active === false) {
+            continue;
+        }
+        const payload = buildEmailPayload(notif, user, null);
+        await sendEmail(user.email, payload.subject, payload.options);
     }
 }
 

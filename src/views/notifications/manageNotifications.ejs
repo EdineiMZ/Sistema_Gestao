@@ -1,56 +1,89 @@
 <%- include('../partials/header') %>
 
-<div class="row">
+<div class="row gy-4 fade-in">
     <div class="col-12">
-        <h2>Gerenciar Notificações</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Campanhas e notificações</h2>
+                <p class="text-muted mb-0">Gerencie mensagens automáticas com filtros dinâmicos e agendamentos inteligentes.</p>
+            </div>
+            <a href="/notifications/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>Nova notificação</a>
+        </div>
 
         <% if (success_msg) { %>
-            <div class="alert alert-success"><%= success_msg %></div>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
         <% } else if (error_msg) { %>
-            <div class="alert alert-danger"><%= error_msg %></div>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
         <% } %>
 
-        <a href="/notifications/create" class="btn btn-success mb-3">Nova Notificação</a>
-
-        <table class="table table-bordered table-striped">
-            <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Título</th>
-                <th>Mensagem (placeholders)</th>
-                <th>Tipo</th>
-                <th>TriggerDate</th>
-                <th>Ativa?</th>
-                <th>UserID</th>
-                <th>SendToAll</th>
-                <th>Ações</th>
-            </tr>
-            </thead>
-            <tbody>
-            <% notifications.forEach(n => { %>
-                <tr>
-                    <td><%= n.id %></td>
-                    <td><%= n.title %></td>
-                    <td><%= n.message %></td>
-                    <td><%= n.type %></td>
-                    <td><%= n.triggerDate ? n.triggerDate : '—' %></td>
-                    <td><%= n.active ? 'Sim' : 'Não' %></td>
-                    <td><%= n.userId || '—' %></td>
-                    <td><%= n.sendToAll ? 'Sim' : 'Não' %></td>
-                    <td>
-                        <a href="/notifications/edit/<%= n.id %>" class="btn btn-warning btn-sm">Editar</a>
-                        <form
-                                action="/notifications/delete/<%= n.id %>?_method=DELETE"
-                                method="POST"
-                                style="display:inline-block"
-                        >
-                            <button class="btn btn-danger btn-sm">Excluir</button>
-                        </form>
-                    </td>
-                </tr>
-            <% }) %>
-            </tbody>
-        </table>
+        <div class="card card-soft p-4">
+            <div class="table-responsive table-modern">
+                <table class="table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Título</th>
+                        <th>Tipo</th>
+                        <th>Agendamento</th>
+                        <th>Recorrência</th>
+                        <th>Filtros aplicados</th>
+                        <th>Escopo</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <% notifications.forEach(n => { %>
+                        <tr>
+                            <td><strong><%= n.id %></strong></td>
+                            <td>
+                                <div class="fw-semibold"><%= n.title %></div>
+                                <small class="text-muted d-block text-truncate" style="max-width: 360px;">
+                                    <%= n.message %>
+                                </small>
+                            </td>
+                            <td><span class="badge-soft badge-soft-warning text-uppercase"><%= n.type || 'custom' %></span></td>
+                            <td>
+                                <% if (n.triggerDate) { %>
+                                    <span data-bs-toggle="tooltip" title="Executa em"><i class="bi bi-clock-history me-1"></i><%= new Date(n.triggerDate).toLocaleString('pt-BR') %></span>
+                                <% } else { %>
+                                    <span class="text-muted">Imediato</span>
+                                <% } %>
+                            </td>
+                            <td><%= n.repeatFrequencyLabel %></td>
+                            <td>
+                                <% n.filtersSummary.forEach(summary => { %>
+                                    <span class="app-filter-tag mb-1"><i class="bi bi-funnel me-2"></i><%= summary %></span>
+                                <% }) %>
+                            </td>
+                            <td>
+                                <% if (n.sendToAll) { %>
+                                    <span class="badge-soft badge-soft-success">Todos os usuários</span>
+                                <% } else if (n.userId) { %>
+                                    <span class="badge-soft badge-soft-warning">Usuário ID <%= n.userId %></span>
+                                <% } else { %>
+                                    <span class="badge-soft badge-soft-warning">Filtrado</span>
+                                <% } %>
+                            </td>
+                            <td class="text-end">
+                                <a href="/notifications/edit/<%= n.id %>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                                <form
+                                    action="/notifications/delete/<%= n.id %>?_method=DELETE"
+                                    method="POST"
+                                    class="d-inline"
+                                >
+                                    <button class="btn btn-sm btn-outline-danger ms-2" type="submit"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 

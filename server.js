@@ -10,6 +10,8 @@ const cron = require('node-cron'); // para agendamentos de tarefas
 
 const { sequelize, User } = require('./database/models');
 
+const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
+
 // Importa o serviço de notificações
 const { processNotifications } = require('./src/services/notificationService');
 
@@ -55,6 +57,8 @@ app.use((req, res, next) => {
     res.locals.error_msg = req.flash('error_msg');
     res.locals.error = req.flash('error');
     res.locals.user = null;
+    res.locals.appName = APP_NAME;
+    res.locals.pageTitle = APP_NAME;
     next();
 });
 

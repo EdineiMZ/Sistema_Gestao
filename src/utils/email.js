@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_PASS = process.env.GMAIL_PASS;
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Sistema de Gestão';
 
 // Cria o transporter
 const transporter = nodemailer.createTransport({
@@ -13,29 +14,52 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+const shouldMockEmail = () => process.env.EMAIL_DISABLED === 'true';
+
 /**
- * Função para enviar e-mail de forma simples
- * @param {string} to  - destinatário
- * @param {string} subject - assunto
- * @param {string} text - texto ou corpo do e-mail
- * @param {string} [html] - se quiser enviar em HTML
+ * Envia e-mail com suporte a HTML e personalizações de cabeçalho.
+ * Também permite receber um objeto com as opções completas do Nodemailer.
+ *
+ * @param {string|string[]} to - destinatário(s)
+ * @param {string} subject - assunto do e-mail
+ * @param {string|object} payload - texto simples ou objeto com opções do Nodemailer
+ * @param {string} [html] - conteúdo em HTML (caso payload seja texto)
  */
-async function sendEmail(to, subject, text, html) {
+async function sendEmail(to, subject, payload, html) {
     try {
-        const mailOptions = {
-            from: GMAIL_USER,  // ou outro e-mail
+        const baseOptions = {
+            from: `${EMAIL_FROM_NAME} <${GMAIL_USER}>`,
             to,
-            subject,
-            text
+            subject
         };
-        if (html) {
-            mailOptions.html = html;
+
+        let mailOptions = { ...baseOptions };
+
+        if (payload && typeof payload === 'object' && !Buffer.isBuffer(payload)) {
+            mailOptions = { ...baseOptions, ...payload };
+        } else {
+            mailOptions = {
+                ...baseOptions,
+                text: payload,
+                html: html || undefined
+            };
         }
 
-        await transporter.sendMail(mailOptions);
+        if (!mailOptions.text && mailOptions.html) {
+            mailOptions.text = mailOptions.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        if (shouldMockEmail()) {
+            console.log(`[EMAIL MOCKADO] ${subject} -> ${to}`);
+            return { mocked: true, mailOptions };
+        }
+
+        const response = await transporter.sendMail(mailOptions);
         console.log(`E-mail enviado para ${to} com assunto "${subject}"`);
+        return response;
     } catch (error) {
         console.error('Erro ao enviar email:', error);
+        throw error;
     }
 }
 
