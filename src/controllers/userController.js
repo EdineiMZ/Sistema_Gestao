@@ -2,6 +2,7 @@
 const { User } = require('../../database/models');
 const { Op } = require('sequelize');
 const { buildQueryFilters } = require('../utils/queryBuilder');
+const { USER_ROLES, parseRole, roleAtLeast } = require('../constants/roles');
 
 
 const parseDecimal = (value, fallback = 0) => {

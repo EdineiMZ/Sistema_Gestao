@@ -1,6 +1,6 @@
 // src/controllers/authController.js
 const { User, Sequelize } = require('../../database/models');
-const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
 const { USER_ROLES } = require('../constants/roles');
 
 const FRIENDLY_DB_ERROR_MESSAGE = 'Estamos atualizando o sistema. Execute as migrações do banco de dados e tente novamente.';
@@ -58,7 +58,7 @@ module.exports = {
                 req.flash('error_msg', 'Usuário não encontrado ou inativo.');
                 return res.redirect('/login');
             }
-            const match = await bcrypt.compare(password, user.password);
+            const match = await argon2.verify(user.password, password);
             if (!match) {
                 req.flash('error_msg', 'Senha incorreta.');
                 return res.redirect('/login');

@@ -7,17 +7,20 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
 const audit = require('../middlewares/audit');
-const { manageUsersValidation = [] } = require('../middlewares/validateMiddleware');
+const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
 
-const userManagementValidation = Array.isArray(manageUsersValidation) ? manageUsersValidation : [];
 
+const manageUsersValidation = createFilterValidation({
+    allowedStatuses: ['active', 'inactive'],
+    redirectTo: '/users/manage'
+});
 
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
 router.get(
     '/manage',
     authMiddleware,
     permissionMiddleware(4),
-    ...userManagementValidation,
+    ...manageUsersValidation,
     userController.manageUsers
 );
 
