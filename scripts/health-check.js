@@ -6,6 +6,7 @@ process.env.EMAIL_DISABLED = 'true';
 process.env.APP_NAME = process.env.APP_NAME || 'Sistema de Gestão - Teste';
 
 const { sequelize, User, Notification, Procedure, Room, Appointment } = require('../database/models');
+const argon2 = require('argon2');
 const { processNotifications } = require('../src/services/notificationService');
 const { USER_ROLES } = require('../src/constants/roles');
 
@@ -28,6 +29,18 @@ async function run() {
             role: USER_ROLES.MANAGER,
             creditBalance: 80
         });
+
+        if (!admin.password.startsWith('$argon2id$') || !profissional.password.startsWith('$argon2id$')) {
+            throw new Error('Hashes de senha não estão utilizando Argon2id.');
+        }
+
+        const adminPasswordValid = await argon2.verify(admin.password, 'SenhaSegura123');
+        const adminPasswordInvalid = await argon2.verify(admin.password, 'SenhaIncorreta');
+        const profissionalPasswordValid = await argon2.verify(profissional.password, 'SenhaSegura123');
+
+        if (!adminPasswordValid || adminPasswordInvalid || !profissionalPasswordValid) {
+            throw new Error('Algumas validações de hash Argon2 falharam.');
+        }
 
         const procedimento = await Procedure.create({
             name: 'Sessão Premium',
