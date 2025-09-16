@@ -1,213 +1,281 @@
 <%- include('../partials/header') %>
 
-<div class="row">
+<div class="row fade-in responsive-page-row gy-4">
     <div class="col-12">
-        <h2>Gerenciar Finanças</h2>
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                <div>
+                    <span class="app-chip mb-2"><i class="bi bi-cash-stack me-2"></i>Saúde financeira</span>
+                    <h2 class="fw-semibold mb-2">Gerenciar finanças estratégicas</h2>
+                    <p class="text-muted mb-0">
+                        Acompanhe lançamentos, status e recorrências com visibilidade completa para decisões rápidas.
+                    </p>
+                </div>
+                <div class="text-muted small text-lg-end">
+                    Lançamentos cadastrados<br />
+                    <span class="fw-semibold text-primary"><%= entries.length %></span>
+                </div>
+            </div>
 
-        <!-- Alertas de feedback -->
-        <% if (success_msg) { %>
-            <div class="alert alert-success"><%= success_msg %></div>
-        <% } else if (error_msg) { %>
-            <div class="alert alert-danger"><%= error_msg %></div>
-        <% } %>
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto mt-4" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } else if (error_msg) { %>
+                <div class="alert alert-danger alert-auto mt-4" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+        </div>
+    </div>
 
-        <!-- Tabela de Lançamentos -->
-        <table class="table table-bordered table-striped align-middle">
-            <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Descrição</th>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Vencimento</th>
-                <th>Pagamento</th>
-                <th>Status</th>
-                <th style="width: 180px;">Ações</th>
-            </tr>
-            </thead>
-            <tbody>
-            <% entries.forEach(entry => { %>
-                <tr>
-                    <td><%= entry.id %></td>
-                    <td><%= entry.description %></td>
-                    <td>
-                        <% if (entry.type === 'payable') { %>
-                            <span class="badge text-bg-danger">Pagar</span>
-                        <% } else { %>
-                            <span class="badge text-bg-success">Receber</span>
-                        <% } %>
-                    </td>
-                    <td>R$ <%= entry.value %></td>
-                    <td><%= entry.dueDate %></td>
-                    <td><%= entry.paymentDate ? entry.paymentDate : '—' %></td>
-                    <td><%= entry.status %></td>
-                    <td>
-                        <!-- Botão para abrir Modal de Edição -->
-                        <button
-                                type="button"
-                                class="btn btn-warning btn-sm"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editFinanceModal<%= entry.id %>"
-                        >
-                            Editar
-                        </button>
-
-                        <!-- Form de exclusão -->
-                        <form
-                                action="/finance/delete/<%= entry.id %>?_method=DELETE"
-                                method="POST"
-                                style="display:inline-block;"
-                        >
-                            <button class="btn btn-danger btn-sm" type="submit">
-                                Excluir
-                            </button>
-                        </form>
-
-                        <!-- Modal de Edição -->
-                        <div
-                                class="modal fade"
-                                id="editFinanceModal<%= entry.id %>"
-                                tabindex="-1"
-                                aria-hidden="true"
-                        >
-                            <div class="modal-dialog">
-                                <form
-                                        action="/finance/update/<%= entry.id %>?_method=PUT"
-                                        method="POST"
-                                        class="modal-content"
-                                >
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">Editar Lançamento #<%= entry.id %></h5>
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
+                    <p class="text-muted mb-0">Monitoramento contínuo de receitas, despesas e recorrências.</p>
+                </div>
+                <span class="badge rounded-pill bg-light text-muted">
+                    <i class="bi bi-shield-lock me-2"></i>Auditoria ativa
+                </span>
+            </div>
+            <div class="table-responsive table-modern responsive-table">
+                <table class="table align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Descrição</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            <th>Vencimento</th>
+                            <th>Pagamento</th>
+                            <th>Status</th>
+                            <th class="text-center" style="width: 200px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% entries.forEach(entry => { %>
+                            <tr>
+                                <td><%= entry.id %></td>
+                                <td><%= entry.description %></td>
+                                <td>
+                                    <% if (entry.type === 'payable') { %>
+                                        <span class="badge text-bg-danger">Pagar</span>
+                                    <% } else { %>
+                                        <span class="badge text-bg-success">Receber</span>
+                                    <% } %>
+                                </td>
+                                <td>R$ <%= entry.value %></td>
+                                <td><%= entry.dueDate %></td>
+                                <td><%= entry.paymentDate ? entry.paymentDate : '—' %></td>
+                                <td><%= entry.status %></td>
+                                <td>
+                                    <div class="d-flex flex-wrap justify-content-center gap-2">
                                         <button
-                                                type="button"
-                                                class="btn-close"
-                                                data-bs-dismiss="modal"
-                                                aria-label="Close"
-                                        ></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <input type="hidden" name="id" value="<%= entry.id %>" />
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Descrição</label>
-                                            <input
-                                                    type="text"
-                                                    class="form-control"
-                                                    name="description"
-                                                    value="<%= entry.description %>"
-                                                    required
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Tipo</label>
-                                            <select class="form-select" name="type" required>
-                                                <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
-                                                <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Valor (R$)</label>
-                                            <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    class="form-control"
-                                                    name="value"
-                                                    value="<%= entry.value %>"
-                                                    required
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Data de Vencimento</label>
-                                            <input
-                                                    type="date"
-                                                    class="form-control"
-                                                    name="dueDate"
-                                                    value="<%= entry.dueDate %>"
-                                                    required
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Data de Pagamento</label>
-                                            <input
-                                                    type="date"
-                                                    class="form-control"
-                                                    name="paymentDate"
-                                                    value="<%= entry.paymentDate ? entry.paymentDate : '' %>"
-                                            />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Status</label>
-                                            <select class="form-select" name="status">
-                                                <option value="pending" <%= entry.status === 'pending' ? 'selected' : '' %>>Pendente</option>
-                                                <option value="paid" <%= entry.status === 'paid' ? 'selected' : '' %>>Pago</option>
-                                                <option value="overdue" <%= entry.status === 'overdue' ? 'selected' : '' %>>Atrasado</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button
-                                                type="button"
-                                                class="btn btn-secondary"
-                                                data-bs-dismiss="modal"
+                                            type="button"
+                                            class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editFinanceModal<%= entry.id %>"
                                         >
-                                            Cancelar
+                                            <i class="bi bi-pencil me-1"></i>Editar
                                         </button>
-                                        <button type="submit" class="btn btn-primary">Salvar</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                        <!-- Fim Modal -->
-                    </td>
-                </tr>
-            <% }) %>
-            </tbody>
-        </table>
 
-        <!-- Form de criação de novo lançamento -->
-        <h3>Novo Lançamento</h3>
-        <form action="/finance/create" method="POST" class="mt-3 row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Descrição</label>
-                <input
+                                        <form
+                                            action="/finance/delete/<%= entry.id %>?_method=DELETE"
+                                            method="POST"
+                                            class="d-inline"
+                                        >
+                                            <button class="btn btn-outline-danger btn-sm" type="submit">
+                                                <i class="bi bi-trash me-1"></i>Excluir
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    <div
+                                        class="modal fade"
+                                        id="editFinanceModal<%= entry.id %>"
+                                        tabindex="-1"
+                                        aria-hidden="true"
+                                    >
+                                        <div class="modal-dialog">
+                                            <form
+                                                action="/finance/update/<%= entry.id %>?_method=PUT"
+                                                method="POST"
+                                                class="modal-content"
+                                            >
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Editar Lançamento #<%= entry.id %></h5>
+                                                    <button
+                                                        type="button"
+                                                        class="btn-close"
+                                                        data-bs-dismiss="modal"
+                                                        aria-label="Close"
+                                                    ></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <input type="hidden" name="id" value="<%= entry.id %>" />
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Descrição</label>
+                                                        <input
+                                                            type="text"
+                                                            class="form-control"
+                                                            name="description"
+                                                            value="<%= entry.description %>"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Tipo</label>
+                                                        <select class="form-select" name="type" required>
+                                                            <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
+                                                            <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Valor (R$)</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            class="form-control"
+                                                            name="value"
+                                                            value="<%= entry.value %>"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Data de Vencimento</label>
+                                                        <input
+                                                            type="date"
+                                                            class="form-control"
+                                                            name="dueDate"
+                                                            value="<%= entry.dueDate %>"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Data de Pagamento</label>
+                                                        <input
+                                                            type="date"
+                                                            class="form-control"
+                                                            name="paymentDate"
+                                                            value="<%= entry.paymentDate ? entry.paymentDate : '' %>"
+                                                        />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Status</label>
+                                                        <select class="form-select" name="status">
+                                                            <option value="pending" <%= entry.status === 'pending' ? 'selected' : '' %>>Pendente</option>
+                                                            <option value="paid" <%= entry.status === 'paid' ? 'selected' : '' %>>Pago</option>
+                                                            <option value="overdue" <%= entry.status === 'overdue' ? 'selected' : '' %>>Atrasado</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Recorrência</label>
+                                                        <select class="form-select" name="recurring">
+                                                            <option value="true" <%= entry.recurring ? 'selected' : '' %>>Lançamento recorrente</option>
+                                                            <option value="false" <%= !entry.recurring ? 'selected' : '' %>>Evento único</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Intervalo de recorrência</label>
+                                                        <input
+                                                            type="text"
+                                                            class="form-control"
+                                                            name="recurringInterval"
+                                                            value="<%= entry.recurringInterval || '' %>"
+                                                            placeholder="Ex.: mensal, trimestral"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-outline-secondary"
+                                                        data-bs-dismiss="modal"
+                                                    >
+                                                        Cancelar
+                                                    </button>
+                                                    <button type="submit" class="btn btn-gradient">Salvar</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-10">
+        <div class="card card-soft responsive-panel">
+            <h3 class="fw-semibold mb-2">Novo lançamento</h3>
+            <p class="text-muted mb-4">Cadastre receitas ou despesas com recorrência opcional e acompanhe tudo no painel.</p>
+            <form action="/finance/create" method="POST" class="row g-3 responsive-filter-grid">
+                <div class="col-md-5">
+                    <label class="form-label">Descrição</label>
+                    <input
                         type="text"
                         class="form-control"
                         name="description"
                         required
-                />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Tipo</label>
-                <select class="form-select" name="type" required>
-                    <option value="payable">Pagar</option>
-                    <option value="receivable">Receber</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Valor (R$)</label>
-                <input
+                        placeholder="Ex.: Pagamento fornecedor"
+                    />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" name="type" required>
+                        <option value="payable">Pagar</option>
+                        <option value="receivable">Receber</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Valor (R$)</label>
+                    <input
                         type="number"
                         step="0.01"
                         class="form-control"
                         name="value"
                         required
-                />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Vencimento</label>
-                <input
+                    />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Vencimento</label>
+                    <input
                         type="date"
                         class="form-control"
                         name="dueDate"
                         required
-                />
-            </div>
-            <div class="col-md-2 align-self-end">
-                <button type="submit" class="btn btn-success w-100">
-                    Criar
-                </button>
-            </div>
-        </form>
+                    />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Recorrência</label>
+                    <select class="form-select" name="recurring">
+                        <option value="false">Não recorrente</option>
+                        <option value="true">Recorrente</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Intervalo (opcional)</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        name="recurringInterval"
+                        placeholder="Ex.: mensal"
+                    />
+                </div>
+                <div class="col-md-12">
+                    <div class="responsive-form-actions">
+                        <button type="reset" class="btn btn-outline-secondary">Limpar</button>
+                        <button type="submit" class="btn btn-gradient">Criar lançamento</button>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

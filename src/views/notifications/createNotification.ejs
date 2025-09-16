@@ -2,9 +2,9 @@
 
 <% const availableRoles = roleOptions || []; %>
 
-<div class="row justify-content-center fade-in">
-    <div class="col-12 col-xl-10">
-        <div class="card card-soft p-4">
+<div class="row justify-content-center fade-in responsive-page-row">
+    <div class="col-12 col-xxl-10">
+        <div class="card card-soft responsive-panel">
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
                 <div>
                     <h2 class="fw-semibold mb-1">Nova notificação automatizada</h2>
@@ -23,7 +23,7 @@
                 </div>
             <% } %>
 
-            <form action="/notifications/create" method="POST" class="needs-validation" novalidate>
+            <form action="/notifications/create" method="POST" class="needs-validation responsive-form" novalidate>
                 <fieldset class="scheduler-border">
                     <legend class="scheduler-border">Conteúdo</legend>
                     <div class="row g-3">
@@ -86,13 +86,13 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-check form-switch">
+                            <div class="form-check form-switch responsive-form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="sendToAll" name="sendToAll" value="true" />
                                 <label class="form-check-label" for="sendToAll">Enviar para todos os usuários</label>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-check form-switch">
+                            <div class="form-check form-switch responsive-form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="active" name="active" value="true" checked />
                                 <label class="form-check-label" for="active">Notificação ativa</label>
                             </div>
@@ -159,20 +159,20 @@
                             <label class="form-label">Fim do período</label>
                             <input type="datetime-local" class="form-control" name="dateRangeEnd" />
                         </div>
-                        <div class="col-md-4 d-flex align-items-center">
-                            <div class="form-check form-switch me-4">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch responsive-form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="onlyActive" name="onlyActive" value="true" <%= defaultFilters.onlyActive ? 'checked' : '' %> />
                                 <label class="form-check-label" for="onlyActive">Somente usuários ativos</label>
                             </div>
                         </div>
-                        <div class="col-md-4 d-flex align-items-center">
-                            <div class="form-check form-switch me-4">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch responsive-form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="includeProfessional" name="includeProfessional" value="true" <%= defaultFilters.includeProfessional ? 'checked' : '' %> />
                                 <label class="form-check-label" for="includeProfessional">Enviar ao profissional</label>
                             </div>
                         </div>
-                        <div class="col-md-4 d-flex align-items-center">
-                            <div class="form-check form-switch">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch responsive-form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="includeClient" name="includeClient" value="true" <%= defaultFilters.includeClient ? 'checked' : '' %> />
                                 <label class="form-check-label" for="includeClient">Enviar ao cliente</label>
                             </div>
@@ -180,7 +180,7 @@
                     </div>
                 </fieldset>
 
-                <div class="d-flex justify-content-end gap-3">
+                <div class="responsive-form-actions">
                     <a href="/notifications" class="btn btn-outline-secondary">Cancelar</a>
                     <button type="submit" class="btn btn-gradient">Salvar notificação</button>
                 </div>

@@ -2,7 +2,7 @@
 
 <% const currentFilters = filters || {}; %>
 
-<div class="row gy-4 fade-in">
+<div class="row gy-4 fade-in responsive-page-row">
     <div class="col-12">
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
             <div>
@@ -22,11 +22,11 @@
             </div>
         <% } %>
 
-        <div class="card card-soft p-4 mb-4">
+        <div class="card card-soft responsive-panel mb-4">
             <form
                 action="/notifications"
                 method="GET"
-                class="row g-3 align-items-end"
+                class="row g-3 align-items-end responsive-filter-grid"
                 data-filter-form
             >
                 <div class="col-lg-4 col-md-6">
@@ -73,19 +73,21 @@
                         min="<%= currentFilters.startDate || '' %>"
                     />
                 </div>
-                <div class="col-lg-1 col-md-12 d-flex gap-2">
-                    <button type="submit" class="btn btn-gradient flex-grow-1" data-submit-filters>
-                        <i class="bi bi-funnel me-2"></i>Filtrar
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" data-reset-filters>
-                        <i class="bi bi-x-lg"></i>
-                    </button>
+                <div class="col-lg-2 col-md-12">
+                    <div class="responsive-filter-actions">
+                        <button type="submit" class="btn btn-gradient" data-submit-filters>
+                            <i class="bi bi-funnel me-2"></i>Filtrar
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" data-reset-filters>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
 
-        <div class="card card-soft p-4">
-            <div class="table-responsive table-modern">
+        <div class="card card-soft responsive-panel">
+            <div class="table-responsive table-modern responsive-table">
                 <table class="table align-middle mb-0">
                     <thead>
                     <tr>
