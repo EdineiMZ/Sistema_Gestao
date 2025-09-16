@@ -70,11 +70,24 @@ const buildStatusSummaryFromEntries = (entries) => {
 };
 
 const formatMonth = (value) => {
-    const date = value instanceof Date ? value : new Date(value);
+    let date;
+
+    if (value instanceof Date) {
+        date = value;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+        date = new Date(value);
+    } else {
+        return null;
+    }
+
     if (!Number.isFinite(date?.getTime())) {
         return null;
     }
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+
+    return `${year}-${month}`;
 };
 
 const buildMonthlySummaryFromEntries = (entries) => {
