@@ -1,0 +1,193 @@
+<%- include('../partials/header') %>
+
+<div class="row">
+    <div class="col-12">
+        <h2>Gerenciar Procedimentos</h2>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success"><%= success_msg %></div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger"><%= error_msg %></div>
+        <% } %>
+
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Preço (R$)</th>
+                <th>Ativo</th>
+                <th>Exige Sala</th>
+                <th>Comissão</th>
+                <th style="width:150px;">Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            <% procedures.forEach(proc => { %>
+                <tr>
+                    <td><%= proc.id %></td>
+                    <td><%= proc.name %></td>
+                    <td><%= proc.price %></td>
+                    <td><%= proc.active ? 'Sim' : 'Não' %></td>
+                    <td><%= proc.requiresRoom ? 'Sim' : 'Não' %></td>
+                    <td>
+                        <% if (proc.commissionType) { %>
+                            <%= proc.commissionType === 'percent' ? proc.commissionValue + '%' : 'R$ ' + proc.commissionValue %>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </td>
+                    <td>
+                        <!-- Botão Editar -->
+                        <button
+                                type="button"
+                                class="btn btn-warning btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editProcedureModal<%= proc.id %>"
+                        >
+                            Editar
+                        </button>
+                        <!-- Excluir -->
+                        <form
+                                action="/procedures/delete/<%= proc.id %>?_method=DELETE"
+                                method="POST"
+                                style="display:inline-block"
+                        >
+                            <button class="btn btn-danger btn-sm">Excluir</button>
+                        </form>
+
+                        <!-- Modal Editar -->
+                        <div
+                                class="modal fade"
+                                id="editProcedureModal<%= proc.id %>"
+                                tabindex="-1"
+                                aria-hidden="true"
+                        >
+                            <div class="modal-dialog">
+                                <form
+                                        action="/procedures/update/<%= proc.id %>?_method=PUT"
+                                        method="POST"
+                                        class="modal-content"
+                                >
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Editar Procedimento #<%= proc.id %></h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nome</label>
+                                            <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    name="name"
+                                                    value="<%= proc.name %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Preço (R$)</label>
+                                            <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    class="form-control"
+                                                    name="price"
+                                                    value="<%= proc.price %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Ativo</label>
+                                            <select class="form-select" name="active">
+                                                <option value="true" <%= proc.active ? 'selected' : ''%>>Sim</option>
+                                                <option value="false" <%= !proc.active ? 'selected' : ''%>>Não</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Exige Sala?</label>
+                                            <select class="form-select" name="requiresRoom">
+                                                <option value="true" <%= proc.requiresRoom ? 'selected' : '' %>>Sim</option>
+                                                <option value="false" <%= !proc.requiresRoom ? 'selected' : '' %>>Não</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Tipo de Comissão</label>
+                                            <select class="form-select" name="commissionType">
+                                                <option value="">Sem Comissão</option>
+                                                <option value="percent" <%= proc.commissionType === 'percent' ? 'selected' : '' %>>Percentual</option>
+                                                <option value="value" <%= proc.commissionType === 'value' ? 'selected' : '' %>>Valor Fixo</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Valor da Comissão</label>
+                                            <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    class="form-control"
+                                                    name="commissionValue"
+                                                    value="<%= proc.commissionValue || '' %>"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-primary">
+                                            Salvar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Fim Modal -->
+                    </td>
+                </tr>
+            <% }) %>
+            </tbody>
+        </table>
+
+        <!-- Form Novo Procedimento -->
+        <h3 class="mt-4">Novo Procedimento</h3>
+        <form action="/procedures/create" method="POST" class="row g-3 mt-1">
+            <div class="col-md-4">
+                <label class="form-label">Nome</label>
+                <input type="text" class="form-control" name="name" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Preço (R$)</label>
+                <input type="number" step="0.01" class="form-control" name="price" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Ativo?</label>
+                <select class="form-select" name="active">
+                    <option value="true">Sim</option>
+                    <option value="false">Não</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Exige Sala?</label>
+                <select class="form-select" name="requiresRoom">
+                    <option value="false">Não</option>
+                    <option value="true">Sim</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Tipo Comissão</label>
+                <select class="form-select" name="commissionType">
+                    <option value="">Sem</option>
+                    <option value="percent">%</option>
+                    <option value="value">Valor R$</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Valor Comissão</label>
+                <input type="number" step="0.01" class="form-control" name="commissionValue" />
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-success">Criar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

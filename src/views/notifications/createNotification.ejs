@@ -1,0 +1,60 @@
+<%- include('../partials/header') %>
+
+<h2>Criar Notificação</h2>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success"><%= success_msg %></div>
+<% } else if (error_msg) { %>
+    <div class="alert alert-danger"><%= error_msg %></div>
+<% } %>
+
+<form action="/notifications/create" method="POST">
+    <div class="mb-3">
+        <label class="form-label">Título</label>
+        <input type="text" class="form-control" name="title" required />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Mensagem (placeholders ex: %USUARIO%, %AGENDAMENTO_NOME%)</label>
+        <textarea class="form-control" name="message" rows="3" required></textarea>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" name="type">
+            <option value="custom">Custom</option>
+            <option value="birthday">Birthday</option>
+            <option value="appointment">Appointment</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Data/Hora de Disparo (opcional)</label>
+        <input type="datetime-local" class="form-control" name="triggerDate" />
+    </div>
+    <div class="mb-3 form-check">
+        <input class="form-check-input" type="checkbox" name="active" value="true" checked />
+        <label class="form-check-label" for="active">Ativa?</label>
+    </div>
+
+    <!-- Selecionar userId ou mandar para todos -->
+    <div class="mb-3">
+        <label class="form-label">Enviar para Usuário (opcional)</label>
+        <select class="form-select" name="userId">
+            <option value="">Nenhum</option>
+            <% users.forEach(u => { %>
+                <option value="<%= u.id %>"><%= u.name %></option>
+            <% }) %>
+        </select>
+        <small class="form-text text-muted">Se "Para Todos" estiver marcado, este campo será ignorado.</small>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input class="form-check-input" type="checkbox" name="sendToAll" value="true" id="sendToAll">
+        <label class="form-check-label" for="sendToAll">
+            Enviar para TODOS os usuários
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Criar</button>
+    <a href="/notifications" class="btn btn-secondary">Cancelar</a>
+</form>
+
+<%- include('../partials/footer') %>

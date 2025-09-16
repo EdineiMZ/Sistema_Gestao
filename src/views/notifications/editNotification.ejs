@@ -1,0 +1,80 @@
+<%- include('../partials/header') %>
+
+<h2>Editar Notificação #<%= notif.id %></h2>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success"><%= success_msg %></div>
+<% } else if (error_msg) { %>
+    <div class="alert alert-danger"><%= error_msg %></div>
+<% } %>
+
+<form action="/notifications/update/<%= notif.id %>?_method=PUT" method="POST">
+    <div class="mb-3">
+        <label class="form-label">Título</label>
+        <input type="text" class="form-control" name="title" required value="<%= notif.title %>" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Mensagem</label>
+        <textarea class="form-control" name="message" rows="3"><%= notif.message %></textarea>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" name="type">
+            <option value="custom" <%= notif.type==='custom'?'selected':'' %>>Custom</option>
+            <option value="birthday" <%= notif.type==='birthday'?'selected':'' %>>Birthday</option>
+            <option value="appointment" <%= notif.type==='appointment'?'selected':'' %>>Appointment</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Data/Hora de Disparo</label>
+        <input
+                type="datetime-local"
+                class="form-control"
+                name="triggerDate"
+                value="<%= notif.triggerDate? notif.triggerDate.toISOString().slice(0,16):'' %>"
+        />
+    </div>
+    <div class="mb-3 form-check">
+        <input
+                class="form-check-input"
+                type="checkbox"
+                name="active"
+                value="true"
+                id="active"
+                <%= notif.active ? 'checked' : '' %>
+        />
+        <label class="form-check-label" for="active">Ativa?</label>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Enviar para Usuário</label>
+        <select class="form-select" name="userId">
+            <option value="">Nenhum</option>
+            <% users.forEach(u => { %>
+                <option
+                        value="<%= u.id %>"
+                        <%= notif.userId===u.id ? 'selected':'' %>
+                ><%= u.name %></option>
+            <% }) %>
+        </select>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input
+                class="form-check-input"
+                type="checkbox"
+                name="sendToAll"
+                value="true"
+                id="sendToAll"
+                <%= notif.sendToAll ? 'checked' : '' %>
+        />
+        <label class="form-check-label" for="sendToAll">
+            Enviar para TODOS
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="/notifications" class="btn btn-secondary">Cancelar</a>
+</form>
+
+<%- include('../partials/footer') %>

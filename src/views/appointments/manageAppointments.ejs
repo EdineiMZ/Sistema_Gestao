@@ -1,0 +1,62 @@
+<%- include('../partials/header') %>
+
+<h2>Gerenciar Agendamentos</h2>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success"><%= success_msg %></div>
+<% } else if (error_msg) { %>
+    <div class="alert alert-danger"><%= error_msg %></div>
+<% } %>
+
+<!-- Exemplo de form de busca -->
+<form method="GET" action="/appointments" class="mb-3">
+    <input type="text" name="search" placeholder="Buscar por ID, descrição, email..." />
+    <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+    <a href="/appointments/create" class="btn btn-success btn-sm">Novo Agendamento</a>
+</form>
+
+<table class="table table-bordered table-striped">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>Descrição</th>
+        <th>Profissional</th>
+        <th>Cliente (Email)</th>
+        <th>Procedimento</th>
+        <th>Sala</th>
+        <th>Início</th>
+        <th>Fim</th>
+        <th>Pagamento</th>
+        <th>Status</th>
+        <th>Ações</th>
+    </tr>
+    </thead>
+    <tbody>
+    <% appointments.forEach(a => { %>
+        <tr>
+            <td><%= a.id %></td>
+            <td><%= a.description %></td>
+            <td><%= a.professional ? a.professional.name : '' %></td>
+            <td><%= a.clientEmail || '' %></td>
+            <td><%= a.procedure ? a.procedure.name : '' %></td>
+            <td><%= a.room ? a.room.name : '' %></td>
+            <td><%= a.start %></td>
+            <td><%= a.end %></td>
+            <td><%= a.paymentConfirmed ? 'Pago' : 'Pendente' %></td>
+            <td><%= a.status %></td>
+            <td>
+                <a href="/appointments/edit/<%= a.id %>" class="btn btn-warning btn-sm">Editar</a>
+                <form
+                        action="/appointments/delete/<%= a.id %>?_method=DELETE"
+                        method="POST"
+                        style="display:inline-block;"
+                >
+                    <button class="btn btn-danger btn-sm" type="submit">Excluir</button>
+                </form>
+            </td>
+        </tr>
+    <% }) %>
+    </tbody>
+</table>
+
+<%- include('../partials/footer') %>

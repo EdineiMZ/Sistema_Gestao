@@ -1,0 +1,214 @@
+<%- include('../partials/header') %>
+
+<div class="row">
+    <div class="col-12">
+        <h2>Gerenciar Finanças</h2>
+
+        <!-- Alertas de feedback -->
+        <% if (success_msg) { %>
+            <div class="alert alert-success"><%= success_msg %></div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger"><%= error_msg %></div>
+        <% } %>
+
+        <!-- Tabela de Lançamentos -->
+        <table class="table table-bordered table-striped align-middle">
+            <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Descrição</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Vencimento</th>
+                <th>Pagamento</th>
+                <th>Status</th>
+                <th style="width: 180px;">Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            <% entries.forEach(entry => { %>
+                <tr>
+                    <td><%= entry.id %></td>
+                    <td><%= entry.description %></td>
+                    <td>
+                        <% if (entry.type === 'payable') { %>
+                            <span class="badge text-bg-danger">Pagar</span>
+                        <% } else { %>
+                            <span class="badge text-bg-success">Receber</span>
+                        <% } %>
+                    </td>
+                    <td>R$ <%= entry.value %></td>
+                    <td><%= entry.dueDate %></td>
+                    <td><%= entry.paymentDate ? entry.paymentDate : '—' %></td>
+                    <td><%= entry.status %></td>
+                    <td>
+                        <!-- Botão para abrir Modal de Edição -->
+                        <button
+                                type="button"
+                                class="btn btn-warning btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editFinanceModal<%= entry.id %>"
+                        >
+                            Editar
+                        </button>
+
+                        <!-- Form de exclusão -->
+                        <form
+                                action="/finance/delete/<%= entry.id %>?_method=DELETE"
+                                method="POST"
+                                style="display:inline-block;"
+                        >
+                            <button class="btn btn-danger btn-sm" type="submit">
+                                Excluir
+                            </button>
+                        </form>
+
+                        <!-- Modal de Edição -->
+                        <div
+                                class="modal fade"
+                                id="editFinanceModal<%= entry.id %>"
+                                tabindex="-1"
+                                aria-hidden="true"
+                        >
+                            <div class="modal-dialog">
+                                <form
+                                        action="/finance/update/<%= entry.id %>?_method=PUT"
+                                        method="POST"
+                                        class="modal-content"
+                                >
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Editar Lançamento #<%= entry.id %></h5>
+                                        <button
+                                                type="button"
+                                                class="btn-close"
+                                                data-bs-dismiss="modal"
+                                                aria-label="Close"
+                                        ></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" name="id" value="<%= entry.id %>" />
+
+                                        <div class="mb-3">
+                                            <label class="form-label">Descrição</label>
+                                            <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    name="description"
+                                                    value="<%= entry.description %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Tipo</label>
+                                            <select class="form-select" name="type" required>
+                                                <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
+                                                <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Valor (R$)</label>
+                                            <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    class="form-control"
+                                                    name="value"
+                                                    value="<%= entry.value %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Data de Vencimento</label>
+                                            <input
+                                                    type="date"
+                                                    class="form-control"
+                                                    name="dueDate"
+                                                    value="<%= entry.dueDate %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Data de Pagamento</label>
+                                            <input
+                                                    type="date"
+                                                    class="form-control"
+                                                    name="paymentDate"
+                                                    value="<%= entry.paymentDate ? entry.paymentDate : '' %>"
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Status</label>
+                                            <select class="form-select" name="status">
+                                                <option value="pending" <%= entry.status === 'pending' ? 'selected' : '' %>>Pendente</option>
+                                                <option value="paid" <%= entry.status === 'paid' ? 'selected' : '' %>>Pago</option>
+                                                <option value="overdue" <%= entry.status === 'overdue' ? 'selected' : '' %>>Atrasado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button
+                                                type="button"
+                                                class="btn btn-secondary"
+                                                data-bs-dismiss="modal"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-primary">Salvar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Fim Modal -->
+                    </td>
+                </tr>
+            <% }) %>
+            </tbody>
+        </table>
+
+        <!-- Form de criação de novo lançamento -->
+        <h3>Novo Lançamento</h3>
+        <form action="/finance/create" method="POST" class="mt-3 row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Descrição</label>
+                <input
+                        type="text"
+                        class="form-control"
+                        name="description"
+                        required
+                />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" name="type" required>
+                    <option value="payable">Pagar</option>
+                    <option value="receivable">Receber</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Valor (R$)</label>
+                <input
+                        type="number"
+                        step="0.01"
+                        class="form-control"
+                        name="value"
+                        required
+                />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Vencimento</label>
+                <input
+                        type="date"
+                        class="form-control"
+                        name="dueDate"
+                        required
+                />
+            </div>
+            <div class="col-md-2 align-self-end">
+                <button type="submit" class="btn btn-success w-100">
+                    Criar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

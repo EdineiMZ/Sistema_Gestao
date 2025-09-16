@@ -1,0 +1,91 @@
+<%- include('../partials/header') %>
+
+<h2>Criar Novo Agendamento</h2>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success"><%= success_msg %></div>
+<% } else if (error_msg) { %>
+    <div class="alert alert-danger"><%= error_msg %></div>
+<% } %>
+
+<form action="/appointments/create" method="POST">
+    <div class="mb-3">
+        <label for="description" class="form-label">Descrição</label>
+        <input
+                type="text"
+                class="form-control"
+                name="description"
+                id="description"
+                placeholder="Ex: Consulta inicial..."
+        />
+    </div>
+
+    <div class="mb-3">
+        <label for="professionalId" class="form-label">Profissional (role>1)</label>
+        <select class="form-select" name="professionalId" id="professionalId" required>
+            <option value="">-- Selecione um profissional --</option>
+            <% professionals.forEach(pro => { %>
+                <option value="<%= pro.id %>"><%= pro.name %></option>
+            <% }) %>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="clientEmail" class="form-label">E-mail do Cliente</label>
+        <input
+                type="email"
+                class="form-control"
+                name="clientEmail"
+                id="clientEmail"
+                placeholder="ex: cliente@exemplo.com"
+        />
+    </div>
+
+    <div class="mb-3">
+        <label for="procedureId" class="form-label">Procedimento</label>
+        <select class="form-select" name="procedureId" id="procedureId" required>
+            <option value="">-- Selecione um procedimento --</option>
+            <% procedures.forEach(proc => { %>
+                <option value="<%= proc.id %>"><%= proc.name %></option>
+            <% }) %>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="roomId" class="form-label">Sala (se necessário)</label>
+        <select class="form-select" name="roomId" id="roomId">
+            <option value="">-- Nenhuma --</option>
+            <% rooms.forEach(r => { %>
+                <option value="<%= r.id %>"><%= r.name %></option>
+            <% }) %>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="start" class="form-label">Data/Hora Início</label>
+        <input type="datetime-local" class="form-control" name="start" id="start" required />
+    </div>
+
+    <div class="mb-3">
+        <label for="end" class="form-label">Data/Hora Fim</label>
+        <input type="datetime-local" class="form-control" name="end" id="end" required />
+    </div>
+
+    <div class="mb-3 form-check">
+        <input
+                class="form-check-input"
+                type="checkbox"
+                name="paymentConfirmed"
+                id="paymentConfirmed"
+                value="true"
+        />
+        <label class="form-check-label" for="paymentConfirmed">
+            Pagamento já realizado?
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-success">Salvar</button>
+    <a href="/appointments" class="btn btn-secondary">Cancelar</a>
+</form>
+
+<%- include('../partials/footer') %>

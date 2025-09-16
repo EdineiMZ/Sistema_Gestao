@@ -1,0 +1,57 @@
+<%- include('../partials/header') %>
+
+<div class="row">
+    <div class="col-12">
+        <h2>Gerenciar Notificações</h2>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success"><%= success_msg %></div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger"><%= error_msg %></div>
+        <% } %>
+
+        <a href="/notifications/create" class="btn btn-success mb-3">Nova Notificação</a>
+
+        <table class="table table-bordered table-striped">
+            <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Mensagem (placeholders)</th>
+                <th>Tipo</th>
+                <th>TriggerDate</th>
+                <th>Ativa?</th>
+                <th>UserID</th>
+                <th>SendToAll</th>
+                <th>Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            <% notifications.forEach(n => { %>
+                <tr>
+                    <td><%= n.id %></td>
+                    <td><%= n.title %></td>
+                    <td><%= n.message %></td>
+                    <td><%= n.type %></td>
+                    <td><%= n.triggerDate ? n.triggerDate : '—' %></td>
+                    <td><%= n.active ? 'Sim' : 'Não' %></td>
+                    <td><%= n.userId || '—' %></td>
+                    <td><%= n.sendToAll ? 'Sim' : 'Não' %></td>
+                    <td>
+                        <a href="/notifications/edit/<%= n.id %>" class="btn btn-warning btn-sm">Editar</a>
+                        <form
+                                action="/notifications/delete/<%= n.id %>?_method=DELETE"
+                                method="POST"
+                                style="display:inline-block"
+                        >
+                            <button class="btn btn-danger btn-sm">Excluir</button>
+                        </form>
+                    </td>
+                </tr>
+            <% }) %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

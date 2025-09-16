@@ -1,0 +1,134 @@
+<%- include('../partials/header') %>
+
+<div class="row">
+    <div class="col-12">
+        <h2>Gerenciar Salas</h2>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success"><%= success_msg %></div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger"><%= error_msg %></div>
+        <% } %>
+
+        <table class="table table-hover align-middle">
+            <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Ativo</th>
+                <th style="width:150px;">Ações</th>
+            </tr>
+            </thead>
+            <tbody>
+            <% rooms.forEach(room => { %>
+                <tr>
+                    <td><%= room.id %></td>
+                    <td><%= room.name %></td>
+                    <td><%= room.active ? 'Sim' : 'Não' %></td>
+                    <td>
+                        <!-- Botão Editar -->
+                        <button
+                                type="button"
+                                class="btn btn-warning btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editRoomModal<%= room.id %>"
+                        >
+                            Editar
+                        </button>
+
+                        <!-- Excluir -->
+                        <form
+                                action="/rooms/delete/<%= room.id %>?_method=DELETE"
+                                method="POST"
+                                style="display:inline-block"
+                        >
+                            <button class="btn btn-danger btn-sm">Excluir</button>
+                        </form>
+
+                        <!-- Modal Editar -->
+                        <div
+                                class="modal fade"
+                                id="editRoomModal<%= room.id %>"
+                                tabindex="-1"
+                                aria-hidden="true"
+                        >
+                            <div class="modal-dialog">
+                                <form
+                                        action="/rooms/update/<%= room.id %>?_method=PUT"
+                                        method="POST"
+                                        class="modal-content"
+                                >
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Editar Sala #<%= room.id %></h5>
+                                        <button
+                                                type="button"
+                                                class="btn-close"
+                                                data-bs-dismiss="modal"
+                                                aria-label="Close"
+                                        ></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nome</label>
+                                            <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    name="name"
+                                                    value="<%= room.name %>"
+                                                    required
+                                            />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Ativo?</label>
+                                            <select class="form-select" name="active">
+                                                <option value="true" <%= room.active ? 'selected' : '' %>>Sim</option>
+                                                <option value="false" <%= !room.active ? 'selected' : '' %>>Não</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button
+                                                type="button"
+                                                class="btn btn-secondary"
+                                                data-bs-dismiss="modal"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-primary">
+                                            Salvar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Fim Modal -->
+                    </td>
+                </tr>
+            <% }) %>
+            </tbody>
+        </table>
+
+        <!-- Form Nova Sala -->
+        <h3 class="mt-4">Nova Sala</h3>
+        <form action="/rooms/create" method="POST" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Nome</label>
+                <input type="text" class="form-control" name="name" required />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Ativo?</label>
+                <select class="form-select" name="active">
+                    <option value="true">Sim</option>
+                    <option value="false">Não</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-success w-100">
+                    Criar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

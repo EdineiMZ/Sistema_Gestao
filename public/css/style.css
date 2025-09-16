@@ -1,0 +1,17 @@
+body {
+    background-color: #f7f7f7;
+}
+
+.navbar-brand {
+    font-weight: bold;
+    color: #fff !important;
+}
+
+.navbar .dropdown-menu {
+    min-width: 150px;
+}
+.navbar .dropdown-item:hover {
+    background-color: #444; /* Exemplo */
+    color: #fff;
+}
+
