@@ -1,8 +1,31 @@
 // src/utils/email.js
 const nodemailer = require('nodemailer');
 
-const GMAIL_USER = process.env.GMAIL_USER;
-const GMAIL_PASS = process.env.GMAIL_PASS;
+let gmailWhitespaceWarningIssued = false;
+
+const sanitizeUser = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const sanitizePassword = (value) => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    const trimmed = value.trim();
+    if (/\s/.test(trimmed)) {
+        if (!gmailWhitespaceWarningIssued) {
+            console.warn(
+                'GMAIL_PASS contém espaços em branco. Espaços serão removidos para compatibilidade com senhas do Gmail App Password.'
+            );
+            gmailWhitespaceWarningIssued = true;
+        }
+        return trimmed.replace(/\s+/g, '');
+    }
+
+    return trimmed;
+};
+
+const GMAIL_USER = sanitizeUser(process.env.GMAIL_USER);
+const GMAIL_PASS = sanitizePassword(process.env.GMAIL_PASS);
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Sistema de Gestão';
 
 // Cria o transporter
