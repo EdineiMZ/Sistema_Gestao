@@ -137,6 +137,27 @@
                         </li>
                     <% } %>
                 <% } %>
+                <% if (user && notifications && notifications.length) { %>
+                    <li class="nav-item ms-lg-2 mt-3 mt-lg-0">
+                        <a
+                            class="nav-link position-relative nav-notification px-2"
+                            href="/notifications"
+                            aria-label="Visualizar notificações disponíveis"
+                        >
+                            <i class="bi bi-bell-fill"></i>
+                            <span
+                                class="notification-badge badge rounded-pill bg-danger-subtle text-danger fw-semibold shadow-sm position-absolute top-0 start-100 translate-middle"
+                                data-testid="notification-badge"
+                                aria-hidden="true"
+                            >
+                                <%= notifications.length > 9 ? '9+' : notifications.length %>
+                            </span>
+                            <span class="visually-hidden">
+                                Você possui <%= notifications.length %> notificações ativas
+                            </span>
+                        </a>
+                    </li>
+                <% } %>
                 <li class="nav-item ms-lg-3 mt-3 mt-lg-0">
                     <button
                         id="themeToggle"
