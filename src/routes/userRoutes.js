@@ -6,12 +6,8 @@ const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
-const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
+const audit = require('../middlewares/audit');
 
-const manageUsersValidation = createFilterValidation({
-    allowedStatuses: ['active', 'inactive'],
-    redirectTo: '/users/manage'
-});
 
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
 router.get(
@@ -27,23 +23,26 @@ router.get(
 router.post(
     '/create',
     authMiddleware,
-    authorize('admin'),
+    permissionMiddleware(4),
     upload.single('profileImage'),
+    audit('user.create', (req) => `User:${req.body?.email || 'novo'}`),
     userController.createUser
 );
 
 router.put(
     '/update/:id',
     authMiddleware,
-    authorize('admin'),
+    permissionMiddleware(4),
     upload.single('profileImage'),
+    audit('user.update', (req) => `User:${req.params.id}`),
     userController.updateUser
 );
 
 router.delete(
     '/delete/:id',
     authMiddleware,
-    authorize('admin'),
+    permissionMiddleware(4),
+    audit('user.delete', (req) => `User:${req.params.id}`),
     userController.deleteUser
 );
 

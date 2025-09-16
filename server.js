@@ -25,6 +25,7 @@ const roomRoutes = require('./src/routes/roomRoutes');
 const appointmentRoutes = require('./src/routes/appointmentRoutes');
 const financeRoutes = require('./src/routes/financeRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const auditRoutes = require('./src/routes/auditRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -125,6 +126,7 @@ app.use('/rooms', roomRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/finance', financeRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/audit', auditRoutes);
 
 // Conexão DB
 sequelize
