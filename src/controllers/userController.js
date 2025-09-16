@@ -1,5 +1,5 @@
 // src/controllers/userController.js
-const { User } = require('../../database/models');
+const { User, UserNotificationPreference, sequelize } = require('../../database/models');
 const { Op } = require('sequelize');
 const { buildQueryFilters } = require('../utils/queryBuilder');
 const { USER_ROLES, parseRole, roleAtLeast } = require('../constants/roles');
@@ -11,6 +11,35 @@ const parseDecimal = (value, fallback = 0) => {
     }
     const parsed = Number.parseFloat(String(value).replace(',', '.'));
     return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseBooleanFlag = (value, fallback = false) => {
+    if (Array.isArray(value)) {
+        value = value[value.length - 1];
+    }
+
+    if (value === undefined || value === null) {
+        return fallback;
+    }
+
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    if (typeof value === 'number') {
+        return value !== 0;
+    }
+
+    const normalized = String(value).trim().toLowerCase();
+    if (['true', 'on', '1', 'yes'].includes(normalized)) {
+        return true;
+    }
+
+    if (['false', 'off', '0', 'no'].includes(normalized)) {
+        return false;
+    }
+
+    return fallback;
 };
 
 const normalizeDate = (value) => {
@@ -45,7 +74,13 @@ module.exports = {
 
             const users = await User.findAll({
                 where,
-                order: [['name', 'ASC']]
+                order: [['name', 'ASC']],
+                include: [
+                    {
+                        model: UserNotificationPreference,
+                        as: 'notificationPreference'
+                    }
+                ]
             });
 
             res.render('users/manageUsers', {
@@ -94,7 +129,25 @@ module.exports = {
                 payload.profileImage = req.file.buffer;
             }
 
-            await User.create(payload);
+            const emailOptIn = parseBooleanFlag(req.body.notificationEmailEnabled, true);
+            const scheduledOptIn = parseBooleanFlag(req.body.notificationScheduledEnabled, true);
+
+            const transaction = await sequelize.transaction();
+
+            try {
+                const newUser = await User.create(payload, { transaction });
+
+                await UserNotificationPreference.create({
+                    userId: newUser.id,
+                    emailEnabled: emailOptIn,
+                    scheduledEnabled: scheduledOptIn
+                }, { transaction });
+
+                await transaction.commit();
+            } catch (transactionError) {
+                await transaction.rollback();
+                throw transactionError;
+            }
 
             req.flash('success_msg', 'Usuário criado com sucesso!');
             return res.redirect('/users/manage');
@@ -138,7 +191,39 @@ module.exports = {
                 user.profileImage = req.file.buffer;
             }
 
-            await user.save();
+            const emailOptIn = parseBooleanFlag(req.body.notificationEmailEnabled, false);
+            const scheduledOptIn = parseBooleanFlag(req.body.notificationScheduledEnabled, false);
+
+            const transaction = await sequelize.transaction();
+
+            try {
+                await user.save({ transaction });
+
+                const [preference, created] = await UserNotificationPreference.findOrCreate({
+                    where: { userId: user.id },
+                    defaults: {
+                        emailEnabled: emailOptIn,
+                        scheduledEnabled: scheduledOptIn
+                    },
+                    transaction
+                });
+
+                if (
+                    preference.emailEnabled !== emailOptIn ||
+                    preference.scheduledEnabled !== scheduledOptIn
+                ) {
+                    await preference.update({
+                        emailEnabled: emailOptIn,
+                        scheduledEnabled: scheduledOptIn
+                    }, { transaction });
+                }
+
+                await transaction.commit();
+            } catch (transactionError) {
+                await transaction.rollback();
+                throw transactionError;
+            }
+
             req.flash('success_msg', 'Usuário atualizado com sucesso!');
             return res.redirect('/users/manage');
         } catch (err) {
@@ -168,6 +253,82 @@ module.exports = {
             console.error(err);
             req.flash('error_msg', 'Erro ao excluir usuário.');
             return res.redirect('/users/manage');
+        }
+    },
+
+    showPreferences: async (req, res) => {
+        try {
+            const dbUser = await User.findByPk(req.user.id, {
+                include: [
+                    {
+                        model: UserNotificationPreference,
+                        as: 'notificationPreference'
+                    }
+                ]
+            });
+
+            if (!dbUser) {
+                req.flash('error_msg', 'Usuário não encontrado.');
+                return res.redirect('/');
+            }
+
+            const preferenceInstance = dbUser.notificationPreference;
+            const preference = preferenceInstance
+                ? preferenceInstance.get({ plain: true })
+                : { emailEnabled: true, scheduledEnabled: true };
+
+            res.locals.notificationPreference = preference;
+
+            return res.render('users/preferences', {
+                pageTitle: 'Preferências de notificações',
+                preference
+            });
+        } catch (err) {
+            console.error('Erro ao carregar preferências do usuário:', err);
+            req.flash('error_msg', 'Não foi possível carregar suas preferências no momento.');
+            return res.redirect('/');
+        }
+    },
+
+    updatePreferences: async (req, res) => {
+        try {
+            const emailOptIn = parseBooleanFlag(req.body.notificationEmailEnabled, false);
+            const scheduledOptIn = parseBooleanFlag(req.body.notificationScheduledEnabled, false);
+
+            const transaction = await sequelize.transaction();
+
+            try {
+                const [preference] = await UserNotificationPreference.findOrCreate({
+                    where: { userId: req.user.id },
+                    defaults: {
+                        emailEnabled: emailOptIn,
+                        scheduledEnabled: scheduledOptIn
+                    },
+                    transaction
+                });
+
+                if (
+                    preference.emailEnabled !== emailOptIn ||
+                    preference.scheduledEnabled !== scheduledOptIn
+                ) {
+                    await preference.update({
+                        emailEnabled: emailOptIn,
+                        scheduledEnabled: scheduledOptIn
+                    }, { transaction });
+                }
+
+                await transaction.commit();
+            } catch (transactionError) {
+                await transaction.rollback();
+                throw transactionError;
+            }
+
+            req.flash('success_msg', 'Preferências de notificações atualizadas com sucesso.');
+            return res.redirect('/users/preferences');
+        } catch (err) {
+            console.error('Erro ao atualizar preferências do usuário:', err);
+            req.flash('error_msg', 'Não foi possível atualizar suas preferências no momento.');
+            return res.redirect('/users/preferences');
         }
     }
 };

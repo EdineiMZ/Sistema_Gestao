@@ -25,6 +25,19 @@ router.get(
     userController.manageUsers
 );
 
+router.get(
+    '/preferences',
+    authMiddleware,
+    userController.showPreferences
+);
+
+router.post(
+    '/preferences',
+    authMiddleware,
+    audit('user.preferences.update', (req) => `User:${req.user?.id || 'unknown'}`),
+    userController.updatePreferences
+);
+
 
 // Upload da imagem no create e update
 router.post(
