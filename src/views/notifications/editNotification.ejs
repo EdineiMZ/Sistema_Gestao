@@ -119,6 +119,48 @@
                             </select>
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label">Nomes-alvo</label>
+                            <textarea
+                                class="form-control"
+                                name="targetNames"
+                                rows="2"
+                                placeholder="Maria Silva; João Souza"
+                                data-multi-value
+                            ><%= (filters.targetNames || []).join('\n') %></textarea>
+                            <div class="form-text d-flex align-items-center gap-2">
+                                <i class="bi bi-lightbulb text-primary"></i>
+                                <span>Separe valores com vírgula, ponto e vírgula ou utilize múltiplas linhas.</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">E-mails específicos</label>
+                            <textarea
+                                class="form-control"
+                                name="targetEmails"
+                                rows="2"
+                                placeholder="exemplo@dominio.com; diretoria@empresa.com"
+                                data-multi-value
+                            ><%= (filters.targetEmails || []).join('\n') %></textarea>
+                            <div class="form-text d-flex align-items-center gap-2">
+                                <i class="bi bi-lightning-charge text-warning"></i>
+                                <span>Endereços inválidos ou duplicados são removidos ao salvar.</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">E-mails contendo</label>
+                            <textarea
+                                class="form-control"
+                                name="targetEmailFragments"
+                                rows="2"
+                                placeholder="@empresa.com; newsletter"
+                                data-multi-value
+                            ><%= (filters.targetEmailFragments || []).join('\n') %></textarea>
+                            <div class="form-text d-flex align-items-center gap-2">
+                                <i class="bi bi-funnel text-info"></i>
+                                <span>Combine partes do e-mail para localizar grupos específicos.</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Crédito mínimo</label>
                             <input type="number" step="0.01" class="form-control" name="minimumCreditBalance" value="<%= filters.minimumCreditBalance ?? '' %>" />
                         </div>

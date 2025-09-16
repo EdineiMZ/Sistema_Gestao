@@ -1,0 +1,323 @@
+<%- include('../partials/header') %>
+
+<% const heroTitle = pageTitle || 'Termos de Uso & Privacidade'; %>
+<% const heroDescription =
+    pageDescription ||
+    'Reforçamos nosso compromisso com transparência, segurança da informação e conformidade regulatória em cada funcionalidade da plataforma.'; %>
+
+<section class="py-5 hero-blur">
+    <div class="container-lg">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-8">
+                <span class="app-chip text-uppercase">Conformidade e governança</span>
+                <h1 class="display-5 fw-semibold mt-3 text-gradient"><%= heroTitle %></h1>
+                <p class="lead-hero mb-4"><%= heroDescription %></p>
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <span class="badge rounded-pill text-bg-primary fw-semibold">Última atualização: junho/2024</span>
+                    <a class="btn btn-soft" href="mailto:dpo@sistemagestao.com">
+                        <i class="bi bi-shield-lock me-2"></i>
+                        Contato do DPO
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card-soft p-4 h-100">
+                    <h2 class="h5 fw-semibold mb-3">Resumo executivo</h2>
+                    <ul class="list-unstyled text-muted small mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Alinhados à LGPD, GDPR e demais regulamentações aplicáveis.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Governança reforçada com auditorias independentes e trilhas completas.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Contato direto com o encarregado de dados para dúvidas e solicitações.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row row-cols-1 row-cols-lg-3 g-4">
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-primary bg-opacity-10 text-primary fw-semibold mb-3">Segurança</span>
+                    <h3 class="h5 fw-semibold">Proteção de ponta a ponta</h3>
+                    <p class="text-muted mb-0">Criptografia em repouso e trânsito, monitoramento 24/7 e testes de intrusão recorrentes.</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-success bg-opacity-10 text-success fw-semibold mb-3">Transparência</span>
+                    <h3 class="h5 fw-semibold">Controle total para titulares</h3>
+                    <p class="text-muted mb-0">Painel de privacidade para solicitar exportação, correção ou exclusão de dados.</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-info bg-opacity-10 text-info fw-semibold mb-3">Compliance</span>
+                    <h3 class="h5 fw-semibold">Processos auditáveis</h3>
+                    <p class="text-muted mb-0">Documentação disponível para auditorias, com registro detalhado de acessos e alterações.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="pb-5">
+    <div class="container-lg">
+        <div class="card-soft p-4 p-lg-5 mb-4">
+            <h2 class="h4 fw-semibold mb-4">1. Termos de Uso da Plataforma</h2>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">1.1 Elegibilidade e cadastro</h3>
+                    <p class="text-muted">
+                        O acesso é concedido a pessoas jurídicas e usuários convidados que aceitam estes termos ao criar ou utilizar uma conta.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            O responsável legal garante que possui autoridade para contratar a solução em nome da organização.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Cada usuário recebe credenciais exclusivas e intransferíveis, devendo manter sigilo e utilizar autenticação multifator.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Alterações de perfil e permissões são registradas e auditadas para assegurar rastreabilidade.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">1.2 Uso autorizado da solução</h3>
+                    <p class="text-muted">
+                        A plataforma destina-se a gestão corporativa. É proibido utilizá-la para fins ilícitos, envio de SPAM ou armazenamento de conteúdo que viole direitos.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Monitoramos padrões anômalos de uso para preservar disponibilidade e evitar fraudes.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Integrações via API devem respeitar limites de requisições, tokens e políticas de versionamento.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Arquivos enviados passam por varredura automática em busca de malware e conteúdo sensível.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">1.3 Planos, faturamento e SLA</h3>
+                    <p class="text-muted">
+                        Serviços adicionais, limites de uso e tempos de resposta são definidos contratualmente. Notificamos com antecedência sobre ajustes comerciais.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Cobranças recorrentes são processadas via parceiros certificados PCI-DSS.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            SLA padrão: 99,9% de disponibilidade mensal e respostas críticas em até 30 minutos úteis.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Caso haja inadimplência superior a 30 dias, o acesso poderá ser suspenso até regularização.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">1.4 Propriedade intelectual e limitações</h3>
+                    <p class="text-muted">
+                        Todo o código, interface e documentação pertencem à nossa empresa. Concedemos licença de uso não exclusiva enquanto houver contrato vigente.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            É vedada a engenharia reversa, cópia, tradução ou criação de obras derivadas sem autorização expressa.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Feedbacks enviados podem ser incorporados ao produto sem obrigação de compensação financeira.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-soft p-4 p-lg-5">
+            <h2 class="h4 fw-semibold mb-4">2. Política de Privacidade e Proteção de Dados</h2>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.1 Dados coletados</h3>
+                    <p class="text-muted">
+                        Coletamos apenas informações necessárias para autenticação, prestação do serviço e melhoria contínua.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Dados cadastrais: nome, e-mail corporativo, telefone e cargo.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Registros técnicos: logs de acesso, endereço IP, identificadores de dispositivos e preferências de navegação.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Conteúdos operacionais inseridos pelos usuários, como anexos, comentários e formulários personalizados.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.2 Finalidades e bases legais</h3>
+                    <p class="text-muted">
+                        Tratamos dados com base na execução do contrato, cumprimento de obrigações legais e legítimo interesse, sempre com análise de impacto.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Autenticar usuários, garantir segurança e personalizar funcionalidades.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Gerar relatórios de performance e indicadores de uso para gestores autorizados.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Cumprir obrigações fiscais, contábeis e regulatórias, preservando registros conforme legislação.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.3 Compartilhamento e operadores</h3>
+                    <p class="text-muted">
+                        Compartilhamos dados apenas com provedores essenciais, seguindo contratos de confidencialidade e cláusulas de proteção compatíveis.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Provedores de infraestrutura cloud com certificações ISO 27001 e SOC 2.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Serviços de e-mail transacional, monitoramento e análise comportamental.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Parceiros de suporte e consultoria mediante autorização formal do controlador.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.4 Direitos dos titulares</h3>
+                    <p class="text-muted">
+                        Garantimos mecanismos para exercício dos direitos previstos nos artigos 18 e 19 da LGPD.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2 small">
+                        <span class="badge rounded-pill text-bg-primary">Confirmação de tratamento</span>
+                        <span class="badge rounded-pill text-bg-primary">Acesso e portabilidade</span>
+                        <span class="badge rounded-pill text-bg-primary">Correção e anonimização</span>
+                        <span class="badge rounded-pill text-bg-primary">Eliminação e oposição</span>
+                        <span class="badge rounded-pill text-bg-primary">Revogação de consentimento</span>
+                    </div>
+                    <p class="text-muted small mb-0 mt-3">
+                        Solicitações são respondidas em até 15 dias. Registros são mantidos para fins de auditoria.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.5 Retenção e descarte</h3>
+                    <p class="text-muted">
+                        Dados são mantidos pelo período necessário ao contrato e às exigências legais. Após o prazo, aplicamos descarte seguro.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Logs de segurança: retenção mínima de 12 meses para investigações forenses.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Dados financeiros: armazenamento conforme legislação fiscal brasileira.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Backups criptografados seguem política de rotação e expurgo supervisionada.
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h5 fw-semibold">2.6 Segurança da informação</h3>
+                    <p class="text-muted">
+                        Mantemos programa robusto de segurança com políticas internas, testes recorrentes e resposta a incidentes.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Gestão de acessos baseada em papéis (RBAC) e revisão periódica de privilégios.
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-dot"></i>
+                            Plano de resposta a incidentes com comunicação transparente aos clientes afetados.
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-dot"></i>
+                            Programas de conscientização e treinamentos obrigatórios para todo o time.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-soft p-4 p-lg-5 mt-4">
+            <h2 class="h4 fw-semibold mb-3">3. Contato e atualizações</h2>
+            <p class="text-muted">
+                Comunicamos alterações relevantes com antecedência mínima de 30 dias. Ao continuar utilizando a plataforma após a vigência da nova versão, você concorda com os termos atualizados.
+            </p>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="bg-primary bg-opacity-10 rounded-4 p-3 h-100">
+                        <h3 class="h6 fw-semibold">Canal do encarregado (DPO)</h3>
+                        <p class="text-muted small mb-1">E-mail: <a href="mailto:dpo@sistemagestao.com" class="text-decoration-none">dpo@sistemagestao.com</a></p>
+                        <p class="text-muted small mb-0">Prazo médio de resposta: 48 horas úteis.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="bg-success bg-opacity-10 rounded-4 p-3 h-100">
+                        <h3 class="h6 fw-semibold">Canal de incidentes</h3>
+                        <p class="text-muted small mb-1">Disponível 24/7 para reportes de segurança via <a href="mailto:security@sistemagestao.com" class="text-decoration-none">security@sistemagestao.com</a>.</p>
+                        <p class="text-muted small mb-0">Seguimos procedimento de resposta alinhado à ISO 27035.</p>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted small mt-4 mb-0">
+                Versão 4.0 • Vigente a partir de 01/07/2024. Consulte sempre este documento para garantir que está utilizando a versão mais recente.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="card-soft p-4 p-lg-5 text-center">
+            <h2 class="section-title">Transparência como padrão</h2>
+            <p class="lead-hero mb-4">
+                Estamos comprometidos em proteger seus dados e oferecer a melhor experiência. Se surgir qualquer dúvida, nossa equipe de privacidade terá prazer em ajudar.
+            </p>
+            <div class="d-flex flex-wrap gap-3 justify-content-center">
+                <a class="btn btn-gradient" href="mailto:dpo@sistemagestao.com">Conversar com o DPO</a>
+                <a class="btn btn-soft" href="/pages/contact">Acessar canais de suporte</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<%- include('../partials/footer') %>

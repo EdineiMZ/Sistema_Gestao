@@ -145,5 +145,41 @@
                 });
             }
         }
+
+        const navContainer = document.getElementById('navbarNav');
+        const collapseBreakpoint = window.matchMedia ? window.matchMedia('(max-width: 991.98px)') : null;
+        if (navContainer && window.bootstrap && typeof window.bootstrap.Collapse === 'function') {
+            const getCollapseInstance = () => window.bootstrap.Collapse.getOrCreateInstance(navContainer, {
+                toggle: false
+            });
+
+            const closeNavIfCollapsedView = () => {
+                if (!collapseBreakpoint || collapseBreakpoint.matches) {
+                    getCollapseInstance().hide();
+                }
+            };
+
+            const closableLinks = navContainer.querySelectorAll('[data-nav-close]');
+            closableLinks.forEach((link) => {
+                const scheduleClose = () => window.setTimeout(closeNavIfCollapsedView, 120);
+                link.addEventListener('click', scheduleClose);
+                link.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        scheduleClose();
+                    }
+                });
+            });
+        }
+
+        const userMenuToggle = document.getElementById('userMenu');
+        const userMenuDropdown = document.getElementById('userMenuDropdown');
+        if (userMenuToggle && userMenuDropdown) {
+            userMenuToggle.addEventListener('shown.bs.dropdown', () => {
+                const focusTarget = userMenuDropdown.querySelector('[data-user-menu-focus]');
+                if (focusTarget && typeof focusTarget.focus === 'function') {
+                    focusTarget.focus();
+                }
+            });
+        }
     });
 })();
