@@ -196,22 +196,76 @@ module.exports = {
                 return res.redirect('/appointments');
             }
 
-            // Checa procedure se exige sala
-            const procedure = await Procedure.findByPk(procedureId);
-            let finalRoomId = roomId || null;
-            if (procedure && procedure.requiresRoom && !roomId) {
+            const pickLastValue = value => Array.isArray(value) ? value[value.length - 1] : value;
+            const normalizeBoolean = (value, fallback) => {
+                if (value === undefined) {
+                    return fallback;
+                }
+                const rawValue = pickLastValue(value);
+                if (typeof rawValue === 'boolean') {
+                    return rawValue;
+                }
+                if (typeof rawValue === 'string') {
+                    const lowered = rawValue.toLowerCase();
+                    if (['true', '1', 'on', 'yes'].includes(lowered)) {
+                        return true;
+                    }
+                    if (['false', '0', 'off', 'no'].includes(lowered)) {
+                        return false;
+                    }
+                }
+                return fallback;
+            };
+            const normalizeDate = (value, fallback) => {
+                if (value === undefined) {
+                    return fallback;
+                }
+                if (value instanceof Date) {
+                    return value;
+                }
+                const parsed = new Date(value);
+                return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+            };
+
+            const normalizedDescription = description !== undefined ? description : appointment.description;
+            const normalizedProfessionalId = (professionalId !== undefined && professionalId !== '') ? professionalId : appointment.professionalId;
+            const normalizedClientEmail = clientEmail !== undefined ? clientEmail : appointment.clientEmail;
+            const normalizedRoomId = (() => {
+                if (roomId === undefined) {
+                    return appointment.roomId;
+                }
+                if (roomId === '' || roomId === null) {
+                    return null;
+                }
+                return roomId;
+            })();
+            const normalizedProcedureId = (() => {
+                if (procedureId === undefined) {
+                    return appointment.procedureId;
+                }
+                if (procedureId === '' || procedureId === null) {
+                    return null;
+                }
+                return procedureId;
+            })();
+            const normalizedStart = normalizeDate(start, appointment.start);
+            const normalizedEnd = normalizeDate(end, appointment.end);
+            const normalizedStatus = (status !== undefined && status !== '') ? status : appointment.status;
+            const normalizedPaymentConfirmed = normalizeBoolean(paymentConfirmed, appointment.paymentConfirmed);
+
+            const procedure = normalizedProcedureId != null ? await Procedure.findByPk(normalizedProcedureId) : null;
+            if (procedure && procedure.requiresRoom && !normalizedRoomId) {
                 req.flash('error_msg', 'Procedimento exige sala, mas nenhuma selecionada.');
                 return res.redirect(`/appointments/edit/${id}`);
             }
 
-            // Ver sobreposição
-            if (finalRoomId) {
+            if (normalizedRoomId) {
                 const overlap = await Appointment.findOne({
                     where: {
                         id: { [Op.ne]: id },
-                        roomId: finalRoomId,
-                        start: { [Op.lt]: end },
-                        end: { [Op.gt]: start }
+                        roomId: normalizedRoomId,
+                        start: { [Op.lt]: normalizedEnd },
+                        end: { [Op.gt]: normalizedStart }
                     }
                 });
                 if (overlap) {
@@ -220,15 +274,15 @@ module.exports = {
                 }
             }
 
-            appointment.description = description;
-            appointment.professionalId = professionalId;
-            appointment.clientEmail = clientEmail;
-            appointment.roomId = finalRoomId;
-            appointment.procedureId = procedureId;
-            appointment.start = start;
-            appointment.end = end;
-            appointment.status = status || 'scheduled';
-            appointment.paymentConfirmed = (paymentConfirmed === 'true');
+            appointment.description = normalizedDescription;
+            appointment.professionalId = normalizedProfessionalId;
+            appointment.clientEmail = normalizedClientEmail;
+            appointment.roomId = normalizedRoomId;
+            appointment.procedureId = normalizedProcedureId;
+            appointment.start = normalizedStart;
+            appointment.end = normalizedEnd;
+            appointment.status = normalizedStatus || appointment.status || 'scheduled';
+            appointment.paymentConfirmed = normalizedPaymentConfirmed;
 
             await appointment.save();
             req.flash('success_msg', 'Agendamento atualizado com sucesso!');
