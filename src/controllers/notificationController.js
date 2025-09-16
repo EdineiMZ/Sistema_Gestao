@@ -1,8 +1,10 @@
 // src/controllers/notificationController.js
 const sanitizeHtml = require('sanitize-html');
 
+const { Op } = require('sequelize');
 const { Notification, User, Procedure, Room } = require('../../database/models');
-const { ROLE_LABELS, parseRole, sortRolesByHierarchy } = require('../constants/roles');
+const { buildQueryFilters } = require('../utils/queryBuilder');
+
 
 const parseBoolean = (value, defaultValue = false) => {
     if (Array.isArray(value)) {
@@ -154,7 +156,24 @@ module.exports = {
     // Lista todas as notificações
     listNotifications: async (req, res) => {
         try {
+            const { where, filters, metadata } = buildQueryFilters(req.query, {
+                statusField: 'active',
+                statusMap: {
+                    active: true,
+                    inactive: false
+                },
+                allowedStatuses: [true, false],
+                defaultStatus: 'all',
+                dateField: 'triggerDate',
+                keywordFields: ['title', 'message']
+            });
+
+            if (metadata.orConditions.length) {
+                where[Op.or] = metadata.orConditions;
+            }
+
             const notifications = await Notification.findAll({
+                where,
                 order: [['id', 'DESC']]
             });
 
@@ -169,7 +188,8 @@ module.exports = {
 
             res.render('notifications/manageNotifications', {
                 pageTitle: 'Notificações automatizadas',
-                notifications: formattedNotifications
+                notifications: formattedNotifications,
+                filters
             });
         } catch (err) {
             console.error(err);

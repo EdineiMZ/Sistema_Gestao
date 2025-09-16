@@ -2,10 +2,23 @@ const express = require('express');
 const router = express.Router();
 const appointmentController = require('../controllers/appointmentController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const authorize = require('../middlewares/authorize');
+const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
 
-// Requer perfil de especialista ou superior para listar/criar
-router.get('/', authMiddleware, authorize('specialist'), appointmentController.listAppointments);
+const appointmentFiltersValidation = createFilterValidation({
+    allowedStatuses: ['scheduled', 'completed', 'cancelled', 'no-show', 'pending-confirmation'],
+    redirectTo: '/appointments'
+});
+
+// role >= 2 para listar/criar
+router.get(
+    '/',
+    authMiddleware,
+    permissionMiddleware(2),
+    ...appointmentFiltersValidation,
+    appointmentController.listAppointments
+);
+
 // nova rota p/ tela de criar
 router.get('/create', authMiddleware, authorize('specialist'), appointmentController.showCreate);
 router.post('/create', authMiddleware, authorize('specialist'), appointmentController.createAppointment);

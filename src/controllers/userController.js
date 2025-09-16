@@ -1,7 +1,9 @@
 // src/controllers/userController.js
 const { User } = require('../../database/models');
+const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
-const { USER_ROLES, parseRole, roleAtLeast } = require('../constants/roles');
+const { buildQueryFilters } = require('../utils/queryBuilder');
+
 
 const parseDecimal = (value, fallback = 0) => {
     if (value === undefined || value === null || value === '') {
@@ -21,13 +23,35 @@ module.exports = {
     // Exibe a página de gerenciamento de usuários (somente ativos)
     manageUsers: async (req, res) => {
         try {
+            const { where, filters, metadata } = buildQueryFilters(req.query, {
+                statusField: 'active',
+                statusMap: {
+                    active: true,
+                    inactive: false
+                },
+                allowedStatuses: [true, false],
+                defaultStatus: 'active',
+                dateField: 'createdAt',
+                keywordFields: ['name', 'email']
+            });
+
+            if (metadata.keywordNumeric !== null) {
+                metadata.orConditions.push({ id: metadata.keywordNumeric });
+            }
+
+            if (metadata.orConditions.length) {
+                where[Op.or] = metadata.orConditions;
+            }
+
             const users = await User.findAll({
-                where: { active: true },
+                where,
                 order: [['name', 'ASC']]
             });
+
             res.render('users/manageUsers', {
                 pageTitle: 'Gestão de usuários',
-                users
+                users,
+                filters
             });
         } catch (err) {
             console.error(err);

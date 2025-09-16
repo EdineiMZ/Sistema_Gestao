@@ -4,11 +4,24 @@ const router = express.Router();
 
 const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const authorize = require('../middlewares/authorize');
+const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
+const { createFilterValidation } = require('../middlewares/queryValidationMiddleware');
+
+const manageUsersValidation = createFilterValidation({
+    allowedStatuses: ['active', 'inactive'],
+    redirectTo: '/users/manage'
+});
 
 // Todas as rotas de gerenciamento de usuários requerem login e permissão >= 4
-router.get('/manage', authMiddleware, authorize('admin'), userController.manageUsers);
+router.get(
+    '/manage',
+    authMiddleware,
+    permissionMiddleware(4),
+    ...manageUsersValidation,
+    userController.manageUsers
+);
+
 
 // Upload da imagem no create e update
 router.post(
