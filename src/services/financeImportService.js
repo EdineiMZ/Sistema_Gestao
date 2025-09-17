@@ -564,11 +564,12 @@ const prepareEntryForPersistence = async (input, options = {}) => {
         financeCategoryId = resolvedId;
     }
 
-    const financeCategoryId = normalizeCategoryId(
+    const normalizedFallbackCategoryId = normalizeCategoryId(
         input.financeCategoryId
             ?? input.categoryId
             ?? input.category?.id
     );
+    const resolvedFinanceCategoryId = financeCategoryId ?? normalizedFallbackCategoryId;
     const categoryName = sanitizeCategoryName(
         input.categoryName
             ?? input.category?.name
@@ -582,7 +583,7 @@ const prepareEntryForPersistence = async (input, options = {}) => {
         dueDate,
         paymentDate,
         status,
-        financeCategoryId,
+        financeCategoryId: resolvedFinanceCategoryId,
         categoryName,
         hash: createEntryHash({ description, value: Math.abs(numericAmount), dueDate })
     };
