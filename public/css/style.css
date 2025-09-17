@@ -184,7 +184,6 @@ body {
 
 .page-container {
     position: relative;
-    z-index: 1;
 }
 
 .bg-gradient-primary {
