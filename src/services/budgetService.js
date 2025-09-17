@@ -1,6 +1,5 @@
 const { Budget } = require('../../database/models');
 const financeReportingService = require('./financeReportingService');
-
 const budgetListCache = new Map();
 
 const toPlainBudget = (budget) => {
@@ -362,10 +361,124 @@ const findBudgetById = async ({ id, userId }) => {
     return Budget.findOne({ where });
 };
 
-const saveBudget = async ({ id, monthlyLimit, thresholds, referenceMonth, userId, financeCategoryId }) => {
+const listBudgets = async (filters = {}, pagination = {}, options = {}) => {
+    const where = {};
+    const userId = normalizeId(filters.userId);
+    const financeCategoryId = normalizeId(filters.financeCategoryId);
+
+    if (userId !== null) {
+        where.userId = userId;
+    }
+
+    if (financeCategoryId !== null) {
+        where.financeCategoryId = financeCategoryId;
+    }
+
+    const { page, pageSize } = normalizePagination(pagination);
+    const cacheKey = buildCacheKey(where, { page, pageSize });
+
+    if (listCache.has(cacheKey)) {
+        const cached = listCache.get(cacheKey);
+        return {
+            data: cached.data.map((item) => ({ ...item })),
+            pagination: { ...cached.pagination }
+        };
+    }
+
+    try {
+        const result = await Budget.findAndCountAll({
+            where,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            order: [['referenceMonth', 'DESC'], ['financeCategoryId', 'ASC']],
+            ...options
+        });
+
+        const data = Array.isArray(result.rows) ? result.rows.map(formatBudgetRow) : [];
+        const totalItems = Number.isFinite(result.count) ? result.count : Array.isArray(result.rows) ? result.rows.length : 0;
+        const totalPages = pageSize > 0 ? Math.ceil(totalItems / pageSize) : 0;
+
+        const payload = {
+            data,
+            pagination: {
+                page,
+                pageSize,
+                totalItems,
+                totalPages
+            }
+        };
+
+        listCache.set(cacheKey, payload);
+
+        return {
+            data: data.map((item) => ({ ...item })),
+            pagination: { ...payload.pagination }
+        };
+    } catch (error) {
+        if (typeof error.message === 'string' && error.message.includes('no such table: budgets')) {
+            return {
+                data: [],
+                pagination: {
+                    page: DEFAULT_PAGE,
+                    pageSize: DEFAULT_PAGE_SIZE,
+                    totalItems: 0,
+                    totalPages: 0
+                }
+            };
+        }
+
+        throw error;
+    }
+};
+
+const findBudgetById = async ({ id, userId }, options = {}) => {
+    const budgetId = normalizeId(id);
+    if (budgetId === null) {
+        return null;
+    }
+
+    const where = { id: budgetId };
+    const normalizedUserId = normalizeId(userId);
+    if (normalizedUserId !== null) {
+        where.userId = normalizedUserId;
+    }
+
+    return Budget.findOne({ where, ...options });
+};
+
+const createBudget = async (data = {}, options = {}) => {
+    const payload = buildBudgetPayload(data);
+    const budget = await Budget.create(payload, options);
+    clearCache();
+    return typeof budget.get === 'function' ? budget.get({ plain: true }) : budget;
+};
+
+const updateBudget = async (budgetId, data = {}, options = {}) => {
+    const targetId = normalizeId(budgetId);
+    if (targetId === null) {
+        return null;
+    }
+
+    const budget = await Budget.findByPk(targetId, { transaction: options.transaction });
+    if (!budget) {
+        return null;
+    }
+
+    const updates = buildBudgetPayload(data);
+    Object.keys(updates).forEach((key) => {
+        budget[key] = updates[key];
+    });
+
+    await budget.save({ transaction: options.transaction });
+    clearCache();
+
+    return typeof budget.get === 'function' ? budget.get({ plain: true }) : { ...budget };
+};
+
+const saveBudget = async ({ id, ...data } = {}, options = {}) => {
     if (id) {
-        const budget = await findBudgetById({ id, userId });
-        if (!budget) {
+        const updated = await updateBudget(id, { id, ...data }, options);
+        if (!updated) {
             const error = new Error('Orçamento não encontrado.');
             error.code = 'BUDGET_NOT_FOUND';
             throw error;
@@ -394,12 +507,15 @@ const saveBudget = async ({ id, monthlyLimit, thresholds, referenceMonth, userId
     return created;
 };
 
-const deleteBudget = async ({ id, userId }) => {
-    const budget = await findBudgetById({ id, userId });
+const deleteBudget = async ({ id, userId }, options = {}) => {
+    const budget = await findBudgetById({ id, userId }, options);
     if (!budget) {
         const error = new Error('Orçamento não encontrado.');
         error.code = 'BUDGET_NOT_FOUND';
         throw error;
+    }
+    if (typeof budget.destroy === 'function') {
+        await budget.destroy({ transaction: options.transaction });
     }
 
     await budget.destroy();
