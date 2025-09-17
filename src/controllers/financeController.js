@@ -6,7 +6,6 @@ const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
-const { buildImportPreview } = financeImportService;
 const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
@@ -175,33 +174,6 @@ const formatPeriodLabel = (filters = {}) => {
         return `Até ${end}`;
     }
     return 'Todo o período';
-};
-
-const wantsJsonResponse = (req) => {
-    if (!req) {
-        return false;
-    }
-
-    if (req.xhr === true) {
-        return true;
-    }
-
-    const headers = req.headers || {};
-    const acceptHeader = headers.accept || headers.Accept || '';
-    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
-        return true;
-    }
-
-    const requestedWith = headers['x-requested-with'] || headers['X-Requested-With'];
-    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
-        return true;
-    }
-
-    if (req.query && typeof req.query.format === 'string' && req.query.format.toLowerCase() === 'json') {
-        return true;
-    }
-
-    return false;
 };
 
 const isMissingTableDbError = (error, tableName) => {
