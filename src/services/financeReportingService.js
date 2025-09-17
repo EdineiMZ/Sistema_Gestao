@@ -4,7 +4,8 @@ const { FinanceEntry, FinanceGoal, Sequelize } = require('../../database/models'
 const {
     FINANCE_RECURRING_INTERVALS,
     FINANCE_RECURRING_INTERVAL_VALUES,
-    FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE
+    FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE,
+    normalizeRecurringInterval
 } = require('../constants/financeRecurringIntervals');
 
 const { Op } = Sequelize;
@@ -590,7 +591,8 @@ module.exports = {
         createEmptyStatusSummary,
         buildDateFilter,
         isValidISODate,
-        resolveProjectionSettings
+        resolveProjectionSettings,
+        normalizeRecurringInterval
 
     }
 };
