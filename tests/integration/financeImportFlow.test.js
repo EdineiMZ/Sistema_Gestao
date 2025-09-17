@@ -121,4 +121,29 @@ describe('Fluxo de importação financeira', () => {
             dueDate: '2024-01-15'
         });
     });
+
+    it('mantém os campos essenciais nas entradas da pré-visualização', async () => {
+        const csvPayload = [
+            'Descrição;Valor;Data;Tipo',
+            'Mensalidade Plataforma;75,00;2024-02-01;Receita'
+        ].join('\n');
+
+        const response = await request(app)
+            .post('/finance/import/preview')
+            .set('Accept', 'application/json')
+            .attach('importFile', Buffer.from(csvPayload, 'utf8'), 'import.csv');
+
+        expect(response.status).toBe(200);
+        const { preview } = response.body;
+        expect(preview.entries).toHaveLength(1);
+
+        const [entry] = preview.entries;
+        expect(entry).toMatchObject({
+            description: 'Mensalidade Plataforma',
+            value: 75,
+            dueDate: '2024-02-01'
+        });
+        expect(entry).toHaveProperty('type', 'receivable');
+        expect(entry).toHaveProperty('status');
+    });
 });

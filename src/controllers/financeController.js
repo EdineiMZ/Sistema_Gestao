@@ -378,14 +378,15 @@ const prepareImportPreview = async (rawEntries = []) => {
     const normalizedEntries = [];
     const validationErrors = [];
 
-    rawEntries.forEach((entry, index) => {
+    for (const [index, entry] of rawEntries.entries()) {
         try {
-            const prepared = financeImportService.prepareEntryForPersistence(entry);
+            const prepared = await financeImportService.prepareEntryForPersistence(entry);
             normalizedEntries.push({ ...prepared, originalIndex: index });
         } catch (error) {
-            validationErrors.push({ index, message: error.message || 'Entrada inválida.' });
+            const message = error?.message || 'Entrada inválida.';
+            validationErrors.push({ index, message });
         }
-    });
+    }
 
     totals.total = normalizedEntries.length + validationErrors.length;
     totals.invalid = validationErrors.length;
