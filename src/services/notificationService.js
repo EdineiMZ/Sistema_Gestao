@@ -14,6 +14,7 @@ const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
@@ -156,7 +157,7 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
                 raw: true
             });
         } catch (error) {
-            console.error('Erro ao carregar histórico de envios da notificação:', error);
+            logger.error('Erro ao carregar histórico de envios da notificação:', error);
             existingLogs = [];
         }
     }
@@ -203,7 +204,7 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
             } catch (error) {
                 if (error?.name === 'SequelizeUniqueConstraintError') {
                     sentSet.add(dedupeKey);
-                    console.warn(
+                    logger.warn(
                         `Envio duplicado detectado para notificação ${notification.id} e destinatário ${normalizedRecipient}. ` +
                         'Registro já existente.'
                     );
@@ -405,7 +406,7 @@ const ensureMessageHtmlColumnExists = async () => {
 
     if (!hasMessageHtml) {
         if (!messageHtmlWarningIssued) {
-            console.warn(
+            logger.warn(
                 'Aviso: coluna "messageHtml" ausente na tabela "Notifications". ' +
                 'Processamento de notificações interrompido até que a migração seja aplicada.'
             );
@@ -473,11 +474,11 @@ async function processNotifications() {
                     await notif.update({ sent: true });
                 }
             } catch (notificationError) {
-                console.error(`Erro ao processar notificação ${notif.id}:`, notificationError);
+                logger.error(`Erro ao processar notificação ${notif.id}:`, notificationError);
             }
         }
     } catch (err) {
-        console.error('Erro ao processar notificações:', err);
+        logger.error('Erro ao processar notificações:', err);
     }
 }
 
