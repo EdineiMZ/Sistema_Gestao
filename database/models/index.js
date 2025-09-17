@@ -220,13 +220,6 @@ if (SupportMessage && User && !(SupportMessage.associations && SupportMessage.as
     });
 }
 
-if (SupportMessage && SupportAttachment && !(SupportMessage.associations && SupportMessage.associations.attachment)) {
-    SupportMessage.belongsTo(SupportAttachment, {
-        as: 'attachment',
-        foreignKey: 'attachmentId'
-    });
-}
-
 if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && SupportAttachment.associations.ticket)) {
     SupportAttachment.belongsTo(SupportTicket, {
         as: 'ticket',
@@ -235,11 +228,19 @@ if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && Su
     });
 }
 
+if (SupportMessage && SupportAttachment && !(SupportMessage.associations && SupportMessage.associations.attachments)) {
+    SupportMessage.hasMany(SupportAttachment, {
+        as: 'attachments',
+        foreignKey: 'messageId',
+        onDelete: 'CASCADE'
+    });
+}
+
 if (SupportAttachment && SupportMessage && !(SupportAttachment.associations && SupportAttachment.associations.message)) {
-    SupportAttachment.hasOne(SupportMessage, {
+    SupportAttachment.belongsTo(SupportMessage, {
         as: 'message',
-        foreignKey: 'attachmentId',
-        constraints: false
+        foreignKey: 'messageId',
+        onDelete: 'CASCADE'
     });
 }
 
