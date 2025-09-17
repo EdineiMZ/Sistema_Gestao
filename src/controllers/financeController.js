@@ -177,33 +177,6 @@ const formatPeriodLabel = (filters = {}) => {
     return 'Todo o período';
 };
 
-const wantsJsonResponse = (req) => {
-    if (!req) {
-        return false;
-    }
-
-    if (req.xhr === true) {
-        return true;
-    }
-
-    const headers = req.headers || {};
-    const acceptHeader = headers.accept || headers.Accept || '';
-    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
-        return true;
-    }
-
-    const requestedWith = headers['x-requested-with'] || headers['X-Requested-With'];
-    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
-        return true;
-    }
-
-    if (req.query && typeof req.query.format === 'string' && req.query.format.toLowerCase() === 'json') {
-        return true;
-    }
-
-    return false;
-};
-
 const isMissingTableDbError = (error, tableName) => {
     if (!error) {
         return false;
@@ -217,76 +190,6 @@ const isMissingTableDbError = (error, tableName) => {
     ).toLowerCase();
 
     return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
-};
-
-const buildImportPreview = async (rawEntries = []) => {
-    const totals = { total: 0, new: 0, conflicting: 0, invalid: 0 };
-    if (!Array.isArray(rawEntries) || !rawEntries.length) {
-        return { entries: [], totals, validationErrors: [] };
-    }
-
-    const normalizedEntries = [];
-    const validationErrors = [];
-
-    rawEntries.forEach((entry, index) => {
-        try {
-            const prepared = financeImportService.prepareEntryForPersistence(entry);
-            normalizedEntries.push({ ...prepared, originalIndex: index });
-        } catch (error) {
-            validationErrors.push({ index, message: error.message || 'Entrada inválida.' });
-        }
-    });
-
-    totals.total = normalizedEntries.length + validationErrors.length;
-    totals.invalid = validationErrors.length;
-
-    const dueDates = [...new Set(normalizedEntries.map((item) => item.dueDate))];
-    let existingEntries = [];
-    if (dueDates.length) {
-        existingEntries = await FinanceEntry.findAll({
-            where: {
-                dueDate: { [Op.in]: dueDates }
-            },
-            attributes: ['description', 'value', 'dueDate'],
-            raw: true
-        });
-    }
-
-    const existingHashes = new Set(
-        existingEntries.map((entry) => financeImportService.createEntryHash(entry))
-    );
-
-    const seenHashes = new Set();
-    const previewEntries = normalizedEntries.map((item) => {
-        const conflictWithDatabase = existingHashes.has(item.hash);
-        const duplicateInBatch = seenHashes.has(item.hash);
-        seenHashes.add(item.hash);
-
-        const conflict = conflictWithDatabase || duplicateInBatch;
-        if (conflict) {
-            totals.conflicting += 1;
-        } else {
-            totals.new += 1;
-        }
-
-        return {
-            description: item.description,
-            type: item.type,
-            value: item.value,
-            dueDate: item.dueDate,
-            paymentDate: item.paymentDate,
-            status: item.status,
-            hash: item.hash,
-            conflict,
-            duplicate: duplicateInBatch
-        };
-    });
-
-    return {
-        entries: previewEntries,
-        totals,
-        validationErrors
-    };
 };
 
 const normalizeFilterValue = (value) => {
