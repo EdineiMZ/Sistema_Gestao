@@ -90,6 +90,48 @@
     </div>
 
     <div class="row g-4 mt-1">
+        <div class="col-12">
+            <article class="card projection-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+                        <div>
+                            <h5 class="chart-title mb-1">Metas e projeções financeiras</h5>
+                            <p class="chart-subtitle mb-0 text-muted">Comparativo do saldo líquido projetado com as metas cadastradas.</p>
+                        </div>
+                        <div class="text-end small">
+                            <span class="badge rounded-pill bg-light text-muted" data-projection-highlight-badge>
+                                <i class="bi bi-bullseye me-1"></i>
+                                Aguardando atualização
+                            </span>
+                        </div>
+                    </div>
+                    <div class="projection-highlight border rounded-3 p-3 bg-light-subtle mb-3" data-projection-highlight>
+                        <div class="text-muted small">As projeções serão carregadas automaticamente.</div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Mês</th>
+                                    <th scope="col">Saldo projetado</th>
+                                    <th scope="col">Meta líquida</th>
+                                    <th scope="col">Diferença</th>
+                                    <th scope="col" class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody data-projection-rows>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted small">Carregando projeções...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-1">
         <div class="col-xxl-8">
             <article class="card chart-card border-0 shadow-sm h-100">
                 <div class="card-body">

@@ -1,4 +1,5 @@
 const { Appointment, FinanceEntry, User, sequelize, Sequelize } = require('../../database/models');
+const financeReportingService = require('../services/financeReportingService');
 const { Op } = Sequelize;
 
 const toNumber = (value) => {
@@ -134,7 +135,7 @@ module.exports = {
                     raw: true
                 }),
                 FinanceEntry.findAll({
-                    attributes: ['type', 'status', 'value', 'paymentDate', 'dueDate', 'createdAt'],
+                    attributes: ['type', 'status', 'value', 'paymentDate', 'dueDate', 'createdAt', 'recurring', 'recurringInterval'],
                     where: {
                         [Op.or]: [
                             { paymentDate: { [Op.gte]: earliestBucketDate } },
@@ -285,6 +286,18 @@ module.exports = {
                 } : null
             }));
 
+            const projectionMonths = await financeReportingService.getMonthlyProjection(
+                { projectionMonths: 6, referenceDate: now },
+                { entries: financeEntries }
+            );
+
+            const projectionHighlight = projectionMonths.find((item) => item.isFuture && item.hasGoal)
+                || projectionMonths.find((item) => item.isFuture)
+                || projectionMonths.find((item) => item.isCurrent)
+                || null;
+
+            const projectionWarnings = projectionMonths.filter((item) => item.needsAttention);
+
             return res.json({
                 summary: {
                     appointmentsToday,
@@ -300,6 +313,15 @@ module.exports = {
                     userGrowth: userGrowthChart
                 },
                 upcomingAppointments: upcomingPayload,
+                projections: {
+                    months: projectionMonths,
+                    highlight: projectionHighlight,
+                    warnings: projectionWarnings.map((item) => ({
+                        month: item.month,
+                        label: item.label,
+                        gapToGoal: item.goal?.gapToGoal ?? null
+                    }))
+                },
                 generatedAt: now.toISOString()
             });
         } catch (error) {
