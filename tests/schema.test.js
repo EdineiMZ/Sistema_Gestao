@@ -25,6 +25,7 @@ const migrations = [
   require('../database/migrations/20240915-create-finance-attachments'),
   require('../database/migrations/20240916-create-finance-categories'),
   require('../database/migrations/20240917-create-budgets'),
+  require('../database/migrations/20240918-create-budget-threshold-statuses'),
 ];
 
 (async () => {

@@ -1,7 +1,8 @@
 require('dotenv').config();
 
 const { sequelize } = require('./database/models');
-const { startWorker, stopWorker } = require('./src/services/notificationWorker');
+const { startWorker, stopWorker, getWorkerMetrics } = require('./src/services/notificationWorker');
+const logger = require('./src/utils/logger');
 
 let shuttingDown = false;
 
@@ -15,9 +16,10 @@ const gracefulShutdown = async (exitCode = 0) => {
         stopWorker();
         await sequelize.close();
     } catch (error) {
-        console.error('Erro ao finalizar o worker de notificações:', error);
+        logger.error('notification-worker.shutdown.failure', { error });
         exitCode = exitCode || 1;
     } finally {
+        logger.info('notification-worker.shutdown.metrics', getWorkerMetrics());
         process.exit(exitCode);
     }
 };
@@ -25,10 +27,10 @@ const gracefulShutdown = async (exitCode = 0) => {
 (async () => {
     try {
         await sequelize.authenticate();
-        console.log('Conexão estabelecida para o worker de notificações.');
+        logger.info('notification-worker.bootstrap.success');
         startWorker({ immediate: true });
     } catch (error) {
-        console.error('Falha ao iniciar o worker de notificações:', error);
+        logger.error('notification-worker.bootstrap.failure', { error });
         await gracefulShutdown(1);
     }
 })();
@@ -36,10 +38,10 @@ const gracefulShutdown = async (exitCode = 0) => {
 process.on('SIGINT', () => gracefulShutdown(0));
 process.on('SIGTERM', () => gracefulShutdown(0));
 process.on('uncaughtException', (error) => {
-    console.error('Exceção não tratada no worker de notificações:', error);
+    logger.error('notification-worker.uncaught-exception', { error });
     void gracefulShutdown(1);
 });
 process.on('unhandledRejection', (reason) => {
-    console.error('Rejeição não tratada no worker de notificações:', reason);
+    logger.error('notification-worker.unhandled-rejection', { reason });
     void gracefulShutdown(1);
 });
