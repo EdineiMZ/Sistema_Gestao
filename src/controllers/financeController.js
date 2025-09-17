@@ -17,7 +17,7 @@ const {
 } = financeConstants;
 const { normalizeRecurringInterval } = reportingUtils;
 
-const wantsJsonResponse = (req) => {
+const wantsJsonResponse = (req = {}) => {
     if (!req || typeof req !== 'object') {
         return false;
     }
@@ -66,37 +66,6 @@ const wantsJsonResponse = (req) => {
         return true;
     }
 
-    return false;
-};
-
-const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
-    value: interval.value,
-    label: interval.label
-}));
-
-const wantsJsonResponse = (req = {}) => {
-    if (!req || typeof req !== 'object') {
-        return false;
-    }
-
-    if (req.xhr === true) {
-        return true;
-    }
-
-    const headers = req.headers || {};
-    const acceptHeader = typeof req.get === 'function'
-        ? req.get('accept')
-        : headers.accept || headers.Accept || '';
-
-    if (typeof headers['x-requested-with'] === 'string'
-        && headers['x-requested-with'].toLowerCase() === 'xmlhttprequest') {
-        return true;
-    }
-
-    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
-        return true;
-    }
-
     const query = req.query || {};
     if (query.format === 'json' || query.format === 'JSON') {
         return true;
@@ -108,6 +77,11 @@ const wantsJsonResponse = (req = {}) => {
 
     return false;
 };
+
+const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
+    value: interval.value,
+    label: interval.label
+}));
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -482,116 +456,6 @@ const beginTransaction = async () => {
     }
     return sequelizeInstance.transaction();
 };
-
-async function buildImportPreview(rawEntries = []) {
-    if (!Array.isArray(rawEntries) || rawEntries.length === 0) {
-        return {
-            entries: [],
-            totals: { total: 0, new: 0, conflicting: 0 },
-            invalidEntries: []
-        };
-    }
-
-    const normalizedEntries = [];
-    const invalidEntries = [];
-
-    rawEntries.forEach((entry, index) => {
-        try {
-            const prepared = financeImportService.prepareEntryForPersistence(entry);
-            normalizedEntries.push({
-                index,
-                prepared,
-                original: entry
-            });
-        } catch (error) {
-            invalidEntries.push({
-                entry,
-                index,
-                message: error?.message || 'Registro inválido.'
-            });
-        }
-    });
-
-    const dueDates = [...new Set(normalizedEntries.map((item) => item.prepared.dueDate))];
-    let existingEntries = [];
-    if (dueDates.length) {
-        existingEntries = await FinanceEntry.findAll({
-            where: { dueDate: { [Op.in]: dueDates } },
-            attributes: ['id', 'description', 'value', 'dueDate']
-        });
-    }
-
-    const existingHashes = new Map();
-    existingEntries.forEach((entry) => {
-        const plain = entry.get({ plain: true });
-        const hash = financeImportService.createEntryHash(plain);
-        if (!existingHashes.has(hash)) {
-            existingHashes.set(hash, plain);
-        }
-    });
-
-    const previewEntries = normalizedEntries.map(({ index, prepared, original }) => {
-        const conflictReasons = [];
-        const existing = existingHashes.get(prepared.hash);
-        if (existing) {
-            const reference = existing.id ? `#${existing.id}` : 'existente';
-            conflictReasons.push(`Já existe lançamento ${reference} com os mesmos dados.`);
-        }
-
-        return {
-            include: conflictReasons.length === 0,
-            conflict: conflictReasons.length > 0,
-            conflictReasons,
-            hash: prepared.hash,
-            description: prepared.description,
-            type: prepared.type,
-            value: prepared.value,
-            dueDate: prepared.dueDate,
-            paymentDate: prepared.paymentDate,
-            status: prepared.status,
-            metadata: original?.metadata || {},
-            originalIndex: index
-        };
-    });
-
-    const groupedByHash = new Map();
-    previewEntries.forEach((entry) => {
-        const list = groupedByHash.get(entry.hash) || [];
-        list.push(entry);
-        groupedByHash.set(entry.hash, list);
-    });
-
-    groupedByHash.forEach((list) => {
-        if (list.length > 1) {
-            list.forEach((entry) => {
-                if (!entry.conflictReasons.includes('Duplicado no arquivo importado.')) {
-                    entry.conflictReasons.push('Duplicado no arquivo importado.');
-                }
-                entry.conflict = true;
-                entry.include = false;
-            });
-        }
-    });
-
-    previewEntries.forEach((entry) => {
-        if (entry.conflictReasons.length) {
-            entry.conflict = true;
-            entry.include = false;
-        }
-    });
-
-    const totals = {
-        total: previewEntries.length,
-        new: previewEntries.filter((entry) => !entry.conflict).length,
-        conflicting: previewEntries.filter((entry) => entry.conflict).length
-    };
-
-    return {
-        entries: previewEntries,
-        totals,
-        invalidEntries
-    };
-}
 
 module.exports = {
     listFinanceEntries: async (req, res) => {
