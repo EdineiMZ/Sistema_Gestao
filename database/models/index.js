@@ -130,7 +130,6 @@ if (Procedure && Appointment) {
 }
 
 // --- Fim das associações manuais ---
-
 if (SupportTicket && User) {
     if (!(User.associations && User.associations.createdSupportTickets)) {
         User.hasMany(SupportTicket, {

@@ -39,6 +39,7 @@ module.exports = (sequelize, DataTypes) => {
         resolvedAt: {
             type: DataTypes.DATE,
             allowNull: true
+
         },
         firstResponseAt: {
             type: DataTypes.DATE,

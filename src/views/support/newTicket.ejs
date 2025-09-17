@@ -1,0 +1,83 @@
+<%- include('../partials/header') %>
+
+<% const priorityLabelsSafe = priorityLabels || { low: 'Baixa', medium: 'Média', high: 'Alta' }; %>
+
+<section class="container py-4 py-lg-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-7">
+            <div class="mb-4 text-center text-lg-start">
+                <a href="/support/tickets" class="btn btn-link px-0 text-decoration-none">
+                    <i class="bi bi-arrow-left"></i>
+                    Voltar para meus chamados
+                </a>
+            </div>
+
+            <div class="card border-0 shadow-sm overflow-hidden">
+                <div class="card-body p-4 p-lg-5">
+                    <span class="badge bg-gradient bg-opacity-10 text-primary mb-3">Atendimento prioritário</span>
+                    <h1 class="h3 fw-semibold text-gradient mb-2">Abrir novo chamado</h1>
+                    <p class="text-muted mb-4">Conte-nos o que está acontecendo e anexe evidências para agilizar o diagnóstico da equipe.</p>
+
+                    <form action="/support/tickets" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="subject" class="form-label fw-semibold">Assunto</label>
+                            <input type="text" class="form-control form-control-lg" id="subject" name="subject" placeholder="Ex.: Erro ao acessar relatórios" required>
+                            <div class="invalid-feedback">Informe um assunto claro para o chamado.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="priority" class="form-label fw-semibold">Prioridade</label>
+                            <select class="form-select form-select-lg" id="priority" name="priority">
+                                <% Object.entries(priorityLabelsSafe).forEach(([value, label]) => { %>
+                                    <option value="<%= value %>"><%= label %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label fw-semibold">Descrição detalhada</label>
+                            <textarea class="form-control" id="description" name="description" rows="6" placeholder="Descreva o comportamento, o impacto no time e passos para reproduzir" required></textarea>
+                            <div class="invalid-feedback">Descreva o que está acontecendo para que possamos ajudar melhor.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="attachments" class="form-label fw-semibold">Anexos (opcional)</label>
+                            <div class="border border-dashed rounded-4 p-4 text-center bg-body-tertiary">
+                                <i class="bi bi-cloud-arrow-up display-5 text-primary"></i>
+                                <p class="mt-3 mb-2 fw-semibold">Arraste arquivos ou clique para selecionar</p>
+                                <p class="text-muted small mb-3">Formatos aceitos: PDF, imagens, documentos Office e ZIP. Limite de 3 arquivos de até 8MB cada.</p>
+                                <input class="form-control form-control-lg" type="file" id="attachments" name="attachments" multiple>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
+                            <a href="/support/tickets" class="btn btn-outline-secondary btn-lg">Cancelar</a>
+                            <button type="submit" class="btn btn-gradient btn-lg">
+                                <i class="bi bi-send me-2"></i>
+                                Enviar chamado
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    'use strict';
+    const forms = document.querySelectorAll('.needs-validation');
+    Array.from(forms).forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+</script>
+
+<%- include('../partials/footer') %>
