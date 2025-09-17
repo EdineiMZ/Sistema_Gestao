@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceCategory, FinanceGoal, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -64,6 +64,23 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 
 const formatCurrency = (value) => currencyFormatter.format(parseAmount(value));
 
+const toExcelColor = (hexColor, fallback = 'FF2563EB') => {
+    if (typeof hexColor !== 'string' || !hexColor) {
+        return fallback;
+    }
+    let normalized = hexColor.trim();
+    if (normalized.startsWith('#')) {
+        normalized = normalized.slice(1);
+    }
+    if (normalized.length === 3) {
+        normalized = normalized.split('').map((char) => char + char).join('');
+    }
+    if (normalized.length !== 6) {
+        return fallback;
+    }
+    return `FF${normalized.toUpperCase()}`;
+};
+
 const sanitizeText = (value) => {
     if (value === null || value === undefined) {
         return '';
@@ -96,6 +113,118 @@ const formatPeriodLabel = (filters = {}) => {
         return `Até ${end}`;
     }
     return 'Todo o período';
+};
+
+const wantsJsonResponse = (req) => {
+    if (!req) {
+        return false;
+    }
+
+    if (req.xhr === true) {
+        return true;
+    }
+
+    const headers = req.headers || {};
+    const acceptHeader = headers.accept || headers.Accept || '';
+    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
+        return true;
+    }
+
+    const requestedWith = headers['x-requested-with'] || headers['X-Requested-With'];
+    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
+        return true;
+    }
+
+    if (req.query && typeof req.query.format === 'string' && req.query.format.toLowerCase() === 'json') {
+        return true;
+    }
+
+    return false;
+};
+
+const isMissingTableDbError = (error, tableName) => {
+    if (!error) {
+        return false;
+    }
+
+    const message = String(
+        error?.original?.message
+        || error?.parent?.message
+        || error?.message
+        || ''
+    ).toLowerCase();
+
+    return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
+};
+
+const buildImportPreview = async (rawEntries = []) => {
+    const totals = { total: 0, new: 0, conflicting: 0, invalid: 0 };
+    if (!Array.isArray(rawEntries) || !rawEntries.length) {
+        return { entries: [], totals, validationErrors: [] };
+    }
+
+    const normalizedEntries = [];
+    const validationErrors = [];
+
+    rawEntries.forEach((entry, index) => {
+        try {
+            const prepared = financeImportService.prepareEntryForPersistence(entry);
+            normalizedEntries.push({ ...prepared, originalIndex: index });
+        } catch (error) {
+            validationErrors.push({ index, message: error.message || 'Entrada inválida.' });
+        }
+    });
+
+    totals.total = normalizedEntries.length + validationErrors.length;
+    totals.invalid = validationErrors.length;
+
+    const dueDates = [...new Set(normalizedEntries.map((item) => item.dueDate))];
+    let existingEntries = [];
+    if (dueDates.length) {
+        existingEntries = await FinanceEntry.findAll({
+            where: {
+                dueDate: { [Op.in]: dueDates }
+            },
+            attributes: ['description', 'value', 'dueDate'],
+            raw: true
+        });
+    }
+
+    const existingHashes = new Set(
+        existingEntries.map((entry) => financeImportService.createEntryHash(entry))
+    );
+
+    const seenHashes = new Set();
+    const previewEntries = normalizedEntries.map((item) => {
+        const conflictWithDatabase = existingHashes.has(item.hash);
+        const duplicateInBatch = seenHashes.has(item.hash);
+        seenHashes.add(item.hash);
+
+        const conflict = conflictWithDatabase || duplicateInBatch;
+        if (conflict) {
+            totals.conflicting += 1;
+        } else {
+            totals.new += 1;
+        }
+
+        return {
+            description: item.description,
+            type: item.type,
+            value: item.value,
+            dueDate: item.dueDate,
+            paymentDate: item.paymentDate,
+            status: item.status,
+            hash: item.hash,
+            conflict,
+            duplicate: duplicateInBatch
+        };
+    });
+
+    return {
+        entries: previewEntries,
+        totals,
+        validationErrors
+    };
 };
 
 const normalizeFilterValue = (value) => {
@@ -138,6 +267,12 @@ const buildEntriesQueryOptions = (filters = {}) => {
                 model: FinanceAttachment,
                 as: 'attachments',
                 attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            },
+            {
+                model: FinanceCategory,
+                as: 'category',
+                attributes: ['id', 'name', 'slug', 'color'],
+                required: false
             }
         ],
         order: [
@@ -369,11 +504,39 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const goalsPromise = FinanceGoal.findAll({
-                order: [['month', 'ASC']]
+            const goalsPromise = (async () => {
+                try {
+                    return await FinanceGoal.findAll({
+                        order: [['month', 'ASC']]
+                    });
+                } catch (error) {
+                    if (isMissingTableDbError(error, 'FinanceGoals')) {
+                        return [];
+                    }
+                    throw error;
+                }
+            })();
+            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
             });
 
-            const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
+            const [entries, summary, goals, budgetOverview] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                goalsPromise,
+                budgetOverviewPromise
+            ]);
+
+            const budgetSummaries = Array.isArray(budgetOverview?.summaries)
+                ? budgetOverview.summaries
+                : [];
+            const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
+                ? budgetOverview.categoryConsumption
+                : [];
+            const budgetMonths = Array.isArray(budgetOverview?.months)
+                ? budgetOverview.months
+                : [];
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -388,18 +551,32 @@ module.exports = {
                 req.session.financeImportPreview = null;
             }
 
-            res.render('finance/manageFinance', {
-                entries,
-                filters,
-                periodLabel: formatPeriodLabel(filters),
-                statusSummary: summary.statusSummary,
-                monthlySummary: summary.monthlySummary,
-                financeTotals: summary.totals,
-                importPreview,
-                recurringIntervalOptions
-            });
+            res.render(
+                'finance/manageFinance',
+                {
+                    entries,
+                    filters,
+                    formatCurrency,
+                    periodLabel: formatPeriodLabel(filters),
+                    statusSummary: summary.statusSummary,
+                    monthlySummary: summary.monthlySummary,
+                    financeTotals: summary.totals,
+                    budgetSummaries,
+                    categoryConsumption,
+                    budgetMonths,
+                    importPreview,
+                    recurringIntervalOptions,
+                    budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null
+                },
+                (renderError, html) => {
+                    if (renderError) {
+                        throw renderError;
+                    }
+                    res.send(html);
+                }
+            );
         } catch (err) {
-            console.error(err);
+            console.error('Erro ao listar finanças:', err);
             req.flash('error_msg', 'Erro ao listar finanças.');
             res.redirect('/');
         }
@@ -814,9 +991,26 @@ module.exports = {
     exportPdf: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
-            const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
+            });
+
+            const [entries, summary, budgetOverview] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                budgetOverviewPromise
+            ]);
+
             const chartImage = await reportChartService.generateFinanceReportChart(summary);
+            const budgetSummaries = Array.isArray(budgetOverview?.summaries)
+                ? budgetOverview.summaries
+                : [];
+            const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
+                ? budgetOverview.categoryConsumption
+                : [];
 
             const document = new PDFDocument({
                 margin: 40,
@@ -871,19 +1065,66 @@ module.exports = {
             if (!entries.length) {
                 document.fontSize(11).text('Nenhum lançamento encontrado para o período selecionado.');
             } else {
-                document.fontSize(11).text('Descrição | Tipo | Valor | Vencimento | Status');
+                document.fontSize(11).text('Descrição | Categoria | Tipo | Valor | Vencimento | Status');
                 document.moveDown(0.3);
                 document.fontSize(10);
 
                 entries.forEach((entry) => {
+                    const categoryLabel = sanitizeText(entry?.category?.name || '—');
                     const line = [
                         sanitizeText(entry.description),
+                        categoryLabel,
                         entry.type === 'payable' ? 'Pagar' : 'Receber',
                         formatCurrency(entry.value),
                         formatDateLabel(entry.dueDate) || '—',
                         sanitizeText(entry.status || 'pendente')
                     ].join(' | ');
                     document.text(line);
+                });
+            }
+
+            if (budgetSummaries.length) {
+                document.moveDown();
+                document.fontSize(14).fillColor('#000000').text('Resumo de Orçamentos', { underline: true });
+                document.moveDown(0.4);
+
+                let currentMonth = null;
+                budgetSummaries.forEach((item) => {
+                    if (item.month !== currentMonth) {
+                        currentMonth = item.month;
+                        document.moveDown(0.2);
+                        document.fontSize(12).fillColor('#2563eb').text(item.monthLabel || item.month);
+                        document.moveDown(0.1);
+                    }
+
+                    const statusColor = item.statusMeta?.textColor || '#1f2937';
+                    const infoColor = '#4b5563';
+                    document.fontSize(11).fillColor('#111827').text(item.categoryName);
+                    document.fontSize(10).fillColor(infoColor).text(
+                        `Limite: ${formatCurrency(item.monthlyLimit)} | Consumido: ${formatCurrency(item.consumption)} | Disponível: ${formatCurrency(item.remaining)} | Utilização: ${item.percentage.toFixed(1)}%`
+                    );
+                    document.fontSize(10).fillColor(statusColor).text(`Status: ${item.statusLabel}`);
+                    document.moveDown(0.2);
+                });
+            }
+
+            if (categoryConsumption.length) {
+                document.moveDown();
+                document.fontSize(14).fillColor('#000000').text('Top categorias por consumo', { underline: true });
+                document.moveDown(0.4);
+
+                categoryConsumption.slice(0, 5).forEach((item, index) => {
+                    const statusColor = item.statusMeta?.textColor || '#111827';
+                    document.fontSize(11).fillColor('#111827').text(
+                        `${index + 1}. ${item.categoryName}`
+                    );
+                    document.fontSize(10).fillColor('#4b5563').text(
+                        `Períodos: ${item.months} | Limite total: ${formatCurrency(item.totalLimit)} | Consumido: ${formatCurrency(item.totalConsumption)} | Disponível: ${formatCurrency(item.remaining)}`
+                    );
+                    document.fontSize(10).fillColor(statusColor).text(
+                        `Média de utilização: ${item.averagePercentage.toFixed(1)}% | Maior pico: ${item.highestPercentage.toFixed(1)}%`
+                    );
+                    document.moveDown(0.2);
                 });
             }
 
@@ -901,12 +1142,30 @@ module.exports = {
     exportExcel: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
-            const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
+            });
+
+            const [entries, summary, budgetOverview] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                budgetOverviewPromise
+            ]);
+
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
             });
+
+            const budgetSummaries = Array.isArray(budgetOverview?.summaries)
+                ? budgetOverview.summaries
+                : [];
+            const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
+                ? budgetOverview.categoryConsumption
+                : [];
 
             const workbook = new ExcelJS.Workbook();
             workbook.creator = 'Sistema de Gestão';
@@ -956,6 +1215,7 @@ module.exports = {
             const worksheet = workbook.addWorksheet('Lançamentos');
             worksheet.columns = [
                 { header: 'Descrição', key: 'description', width: 40 },
+                { header: 'Categoria', key: 'category', width: 26 },
                 { header: 'Tipo', key: 'type', width: 15 },
                 { header: 'Valor (R$)', key: 'value', width: 18 },
                 { header: 'Vencimento', key: 'dueDate', width: 18 },
@@ -965,6 +1225,7 @@ module.exports = {
             if (!entries.length) {
                 worksheet.addRow({
                     description: 'Nenhum lançamento para o período selecionado',
+                    category: '',
                     type: '',
                     value: '',
                     dueDate: '',
@@ -974,12 +1235,95 @@ module.exports = {
                 entries.forEach((entry) => {
                     worksheet.addRow({
                         description: sanitizeText(entry.description),
+                        category: sanitizeText(entry?.category?.name || ''),
                         type: entry.type === 'payable' ? 'Pagar' : 'Receber',
                         value: parseAmount(entry.value),
                         dueDate: formatDateLabel(entry.dueDate) || '',
                         status: sanitizeText(entry.status || 'pendente')
                     });
                 });
+            }
+
+            if (budgetSummaries.length) {
+                const budgetSheet = workbook.addWorksheet('Orçamentos');
+                budgetSheet.columns = [
+                    { header: 'Mês', key: 'month', width: 18 },
+                    { header: 'Categoria', key: 'category', width: 28 },
+                    { header: 'Limite Mensal (R$)', key: 'limit', width: 20 },
+                    { header: 'Consumido (R$)', key: 'consumption', width: 20 },
+                    { header: 'Disponível (R$)', key: 'remaining', width: 20 },
+                    { header: 'Utilização (%)', key: 'percentage', width: 18 },
+                    { header: 'Status', key: 'status', width: 24 }
+                ];
+
+                budgetSummaries.forEach((item) => {
+                    const row = budgetSheet.addRow({
+                        month: item.monthLabel || item.month,
+                        category: item.categoryName,
+                        limit: parseAmount(item.monthlyLimit),
+                        consumption: parseAmount(item.consumption),
+                        remaining: parseAmount(item.remaining),
+                        percentage: Number(item.percentage || 0),
+                        status: item.statusLabel
+                    });
+
+                    const statusColor = toExcelColor(item.statusMeta?.barColor, 'FF2563EB');
+                    const statusCell = row.getCell('status');
+                    statusCell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: statusColor }
+                    };
+                    statusCell.font = {
+                        color: { argb: 'FFFFFFFF' },
+                        bold: true
+                    };
+                });
+
+                budgetSheet.getRow(1).font = { bold: true };
+                budgetSheet.getRow(1).alignment = { horizontal: 'center' };
+            }
+
+            if (categoryConsumption.length) {
+                const categorySheet = workbook.addWorksheet('Resumo Categorias');
+                categorySheet.columns = [
+                    { header: 'Categoria', key: 'category', width: 28 },
+                    { header: 'Meses Monitorados', key: 'months', width: 18 },
+                    { header: 'Limite Total (R$)', key: 'limit', width: 20 },
+                    { header: 'Consumido (R$)', key: 'consumption', width: 20 },
+                    { header: 'Disponível (R$)', key: 'remaining', width: 20 },
+                    { header: 'Média de Utilização (%)', key: 'average', width: 22 },
+                    { header: 'Maior Pico (%)', key: 'peak', width: 18 },
+                    { header: 'Status', key: 'status', width: 24 }
+                ];
+
+                categoryConsumption.forEach((item) => {
+                    const row = categorySheet.addRow({
+                        category: item.categoryName,
+                        months: item.months,
+                        limit: parseAmount(item.totalLimit),
+                        consumption: parseAmount(item.totalConsumption),
+                        remaining: parseAmount(item.remaining),
+                        average: Number(item.averagePercentage || 0),
+                        peak: Number(item.highestPercentage || 0),
+                        status: item.statusLabel
+                    });
+
+                    const statusColor = toExcelColor(item.statusMeta?.barColor, 'FF2563EB');
+                    const statusCell = row.getCell('status');
+                    statusCell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: statusColor }
+                    };
+                    statusCell.font = {
+                        color: { argb: 'FFFFFFFF' },
+                        bold: true
+                    };
+                });
+
+                categorySheet.getRow(1).font = { bold: true };
+                categorySheet.getRow(1).alignment = { horizontal: 'center' };
             }
 
             res.setHeader(

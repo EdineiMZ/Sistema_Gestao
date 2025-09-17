@@ -1,6 +1,6 @@
 'use strict';
 
-const { FinanceEntry, FinanceGoal, Sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceGoal, Budget, FinanceCategory, Sequelize } = require('../../database/models');
 const {
     FINANCE_RECURRING_INTERVALS,
     FINANCE_RECURRING_INTERVAL_VALUES,
@@ -12,6 +12,18 @@ const { Op } = Sequelize;
 
 const FINANCE_TYPES = ['payable', 'receivable'];
 const FINANCE_STATUSES = ['pending', 'paid', 'overdue', 'cancelled'];
+const BUDGET_STATUS_PRIORITY = {
+    healthy: 1,
+    caution: 2,
+    warning: 3,
+    critical: 4
+};
+const DEFAULT_STATUS_META = {
+    healthy: { key: 'healthy', label: 'Consumo saudável', textColor: '#065f46', barColor: '#10b981', badgeClass: 'bg-success-subtle text-success' },
+    caution: { key: 'caution', label: 'Consumo moderado', textColor: '#1d4ed8', barColor: '#2563eb', badgeClass: 'bg-primary-subtle text-primary' },
+    warning: { key: 'warning', label: 'Atenção ao consumo', textColor: '#b45309', barColor: '#f59e0b', badgeClass: 'bg-warning-subtle text-warning' },
+    critical: { key: 'critical', label: 'Limite excedido', textColor: '#b91c1c', barColor: '#ef4444', badgeClass: 'bg-danger-subtle text-danger' }
+};
 const DEFAULT_PROJECTION_MONTHS = 6;
 const MAX_PROJECTION_MONTHS = 24;
 
@@ -79,6 +91,170 @@ const parseProjectionMonths = (value) => {
         return DEFAULT_PROJECTION_MONTHS;
     }
     return Math.min(parsed, MAX_PROJECTION_MONTHS);
+};
+
+const isMissingTableError = (error, tableName) => {
+    if (!error) {
+        return false;
+    }
+
+    const message = String(
+        error?.original?.message
+        || error?.parent?.message
+        || error?.message
+        || ''
+    ).toLowerCase();
+
+    return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
+};
+
+const getSequelizeInstance = () => {
+    if (FinanceEntry?.sequelize) {
+        return FinanceEntry.sequelize;
+    }
+    if (Budget?.sequelize) {
+        return Budget.sequelize;
+    }
+    if (FinanceGoal?.sequelize) {
+        return FinanceGoal.sequelize;
+    }
+    return null;
+};
+
+const getDialect = () => {
+    const sequelizeInstance = getSequelizeInstance();
+    if (sequelizeInstance && typeof sequelizeInstance.getDialect === 'function') {
+        return sequelizeInstance.getDialect();
+    }
+    return 'sqlite';
+};
+
+const buildMonthKeyExpression = (column = 'dueDate') => {
+    const dialect = getDialect();
+    const columnRef = Sequelize.col(column);
+    if (dialect === 'postgres') {
+        return Sequelize.fn('to_char', columnRef, 'YYYY-MM');
+    }
+    if (dialect === 'mysql' || dialect === 'mariadb') {
+        return Sequelize.fn('DATE_FORMAT', columnRef, '%Y-%m');
+    }
+    return Sequelize.fn('strftime', '%Y-%m', columnRef);
+};
+
+const buildMonthStartExpression = (column = 'dueDate') => {
+    const dialect = getDialect();
+    const columnRef = Sequelize.col(column);
+    if (dialect === 'postgres') {
+        return Sequelize.fn('date_trunc', 'month', columnRef);
+    }
+    if (dialect === 'mysql' || dialect === 'mariadb') {
+        return Sequelize.fn('DATE_FORMAT', columnRef, '%Y-%m-01');
+    }
+    return Sequelize.fn('strftime', '%Y-%m-01', columnRef);
+};
+
+const formatMonthLabelLocalized = (monthKey) => {
+    if (!monthKey || typeof monthKey !== 'string') {
+        return '';
+    }
+
+    const normalized = `${monthKey}-01T00:00:00Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) {
+        return monthKey;
+    }
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
+const normalizeNumber = (value, precision = 2) => {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+    return Number(parsed.toFixed(precision));
+};
+
+const normalizeThresholdList = (value) => {
+    if (value === null || value === undefined) {
+        return [];
+    }
+    const rawList = Array.isArray(value) ? value : [value];
+    const normalized = rawList
+        .map((item) => {
+            const parsed = Number.parseFloat(item);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                return null;
+            }
+            return Number(parsed.toFixed(2));
+        })
+        .filter((item) => item !== null);
+
+    const unique = Array.from(new Set(normalized));
+    unique.sort((a, b) => a - b);
+    return unique;
+};
+
+const resolveBudgetStatus = (consumption, limit, thresholds = []) => {
+    const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 0;
+    const safeConsumption = Number.isFinite(Number(consumption)) ? Number(consumption) : 0;
+    const ratio = safeLimit > 0 ? (safeConsumption / safeLimit) * 100 : null;
+    const sortedThresholds = normalizeThresholdList(thresholds);
+
+    if (ratio !== null && ratio >= 100) {
+        return { ...DEFAULT_STATUS_META.critical };
+    }
+
+    if (sortedThresholds.length) {
+        const highestThreshold = sortedThresholds[sortedThresholds.length - 1];
+        if (safeConsumption >= highestThreshold) {
+            return { ...DEFAULT_STATUS_META.warning };
+        }
+    }
+
+    if (ratio !== null && ratio >= 85) {
+        return { ...DEFAULT_STATUS_META.warning };
+    }
+
+    if (ratio !== null && ratio >= 60) {
+        return { ...DEFAULT_STATUS_META.caution };
+    }
+
+    return { ...DEFAULT_STATUS_META.healthy };
+};
+
+const mergeStatusMeta = (statusA, statusB) => {
+    const metaA = DEFAULT_STATUS_META[statusA?.key || statusA] || DEFAULT_STATUS_META.healthy;
+    const metaB = DEFAULT_STATUS_META[statusB?.key || statusB] || DEFAULT_STATUS_META.healthy;
+    const priorityA = BUDGET_STATUS_PRIORITY[metaA.key] || 0;
+    const priorityB = BUDGET_STATUS_PRIORITY[metaB.key] || 0;
+    return priorityA >= priorityB ? metaA : metaB;
+};
+
+const buildBudgetSummaryPayload = (budget, consumptionValue, monthKey) => {
+    const monthlyLimit = normalizeNumber(budget?.monthlyLimit || 0);
+    const consumption = normalizeNumber(consumptionValue || 0);
+    const remaining = normalizeNumber(monthlyLimit - consumption);
+    const percentage = monthlyLimit > 0 ? normalizeNumber((consumption / monthlyLimit) * 100) : 0;
+    const thresholds = normalizeThresholdList(budget?.thresholds);
+    const statusMeta = resolveBudgetStatus(consumption, monthlyLimit, thresholds);
+
+    return {
+        budgetId: budget?.id || null,
+        categoryId: budget?.financeCategoryId || null,
+        categorySlug: budget?.category?.slug || null,
+        categoryName: budget?.category?.name || 'Sem categoria',
+        categoryColor: budget?.category?.color || '#6b7280',
+        month: monthKey,
+        monthLabel: formatMonthLabelLocalized(monthKey),
+        monthlyLimit,
+        consumption,
+        remaining,
+        percentage,
+        thresholds,
+        status: statusMeta.key,
+        statusLabel: statusMeta.label,
+        statusMeta
+    };
 };
 
 const isValidISODate = (value) => {
@@ -354,6 +530,393 @@ const buildRecurringProjectionMap = (entries, buckets) => {
     return projection;
 };
 
+const fetchBudgetRows = async (filters = {}) => {
+    if (!Budget || typeof Budget.findAll !== 'function') {
+        return [];
+    }
+
+    const where = {};
+
+    if (Number.isInteger(filters.userId)) {
+        where.userId = filters.userId;
+    } else if (Number.isInteger(Number(filters.userId))) {
+        where.userId = Number(filters.userId);
+    }
+
+    if (Number.isInteger(filters.financeCategoryId)) {
+        where.financeCategoryId = filters.financeCategoryId;
+    } else if (Number.isInteger(Number(filters.financeCategoryId))) {
+        where.financeCategoryId = Number(filters.financeCategoryId);
+    }
+
+    try {
+        return await Budget.findAll({
+            where,
+            attributes: ['id', 'monthlyLimit', 'thresholds', 'referenceMonth', 'userId', 'financeCategoryId'],
+            include: [
+                {
+                    model: FinanceCategory,
+                    as: 'category',
+                    attributes: ['id', 'name', 'slug', 'color'],
+                    required: false
+                }
+            ],
+            order: [
+                ['financeCategoryId', 'ASC']
+            ],
+            raw: true,
+            nest: true
+        });
+    } catch (error) {
+        if (isMissingTableError(error, 'Budgets')) {
+            return [];
+        }
+        throw error;
+    }
+};
+
+const fetchCategoryMonthlyConsumption = async (filters = {}) => {
+    if (Array.isArray(filters.entries)) {
+        return buildConsumptionRowsFromEntries(filters.entries, filters);
+    }
+
+    const where = {};
+    const dateFilter = buildDateFilter(filters);
+    if (dateFilter) {
+        where.dueDate = dateFilter;
+    }
+
+    if (FINANCE_STATUSES.includes(filters.status)) {
+        where.status = filters.status;
+    }
+
+    if (FINANCE_TYPES.includes(filters.type)) {
+        where.type = filters.type;
+    } else {
+        where.type = 'payable';
+    }
+
+    const monthKeyExpr = buildMonthKeyExpression('FinanceEntry.dueDate');
+    const monthStartExpr = buildMonthStartExpression('FinanceEntry.dueDate');
+
+    return FinanceEntry.findAll({
+        attributes: [
+            [monthKeyExpr, 'month'],
+            [monthStartExpr, 'monthStart'],
+            ['financeCategoryId', 'financeCategoryId'],
+            [Sequelize.fn('SUM', Sequelize.col('FinanceEntry.value')), 'totalValue']
+        ],
+        where,
+        group: [Sequelize.literal('month'), 'financeCategoryId'],
+        raw: true
+    });
+};
+
+const resolveEntriesForBudget = async (filters = {}, options = {}) => {
+    if (Array.isArray(options.entries)) {
+        return options.entries;
+    }
+
+    if (options.entriesPromise && typeof options.entriesPromise.then === 'function') {
+        try {
+            const result = await options.entriesPromise;
+            if (Array.isArray(result)) {
+                return result;
+            }
+        } catch (error) {
+            console.warn('Não foi possível resolver entriesPromise para orçamentos:', error?.message || error);
+        }
+    }
+
+    if (Array.isArray(filters.entries)) {
+        return filters.entries;
+    }
+
+    return null;
+};
+
+const buildConsumptionRowsFromEntries = (entries = [], filters = {}) => {
+    if (!Array.isArray(entries) || !entries.length) {
+        return [];
+    }
+
+    const typeFilter = FINANCE_TYPES.includes(filters.type) ? filters.type : 'payable';
+    const statusFilter = FINANCE_STATUSES.includes(filters.status) ? filters.status : null;
+    const dateFilter = buildDateFilter(filters);
+
+    const rangeStart = dateFilter?.[Op.gte] ? new Date(dateFilter[Op.gte]) : null;
+    const rangeEnd = dateFilter?.[Op.lte] ? new Date(dateFilter[Op.lte]) : null;
+
+    const map = new Map();
+
+    entries.forEach((entry) => {
+        const plain = typeof entry?.get === 'function' ? entry.get({ plain: true }) : entry;
+        if (!plain) {
+            return;
+        }
+
+        if (plain.type && plain.type !== typeFilter) {
+            return;
+        }
+
+        if (statusFilter && plain.status !== statusFilter) {
+            return;
+        }
+
+        const dueDate = parseDateCandidate(plain.dueDate);
+        if (!dueDate) {
+            return;
+        }
+
+        if (rangeStart && dueDate < rangeStart) {
+            return;
+        }
+
+        if (rangeEnd && dueDate > rangeEnd) {
+            return;
+        }
+
+        const monthKey = formatMonth(dueDate);
+        if (!monthKey) {
+            return;
+        }
+
+        const categoryId = Number(plain.financeCategoryId) || null;
+        if (!categoryId) {
+            return;
+        }
+
+        const key = `${categoryId}::${monthKey}`;
+        const current = map.get(key) || 0;
+        map.set(key, normalizeNumber(current + Number(plain.value || 0)));
+    });
+
+    return Array.from(map.entries()).map(([key, totalValue]) => {
+        const [categoryId, month] = key.split('::');
+        return {
+            financeCategoryId: Number(categoryId),
+            month,
+            monthStart: `${month}-01`,
+            totalValue
+        };
+    });
+};
+
+const fetchCategoriesForIds = async (categoryIds = []) => {
+    if (!Array.isArray(categoryIds) || !categoryIds.length) {
+        return {};
+    }
+
+    const uniqueIds = Array.from(new Set(categoryIds.filter((id) => Number.isInteger(id) || Number.isInteger(Number(id)))));
+    if (!uniqueIds.length) {
+        return {};
+    }
+
+    const normalizedIds = uniqueIds.map((id) => Number(id));
+    if (!FinanceCategory || (typeof FinanceCategory.findAll !== 'function' && typeof FinanceCategory.scope !== 'function')) {
+        return {};
+    }
+
+    let categoryQuery = FinanceCategory;
+    if (FinanceCategory?.scope) {
+        categoryQuery = FinanceCategory.scope('all');
+    }
+
+    const categories = await categoryQuery.findAll({
+        attributes: ['id', 'name', 'slug', 'color'],
+        where: {
+            id: {
+                [Op.in]: normalizedIds
+            }
+        },
+        raw: true
+    });
+
+    return categories.reduce((acc, category) => {
+        acc[category.id] = category;
+        return acc;
+    }, {});
+};
+
+const buildBudgetOverview = async (filters = {}, options = {}) => {
+    const resolvedEntries = await resolveEntriesForBudget(filters, options);
+    const [budgetRows, consumptionRows] = await Promise.all([
+        fetchBudgetRows(filters),
+        fetchCategoryMonthlyConsumption(resolvedEntries ? { ...filters, entries: resolvedEntries } : filters)
+    ]);
+
+    const categoryIds = [
+        ...budgetRows.map((budget) => budget.financeCategoryId),
+        ...consumptionRows.map((row) => row.financeCategoryId)
+    ].filter((value) => value !== null && value !== undefined);
+
+    const categoryMap = await fetchCategoriesForIds(categoryIds);
+
+    const monthKeys = new Set();
+    const consumptionMap = new Map();
+
+    consumptionRows.forEach((row) => {
+        const categoryId = Number(row.financeCategoryId) || null;
+        if (!categoryId) {
+            return;
+        }
+
+        let monthKey = typeof row.month === 'string' ? row.month : null;
+        if (!monthKey && row.monthStart) {
+            monthKey = formatMonth(row.monthStart);
+        }
+
+        if (!monthKey) {
+            return;
+        }
+
+        monthKeys.add(monthKey);
+        const mapKey = `${categoryId}::${monthKey}`;
+        const current = consumptionMap.get(mapKey) || 0;
+        consumptionMap.set(mapKey, normalizeNumber(current + Number(row.totalValue || 0)));
+    });
+
+    if (!monthKeys.size) {
+        budgetRows.forEach((budget) => {
+            const refMonth = formatMonth(budget.referenceMonth);
+            if (refMonth) {
+                monthKeys.add(refMonth);
+            }
+        });
+    }
+
+    if (!monthKeys.size) {
+        const currentMonth = formatMonth(new Date());
+        if (currentMonth) {
+            monthKeys.add(currentMonth);
+        }
+    }
+
+    const sortedMonths = Array.from(monthKeys).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const categoriesWithBudget = new Set();
+    const summaryItems = [];
+
+    budgetRows.forEach((budget) => {
+        const categoryId = Number(budget.financeCategoryId) || null;
+        if (categoryId) {
+            categoriesWithBudget.add(categoryId);
+        }
+
+        if (!budget.category || !budget.category.id) {
+            const fallbackCategory = categoryMap[categoryId];
+            if (fallbackCategory) {
+                budget.category = fallbackCategory;
+            }
+        }
+
+        const referenceMonth = formatMonth(budget.referenceMonth);
+        const monthsToConsider = referenceMonth ? [referenceMonth] : sortedMonths;
+
+        monthsToConsider.forEach((monthKey) => {
+            const consumptionValue = consumptionMap.get(`${categoryId}::${monthKey}`) || 0;
+            const payload = buildBudgetSummaryPayload(budget, consumptionValue, monthKey);
+            summaryItems.push(payload);
+        });
+    });
+
+    consumptionRows.forEach((row) => {
+        const categoryId = Number(row.financeCategoryId) || null;
+        if (!categoryId || categoriesWithBudget.has(categoryId)) {
+            return;
+        }
+
+        const monthKey = typeof row.month === 'string' ? row.month : formatMonth(row.monthStart);
+        const consumptionValue = normalizeNumber(row.totalValue || 0);
+        const category = categoryMap[categoryId] || {
+            id: categoryId,
+            name: 'Categoria não classificada',
+            slug: null,
+            color: '#6b7280'
+        };
+
+        const syntheticBudget = {
+            id: null,
+            monthlyLimit: 0,
+            thresholds: [],
+            referenceMonth: monthKey ? `${monthKey}-01` : null,
+            financeCategoryId: categoryId,
+            category
+        };
+
+        const payload = buildBudgetSummaryPayload(syntheticBudget, consumptionValue, monthKey);
+        summaryItems.push(payload);
+    });
+
+    const categoryAggregation = new Map();
+
+    summaryItems.forEach((item) => {
+        if (!item.categoryId) {
+            return;
+        }
+        if (!categoryAggregation.has(item.categoryId)) {
+            categoryAggregation.set(item.categoryId, {
+                categoryId: item.categoryId,
+                categoryName: item.categoryName,
+                categoryColor: item.categoryColor,
+                categorySlug: item.categorySlug,
+                totalLimit: 0,
+                totalConsumption: 0,
+                months: 0,
+                statusMeta: item.statusMeta,
+                maxPercentage: 0
+            });
+        }
+
+        const aggregate = categoryAggregation.get(item.categoryId);
+        aggregate.totalLimit = normalizeNumber(aggregate.totalLimit + item.monthlyLimit);
+        aggregate.totalConsumption = normalizeNumber(aggregate.totalConsumption + item.consumption);
+        aggregate.months += 1;
+        aggregate.statusMeta = mergeStatusMeta(aggregate.statusMeta, item.statusMeta);
+        aggregate.maxPercentage = Math.max(aggregate.maxPercentage, item.percentage || 0);
+    });
+
+    const categoryConsumption = Array.from(categoryAggregation.values())
+        .map((aggregate) => {
+            const averagePercentage = aggregate.totalLimit > 0
+                ? normalizeNumber((aggregate.totalConsumption / aggregate.totalLimit) * 100)
+                : 0;
+            const remaining = normalizeNumber(aggregate.totalLimit - aggregate.totalConsumption);
+
+            return {
+                categoryId: aggregate.categoryId,
+                categoryName: aggregate.categoryName,
+                categoryColor: aggregate.categoryColor,
+                categorySlug: aggregate.categorySlug,
+                months: aggregate.months,
+                totalLimit: aggregate.totalLimit,
+                totalConsumption: aggregate.totalConsumption,
+                remaining,
+                averagePercentage,
+                highestPercentage: normalizeNumber(aggregate.maxPercentage),
+                status: aggregate.statusMeta.key,
+                statusLabel: aggregate.statusMeta.label,
+                statusMeta: aggregate.statusMeta
+            };
+        })
+        .sort((a, b) => {
+            if (b.totalConsumption !== a.totalConsumption) {
+                return b.totalConsumption - a.totalConsumption;
+            }
+            return a.categoryName.localeCompare(b.categoryName, 'pt-BR');
+        });
+
+    return {
+        summaries: summaryItems.sort((a, b) => {
+            if (a.month === b.month) {
+                return a.categoryName.localeCompare(b.categoryName, 'pt-BR');
+            }
+            return a.month < b.month ? -1 : 1;
+        }),
+        categoryConsumption,
+        months: sortedMonths
+    };
+};
+
 const fetchGoalsForMonths = async (monthKeys, options = {}) => {
     if (Array.isArray(options.goals)) {
         return options.goals;
@@ -370,14 +933,21 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return key;
     });
 
-    return FinanceGoal.findAll({
-        attributes: ['id', 'month', 'targetNetAmount', 'notes'],
-        where: {
-            month: { [Op.in]: monthValues }
-        },
-        order: [['month', 'ASC']],
-        raw: true
-    });
+    try {
+        return await FinanceGoal.findAll({
+            attributes: ['id', 'month', 'targetNetAmount', 'notes'],
+            where: {
+                month: { [Op.in]: monthValues }
+            },
+            order: [['month', 'ASC']],
+            raw: true
+        });
+    } catch (error) {
+        if (isMissingTableError(error, 'FinanceGoals')) {
+            return [];
+        }
+        throw error;
+    }
 };
 
 const buildGoalsMap = (goals) => {
@@ -571,11 +1141,33 @@ const getFinanceSummary = async (filters = {}, options = {}) => {
     };
 };
 
+const getBudgetSummaries = async (filters = {}, options = {}) => {
+    const overview = await buildBudgetOverview(filters, options);
+    if (options && options.includeCategoryConsumption) {
+        return overview;
+    }
+    return overview.summaries;
+};
+
+const getCategoryConsumption = async (filters = {}, options = {}) => {
+    if (options?.budgetOverview && Array.isArray(options.budgetOverview.categoryConsumption)) {
+        return options.budgetOverview.categoryConsumption;
+    }
+    if (Array.isArray(options?.budgetSummaries)) {
+        const overview = await buildBudgetOverview(filters, { ...options, summaries: options.budgetSummaries });
+        return overview.categoryConsumption;
+    }
+    const overview = await buildBudgetOverview(filters, options);
+    return overview.categoryConsumption;
+};
+
 module.exports = {
     getStatusSummary,
     getMonthlySummary,
     getMonthlyProjection,
     getFinanceSummary,
+    getBudgetSummaries,
+    getCategoryConsumption,
     constants: {
         FINANCE_TYPES: [...FINANCE_TYPES],
         FINANCE_STATUSES: [...FINANCE_STATUSES],
@@ -592,7 +1184,11 @@ module.exports = {
         buildDateFilter,
         isValidISODate,
         resolveProjectionSettings,
-        normalizeRecurringInterval
+        normalizeRecurringInterval,
+        buildBudgetOverview,
+        normalizeThresholdList,
+        resolveBudgetStatus,
+        DEFAULT_STATUS_META
 
     }
 };
