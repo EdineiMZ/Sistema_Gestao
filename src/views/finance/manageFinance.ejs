@@ -333,7 +333,17 @@
                         <% entries.forEach(entry => { %>
                             <tr>
                                 <td><%= entry.id %></td>
-                                <td><%= entry.description %></td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-semibold"><%= entry.description %></span>
+                                        <% if (entry.attachments && entry.attachments.length) { %>
+                                            <span class="text-muted small">
+                                                <i class="bi bi-paperclip me-1" aria-hidden="true"></i>
+                                                <%= entry.attachments.length %> anexo<%= entry.attachments.length > 1 ? 's' : '' %>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </td>
                                 <td>
                                     <% if (entry.type === 'payable') { %>
                                         <span class="badge text-bg-danger">Pagar</span>
@@ -377,6 +387,7 @@
                                             <form
                                                 action="/finance/update/<%= entry.id %>?_method=PUT"
                                                 method="POST"
+                                                enctype="multipart/form-data"
                                                 class="modal-content"
                                             >
                                                 <div class="modal-header">
@@ -455,15 +466,55 @@
                                                     </div>
                                                     <div class="mb-3">
                                                         <label class="form-label">Intervalo de recorrência</label>
-                                                        <select class="form-select" name="recurringInterval">
-                                                            <option value="" <%= entry.recurringInterval ? '' : 'selected' %>>Selecione um intervalo</option>
-                                                            <% intervalOptions.forEach((option) => { %>
-                                                                <% if (!option || !option.value) { return; } %>
-                                                                <option value="<%= option.value %>" <%= entry.recurringInterval === option.value ? 'selected' : '' %>>
-                                                                    <%= option.label %>
-                                                                </option>
-                                                            <% }); %>
-                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            class="form-control"
+                                                            name="recurringInterval"
+                                                            value="<%= entry.recurringInterval || '' %>"
+                                                            placeholder="Ex.: mensal, trimestral"
+                                                        />
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Anexos cadastrados</label>
+                                                        <% if (entry.attachments && entry.attachments.length) { %>
+                                                            <ul class="list-group list-group-flush rounded shadow-sm">
+                                                                <% entry.attachments.forEach((attachment) => { %>
+                                                                    <li class="list-group-item d-flex align-items-center justify-content-between gap-3">
+                                                                        <div class="d-flex align-items-center gap-2 text-truncate">
+                                                                            <i class="bi bi-paperclip text-primary" aria-hidden="true"></i>
+                                                                            <span class="text-truncate" title="<%= attachment.fileName %>"><%= attachment.fileName %></span>
+                                                                        </div>
+                                                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2 text-sm-end">
+                                                                            <span class="text-muted small"><%= Math.max(1, Math.round((attachment.size || 0) / 1024)) %> KB</span>
+                                                                            <a
+                                                                                class="btn btn-outline-primary btn-sm"
+                                                                                href="/finance/attachments/<%= attachment.id %>/download"
+                                                                            >
+                                                                                <i class="bi bi-download me-1" aria-hidden="true"></i>Baixar
+                                                                            </a>
+                                                                        </div>
+                                                                    </li>
+                                                                <% }); %>
+                                                            </ul>
+                                                        <% } else { %>
+                                                            <p class="text-muted small mb-0">Nenhum anexo disponível para este lançamento.</p>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label" for="entry-attachments-<%= entry.id %>">
+                                                            Adicionar novos anexos
+                                                        </label>
+                                                        <input
+                                                            type="file"
+                                                            class="form-control"
+                                                            id="entry-attachments-<%= entry.id %>"
+                                                            name="attachments"
+                                                            multiple
+                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                                                        />
+                                                        <div class="form-text">
+                                                            Anexe arquivos relevantes (até 10MB por arquivo).
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
@@ -491,7 +542,7 @@
         <div class="card card-soft responsive-panel">
             <h3 class="fw-semibold mb-2">Novo lançamento</h3>
             <p class="text-muted mb-4">Cadastre receitas ou despesas com recorrência opcional e acompanhe tudo no painel.</p>
-            <form action="/finance/create" method="POST" class="row g-3 responsive-filter-grid">
+            <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid">
                 <div class="col-md-5">
                     <label class="form-label">Descrição</label>
                     <input
@@ -537,13 +588,26 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Intervalo (opcional)</label>
-                    <select class="form-select" name="recurringInterval">
-                        <option value="" selected>Selecione um intervalo</option>
-                        <% intervalOptions.forEach((option) => { %>
-                            <% if (!option || !option.value) { return; } %>
-                            <option value="<%= option.value %>"><%= option.label %></option>
-                        <% }); %>
-                    </select>
+                    <input
+                        type="text"
+                        class="form-control"
+                        name="recurringInterval"
+                        placeholder="Ex.: mensal"
+                    />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="new-entry-attachments">Anexar documentos</label>
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="new-entry-attachments"
+                        name="attachments"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                    />
+                    <div class="form-text">
+                        Upload seguro com limite de 10MB por arquivo. Tipos aceitos: PDF, imagens e documentos do Office.
+                    </div>
                 </div>
                 <div class="col-md-12">
                     <div class="responsive-form-actions">

@@ -1,12 +1,10 @@
-const { FinanceEntry } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
-const {
-    FINANCE_RECURRING_INTERVALS,
-    normalizeRecurringInterval
-} = require('../constants/financeRecurringIntervals');
+const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
@@ -100,9 +98,17 @@ const buildFiltersFromQuery = (query = {}) => {
 
 const buildEntriesQueryOptions = (filters = {}) => {
     const options = {
+        include: [
+            {
+                model: FinanceAttachment,
+                as: 'attachments',
+                attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            }
+        ],
         order: [
             ['dueDate', 'ASC'],
-            ['id', 'ASC']
+            ['id', 'ASC'],
+            [{ model: FinanceAttachment, as: 'attachments' }, 'createdAt', 'DESC']
         ]
     };
 
@@ -134,6 +140,55 @@ const createSummaryPromise = (entriesPromise, filters) => {
     );
 };
 
+const toArray = (value) => (Array.isArray(value) ? value : []);
+
+const removeStoredFiles = async (storageKeys = []) => {
+    await Promise.all(storageKeys.map(async (storageKey) => {
+        try {
+            await fileStorageService.deleteStoredFile(storageKey);
+        } catch (storageError) {
+            console.error('Erro ao remover arquivo armazenado:', storageError);
+        }
+    }));
+};
+
+const persistAttachments = async (entryId, files, transaction) => {
+    const storedKeys = [];
+
+    const attachmentFiles = toArray(files).filter((file) => file && Buffer.isBuffer(file.buffer) && file.size > 0);
+    if (!attachmentFiles.length) {
+        return storedKeys;
+    }
+
+    for (const file of attachmentFiles) {
+        const { storageKey, checksum, sanitizedFileName } = await fileStorageService.saveBuffer({
+            buffer: file.buffer,
+            originalName: file.originalname
+        });
+
+        try {
+            await FinanceAttachment.create({
+                financeEntryId: entryId,
+                fileName: sanitizedFileName,
+                mimeType: file.mimetype,
+                size: file.size,
+                checksum,
+                storageKey
+            }, { transaction });
+            storedKeys.push(storageKey);
+        } catch (error) {
+            try {
+                await fileStorageService.deleteStoredFile(storageKey);
+            } catch (storageError) {
+                console.error('Erro ao remover arquivo após falha ao criar anexo:', storageError);
+            }
+            throw error;
+        }
+    }
+
+    return storedKeys;
+};
+
 module.exports = {
     listFinanceEntries: async (req, res) => {
         try {
@@ -160,19 +215,39 @@ module.exports = {
     },
 
     createFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
-            await FinanceEntry.create({
+
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.create({
                 description,
                 type,
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
-                recurringInterval: normalizeRecurringInterval(recurringInterval)
-            });
+                recurringInterval: recurringInterval || null
+            }, { transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de criação:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao criar lançamento.');
             res.redirect('/finance');
@@ -180,12 +255,19 @@ module.exports = {
     },
 
     updateFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { id } = req.params;
             const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
 
-            const entry = await FinanceEntry.findByPk(id);
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.findByPk(id, { transaction });
+
             if (!entry) {
+                await transaction.rollback();
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
@@ -199,10 +281,25 @@ module.exports = {
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
-            await entry.save();
+            await entry.save({ transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
+
             req.flash('success_msg', 'Lançamento atualizado!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de atualização:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao atualizar lançamento.');
             res.redirect('/finance');
@@ -217,7 +314,20 @@ module.exports = {
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
+
+            const attachments = await FinanceAttachment.findAll({
+                where: { financeEntryId: entry.id },
+                attributes: ['storageKey'],
+                raw: true
+            });
+
             await entry.destroy();
+
+            const storageKeys = attachments.map((item) => item.storageKey).filter(Boolean);
+            if (storageKeys.length) {
+                await removeStoredFiles(storageKeys);
+            }
+
             req.flash('success_msg', 'Lançamento removido com sucesso.');
             res.redirect('/finance');
         } catch (err) {
@@ -415,6 +525,42 @@ module.exports = {
                 res.status(500).json({ error: 'Erro ao exportar Excel.' });
             } else {
                 res.end();
+            }
+        }
+    },
+
+    downloadAttachment: async (req, res) => {
+        try {
+            const { attachmentId } = req.params;
+
+            const attachment = await FinanceAttachment.findByPk(attachmentId);
+            if (!attachment) {
+                req.flash('error_msg', 'Anexo não encontrado.');
+                return res.redirect('/finance');
+            }
+
+            let stream;
+            try {
+                stream = fileStorageService.createReadStream(attachment.storageKey);
+            } catch (error) {
+                console.error('Erro ao acessar anexo de finanças:', error);
+                req.flash('error_msg', 'Arquivo de anexo indisponível.');
+                return res.redirect('/finance');
+            }
+
+            res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+            if (Number.isFinite(Number(attachment.size))) {
+                res.setHeader('Content-Length', String(attachment.size));
+            }
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.fileName)}"`);
+            res.setHeader('Cache-Control', 'no-store');
+
+            await pipeline(stream, res);
+        } catch (err) {
+            console.error('Erro ao baixar anexo financeiro:', err);
+            if (!res.headersSent) {
+                req.flash('error_msg', 'Erro ao baixar anexo.');
+                res.redirect('/finance');
             }
         }
     }

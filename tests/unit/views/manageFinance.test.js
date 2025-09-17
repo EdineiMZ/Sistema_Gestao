@@ -27,7 +27,14 @@ const buildViewContext = () => ({
             paymentDate: '2024-05-02',
             status: 'paid',
             recurring: true,
-            recurringInterval: 'monthly'
+            recurringInterval: 'Mensal',
+            attachments: [
+                {
+                    id: 701,
+                    fileName: 'comprovante.pdf',
+                    size: 20480
+                }
+            ]
         }
     ],
     recurringIntervalOptions: FINANCE_RECURRING_INTERVALS,
@@ -81,6 +88,17 @@ describe('views/finance/manageFinance', () => {
         expect(normalizedHtml).toContain('maio de 2024');
         expect(normalizedHtml).toContain('financePerformanceChart');
         expect(normalizedHtml).toContain('chart.umd.min.js');
+    });
+
+    it('exibe controles de upload e anexos vinculados aos lançamentos', async () => {
+        const context = buildViewContext();
+        const html = await ejs.renderFile(viewPath, context, { async: true });
+
+        expect(html).toContain('enctype="multipart/form-data"');
+        expect(html).toContain('name="attachments"');
+        expect(html).toContain('href="/finance/attachments/701/download"');
+        expect(html).toContain('comprovante.pdf');
+        expect(html).toContain('bi bi-paperclip');
     });
 });
 

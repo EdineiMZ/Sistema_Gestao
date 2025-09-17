@@ -88,5 +88,14 @@ module.exports = (sequelize, DataTypes) => {
         tableName: 'FinanceEntries'
     });
 
+    FinanceEntry.associate = (models) => {
+        FinanceEntry.hasMany(models.FinanceAttachment, {
+            as: 'attachments',
+            foreignKey: 'financeEntryId',
+            onDelete: 'CASCADE',
+            hooks: true
+        });
+    };
+
     return FinanceEntry;
 };

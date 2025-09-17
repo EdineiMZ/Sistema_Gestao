@@ -5,6 +5,7 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
 const { USER_ROLES } = require('../constants/roles');
+const { uploadAttachments } = require('../middlewares/financeAttachmentUpload');
 
 // Apenas administradores podem gerenciar finanças
 router.get('/', authMiddleware, permissionMiddleware(USER_ROLES.ADMIN), financeController.listFinanceEntries);
@@ -12,6 +13,7 @@ router.post(
     '/create',
     authMiddleware,
     permissionMiddleware(USER_ROLES.ADMIN),
+    uploadAttachments,
     audit('financeEntry.create', (req) => `FinanceEntry:${req.body?.description || 'novo'}`),
     financeController.createFinanceEntry
 );
@@ -19,6 +21,7 @@ router.put(
     '/update/:id',
     authMiddleware,
     permissionMiddleware(USER_ROLES.ADMIN),
+    uploadAttachments,
     audit('financeEntry.update', (req) => `FinanceEntry:${req.params.id}`),
     financeController.updateFinanceEntry
 );
@@ -52,6 +55,14 @@ router.get(
         return `FinanceExport:excel:${start}-${end}`;
     }),
     financeController.exportExcel
+);
+
+router.get(
+    '/attachments/:attachmentId/download',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeAttachment.download', (req) => `FinanceAttachment:${req.params.attachmentId}`),
+    financeController.downloadAttachment
 );
 
 
