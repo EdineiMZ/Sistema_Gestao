@@ -30,14 +30,22 @@ module.exports = {
                 onUpdate: 'CASCADE',
                 onDelete: 'CASCADE'
             },
-            body: {
-                type: Sequelize.TEXT,
+            senderRole: {
+                type: Sequelize.STRING(20),
                 allowNull: false
             },
-            isFromAgent: {
-                type: Sequelize.BOOLEAN,
+            messageType: {
+                type: Sequelize.STRING(20),
                 allowNull: false,
-                defaultValue: false
+                defaultValue: 'text'
+            },
+            content: {
+                type: Sequelize.TEXT,
+                allowNull: true
+            },
+            attachmentId: {
+                type: Sequelize.INTEGER,
+                allowNull: true
             },
             createdAt: {
                 type: Sequelize.DATE,
@@ -52,19 +60,25 @@ module.exports = {
         });
 
         await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_messages_ticket_idx',
-            fields: ['ticketId']
+            name: 'supportMessages_ticketId_createdAt',
+            fields: ['ticketId', 'createdAt']
         });
 
         await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_messages_sender_idx',
+            name: 'supportMessages_senderId_idx',
             fields: ['senderId']
+        });
+
+        await queryInterface.addIndex(TABLE_NAME, {
+            name: 'supportMessages_attachmentId_idx',
+            fields: ['attachmentId']
         });
     },
 
     down: async (queryInterface) => {
-        await queryInterface.removeIndex(TABLE_NAME, 'support_messages_sender_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'support_messages_ticket_idx');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_attachmentId_idx');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_senderId_idx');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_ticketId_createdAt');
         await queryInterface.dropTable(TABLE_NAME);
     }
 };

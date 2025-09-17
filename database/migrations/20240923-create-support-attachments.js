@@ -20,16 +20,6 @@ module.exports = {
                 onUpdate: 'CASCADE',
                 onDelete: 'CASCADE'
             },
-            messageId: {
-                type: Sequelize.INTEGER,
-                allowNull: false,
-                references: {
-                    model: 'supportMessages',
-                    key: 'id'
-                },
-                onUpdate: 'CASCADE',
-                onDelete: 'CASCADE'
-            },
             uploadedById: {
                 type: Sequelize.INTEGER,
                 allowNull: true,
@@ -40,7 +30,7 @@ module.exports = {
                 onUpdate: 'CASCADE',
                 onDelete: 'SET NULL'
             },
-            fileName: {
+            originalName: {
                 type: Sequelize.STRING(255),
                 allowNull: false
             },
@@ -49,16 +39,16 @@ module.exports = {
                 allowNull: false
             },
             checksum: {
-                type: Sequelize.STRING(128),
-                allowNull: true
+                type: Sequelize.STRING(64),
+                allowNull: false
             },
-            contentType: {
+            mimeType: {
                 type: Sequelize.STRING(120),
-                allowNull: true
+                allowNull: false
             },
-            fileSize: {
+            size: {
                 type: Sequelize.BIGINT,
-                allowNull: true
+                allowNull: false
             },
             createdAt: {
                 type: Sequelize.DATE,
@@ -73,25 +63,32 @@ module.exports = {
         });
 
         await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_attachments_ticket_idx',
+            name: 'supportAttachments_ticketId_idx',
             fields: ['ticketId']
         });
 
         await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_attachments_message_idx',
-            fields: ['messageId']
+            name: 'supportAttachments_uploaderId_idx',
+            fields: ['uploadedById']
         });
 
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_attachments_uploader_idx',
-            fields: ['uploadedById']
+        await queryInterface.addConstraint('supportMessages', {
+            fields: ['attachmentId'],
+            type: 'foreign key',
+            name: 'supportMessages_attachmentId_fkey',
+            references: {
+                table: TABLE_NAME,
+                field: 'id'
+            },
+            onUpdate: 'CASCADE',
+            onDelete: 'SET NULL'
         });
     },
 
     down: async (queryInterface) => {
-        await queryInterface.removeIndex(TABLE_NAME, 'support_attachments_uploader_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'support_attachments_message_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'support_attachments_ticket_idx');
+        await queryInterface.removeConstraint('supportMessages', 'supportMessages_attachmentId_fkey');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportAttachments_uploaderId_idx');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportAttachments_ticketId_idx');
         await queryInterface.dropTable(TABLE_NAME);
     }
 };

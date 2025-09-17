@@ -1,7 +1,6 @@
 'use strict';
 
 const TABLE_NAME = 'supportTickets';
-const STATUS_ENUM_NAME = 'enum_supportTickets_status';
 
 module.exports = {
     up: async (queryInterface, Sequelize) => {
@@ -12,15 +11,19 @@ module.exports = {
                 autoIncrement: true
             },
             subject: {
-                type: Sequelize.STRING(180),
+                type: Sequelize.STRING(150),
+                allowNull: false
+            },
+            description: {
+                type: Sequelize.TEXT,
                 allowNull: false
             },
             status: {
-                type: Sequelize.ENUM('pending', 'in_progress', 'resolved'),
+                type: Sequelize.STRING(20),
                 allowNull: false,
-                defaultValue: 'pending'
+                defaultValue: 'open'
             },
-            creatorId: {
+            userId: {
                 type: Sequelize.INTEGER,
                 allowNull: false,
                 references: {
@@ -29,29 +32,6 @@ module.exports = {
                 },
                 onUpdate: 'CASCADE',
                 onDelete: 'CASCADE'
-            },
-            assignedToId: {
-                type: Sequelize.INTEGER,
-                allowNull: true,
-                references: {
-                    model: 'Users',
-                    key: 'id'
-                },
-                onUpdate: 'CASCADE',
-                onDelete: 'SET NULL'
-            },
-            resolvedAt: {
-                type: Sequelize.DATE,
-                allowNull: true
-            },
-            firstResponseAt: {
-                type: Sequelize.DATE,
-                allowNull: true
-            },
-            lastMessageAt: {
-                type: Sequelize.DATE,
-                allowNull: false,
-                defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
             },
             createdAt: {
                 type: Sequelize.DATE,
@@ -66,29 +46,13 @@ module.exports = {
         });
 
         await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_tickets_status_idx',
-            fields: ['status']
-        });
-
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_tickets_creator_idx',
-            fields: ['creatorId']
-        });
-
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'support_tickets_assignee_idx',
-            fields: ['assignedToId']
+            name: 'supportTickets_userId_status',
+            fields: ['userId', 'status']
         });
     },
 
     down: async (queryInterface) => {
-        await queryInterface.removeIndex(TABLE_NAME, 'support_tickets_assignee_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'support_tickets_creator_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'support_tickets_status_idx');
+        await queryInterface.removeIndex(TABLE_NAME, 'supportTickets_userId_status');
         await queryInterface.dropTable(TABLE_NAME);
-
-        if (queryInterface.sequelize.getDialect() === 'postgres') {
-            await queryInterface.sequelize.query(`DROP TYPE IF EXISTS "${STATUS_ENUM_NAME}";`);
-        }
     }
 };
