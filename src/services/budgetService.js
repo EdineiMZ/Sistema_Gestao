@@ -6,17 +6,25 @@ const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
 const listCache = new Map();
-
-const normalizeIntegerId = (value) => {
-    if (value === null || value === undefined || value === '') {
-        return null;
-    }
-    const parsed = Number.parseInt(String(value).trim(), 10);
-    return Number.isInteger(parsed) ? parsed : null;
+const clearCache = () => {
+    listCache.clear();
 };
 
-const parseLocalizedNumber = (value) => {
-    if (value === null || value === undefined || value === '') {
+const normalizeId = (value) => {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const normalizeNumber = (value) => {
+    if (value === undefined || value === null || value === '') {
         return null;
     }
 
@@ -30,238 +38,210 @@ const parseLocalizedNumber = (value) => {
             return null;
         }
 
-        const hasComma = trimmed.includes(',');
-        const sanitized = hasComma
-            ? trimmed.replace(/\./g, '').replace(',', '.')
-            : trimmed;
-
+        const sanitized = trimmed.replace(/\./g, '').replace(',', '.');
         const parsed = Number.parseFloat(sanitized);
         return Number.isFinite(parsed) ? parsed : null;
     }
-
-    const parsed = Number.parseFloat(value);
+    const parsed = Number.parseFloat(String(value));
     return Number.isFinite(parsed) ? parsed : null;
 };
 
-const normalizeAmount = (value) => {
-    const numeric = parseLocalizedNumber(value);
-    if (numeric === null) {
-        return null;
-    }
-    return Number(numeric.toFixed(2));
-};
-
-const normalizeThresholdValues = (value) => {
-    if (value === null || value === undefined) {
+const normalizeThresholdList = (value) => {
+    if (value === undefined || value === null) {
         return [];
     }
 
-    const rawList = Array.isArray(value) ? value : [value];
-    const uniqueMap = new Map();
+    const list = Array.isArray(value) ? value : [value];
+    const normalized = list
+        .map((item) => normalizeNumber(item))
+        .filter((item) => Number.isFinite(item) && item > 0)
+        .map((item) => Number(item.toFixed(4)));
 
-    rawList.forEach((item) => {
-        const normalized = normalizeAmount(item);
-        if (normalized !== null && normalized > 0) {
-            const key = normalized.toFixed(2);
-            if (!uniqueMap.has(key)) {
-                uniqueMap.set(key, normalized);
-            }
-        }
-    });
-
-    const normalizedList = Array.from(uniqueMap.values());
-    normalizedList.sort((a, b) => a - b);
-    return normalizedList;
+    const uniqueValues = Array.from(new Set(normalized));
+    uniqueValues.sort((a, b) => a - b);
+    return uniqueValues;
 };
 
 const normalizeReferenceMonth = (value) => {
-    if (!value) {
+    if (value === undefined || value === null || value === '') {
         return null;
     }
 
     if (value instanceof Date) {
-        if (!Number.isFinite(value.getTime())) {
+        if (Number.isNaN(value.getTime())) {
             return null;
         }
-        const year = value.getUTCFullYear();
-        const month = value.getUTCMonth() + 1;
-        return `${year}-${String(month).padStart(2, '0')}-01`;
+        return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1)).toISOString().slice(0, 10);
     }
 
-    const stringValue = String(value).trim();
-    if (!stringValue) {
-        return null;
+    if (typeof value === 'number') {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
     }
 
-    if (/^\d{4}-\d{2}$/.test(stringValue)) {
-        return `${stringValue}-01`;
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+
+        let reference;
+        if (/^\d{4}-\d{2}$/.test(trimmed)) {
+            reference = new Date(`${trimmed}-01T00:00:00Z`);
+        } else {
+            reference = new Date(trimmed);
+        }
+
+        if (Number.isNaN(reference.getTime())) {
+            return null;
+        }
+
+        return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), 1)).toISOString().slice(0, 10);
     }
 
-    if (/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
-        return `${stringValue.slice(0, 7)}-01`;
-    }
-
-    const parsed = new Date(stringValue);
-    if (!Number.isFinite(parsed.getTime())) {
-        return null;
-    }
-
-    const year = parsed.getUTCFullYear();
-    const month = parsed.getUTCMonth() + 1;
-    return `${year}-${String(month).padStart(2, '0')}-01`;
+    return null;
 };
 
-const normalizeBudgetPayload = (payload = {}) => {
-    const normalized = { ...payload };
+const buildBudgetPayload = (input = {}) => {
+    const payload = {};
 
-    if ('monthlyLimit' in payload) {
-        const monthlyLimit = normalizeAmount(payload.monthlyLimit);
+    if ('monthlyLimit' in input) {
+        const monthlyLimit = normalizeNumber(input.monthlyLimit);
         if (monthlyLimit !== null) {
-            normalized.monthlyLimit = monthlyLimit;
-        } else {
-            delete normalized.monthlyLimit;
+            payload.monthlyLimit = monthlyLimit;
         }
     }
 
-    if ('thresholds' in payload) {
-        normalized.thresholds = normalizeThresholdValues(payload.thresholds);
+    if ('thresholds' in input) {
+        payload.thresholds = normalizeThresholdList(input.thresholds);
     }
 
-    if ('referenceMonth' in payload) {
-        normalized.referenceMonth = normalizeReferenceMonth(payload.referenceMonth);
+    if ('referenceMonth' in input) {
+        payload.referenceMonth = normalizeReferenceMonth(input.referenceMonth);
     }
 
-    if ('userId' in payload) {
-        const userId = normalizeIntegerId(payload.userId);
+    if ('userId' in input) {
+        const userId = normalizeId(input.userId);
         if (userId !== null) {
-            normalized.userId = userId;
-        } else {
-            delete normalized.userId;
+            payload.userId = userId;
         }
     }
 
-    if ('financeCategoryId' in payload) {
-        const financeCategoryId = normalizeIntegerId(payload.financeCategoryId);
+    if ('financeCategoryId' in input) {
+        const financeCategoryId = normalizeId(input.financeCategoryId);
         if (financeCategoryId !== null) {
-            normalized.financeCategoryId = financeCategoryId;
-        } else {
-            delete normalized.financeCategoryId;
+            payload.financeCategoryId = financeCategoryId;
         }
     }
 
-    if ('id' in payload) {
-        const id = normalizeIntegerId(payload.id);
-        normalized.id = id;
-    }
-
-    return normalized;
+    return payload;
 };
 
-const getPlainRecord = (instance) => {
-    if (instance && typeof instance.get === 'function') {
-        return instance.get({ plain: true });
-    }
-    return instance;
-};
+const normalizePagination = (pagination = {}) => {
+    const pageValue = Number.parseInt(pagination.page, 10);
+    const sizeValue = Number.parseInt(pagination.pageSize, 10);
 
-const normalizePaginationOptions = (options = {}) => {
-    const rawPage = Number.parseInt(options.page, 10);
-    const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : DEFAULT_PAGE;
-
-    const rawPageSize = Number.parseInt(options.pageSize, 10);
-    const normalizedSize = Number.isInteger(rawPageSize) && rawPageSize > 0 ? rawPageSize : DEFAULT_PAGE_SIZE;
-    const pageSize = Math.min(normalizedSize, MAX_PAGE_SIZE);
+    const page = Number.isInteger(pageValue) && pageValue > 0 ? pageValue : DEFAULT_PAGE;
+    const pageSize = Number.isInteger(sizeValue) && sizeValue > 0 ? Math.min(sizeValue, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
 
     return { page, pageSize };
 };
 
-const buildPagination = (page, pageSize, totalItems) => {
-    const safePageSize = pageSize > 0 ? pageSize : DEFAULT_PAGE_SIZE;
-    const totalPages = safePageSize > 0 ? Math.ceil(totalItems / safePageSize) : 0;
-
-    return {
-        page,
-        pageSize: safePageSize,
-        totalItems,
-        totalPages
-    };
-};
-
-const buildListFilters = ({ userId, financeCategoryId } = {}) => {
-    const filters = {};
-
-    const normalizedUserId = normalizeIntegerId(userId);
-    if (normalizedUserId !== null) {
-        filters.userId = normalizedUserId;
-    }
-
-    const normalizedCategoryId = normalizeIntegerId(financeCategoryId);
-    if (normalizedCategoryId !== null) {
-        filters.financeCategoryId = normalizedCategoryId;
-    }
-
-    return filters;
-};
-
 const buildCacheKey = (filters, pagination) => JSON.stringify({ filters, pagination });
 
-const isMissingBudgetTableError = (error) => {
-    const message = String(
-        error?.original?.message
-        || error?.parent?.message
-        || error?.message
-        || ''
-    ).toLowerCase();
+const formatBudgetRow = (row) => {
+    if (row && typeof row.get === 'function') {
+        return row.get({ plain: true });
+    }
 
-    return message.includes('no such table') && message.includes('budget');
+    if (row && typeof row.toJSON === 'function') {
+        return row.toJSON();
+    }
+
+    return { ...row };
 };
 
-const clearListBudgetsCache = () => {
-    listCache.clear();
-};
+const listBudgets = async (filters = {}, pagination = {}, options = {}) => {
+    const where = {};
+    const userId = normalizeId(filters.userId);
+    const financeCategoryId = normalizeId(filters.financeCategoryId);
 
-const listBudgets = async ({ userId, financeCategoryId } = {}, options = {}) => {
-    const filters = buildListFilters({ userId, financeCategoryId });
-    const pagination = normalizePaginationOptions(options);
-    const cacheKey = buildCacheKey(filters, pagination);
+    if (userId !== null) {
+        where.userId = userId;
+    }
+
+    if (financeCategoryId !== null) {
+        where.financeCategoryId = financeCategoryId;
+    }
+
+    const { page, pageSize } = normalizePagination(pagination);
+    const cacheKey = buildCacheKey(where, { page, pageSize });
 
     if (listCache.has(cacheKey)) {
-        return listCache.get(cacheKey);
+        const cached = listCache.get(cacheKey);
+        return {
+            data: cached.data.map((item) => ({ ...item })),
+            pagination: { ...cached.pagination }
+        };
     }
 
     try {
-        const { rows = [], count = 0 } = await Budget.findAndCountAll({
-            where: filters,
+        const result = await Budget.findAndCountAll({
+            where,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
             order: [['referenceMonth', 'DESC'], ['financeCategoryId', 'ASC']],
-            offset: (pagination.page - 1) * pagination.pageSize,
-            limit: pagination.pageSize
+            ...options
         });
 
-        const data = rows.map(getPlainRecord);
-        const result = {
+        const data = Array.isArray(result.rows) ? result.rows.map(formatBudgetRow) : [];
+        const totalItems = Number.isFinite(result.count) ? result.count : Array.isArray(result.rows) ? result.rows.length : 0;
+        const totalPages = pageSize > 0 ? Math.ceil(totalItems / pageSize) : 0;
+
+        const payload = {
             data,
-            pagination: buildPagination(pagination.page, pagination.pageSize, count)
+            pagination: {
+                page,
+                pageSize,
+                totalItems,
+                totalPages
+            }
         };
 
-        listCache.set(cacheKey, result);
-        return result;
+        listCache.set(cacheKey, payload);
+
+        return {
+            data: data.map((item) => ({ ...item })),
+            pagination: { ...payload.pagination }
+        };
     } catch (error) {
-        if (isMissingBudgetTableError(error)) {
-            const emptyResult = {
+        if (typeof error.message === 'string' && error.message.includes('no such table: budgets')) {
+            return {
                 data: [],
-                pagination: buildPagination(pagination.page, pagination.pageSize, 0)
+                pagination: {
+                    page: DEFAULT_PAGE,
+                    pageSize: DEFAULT_PAGE_SIZE,
+                    totalItems: 0,
+                    totalPages: 0
+                }
             };
-            listCache.set(cacheKey, emptyResult);
-            return emptyResult;
         }
+
         throw error;
     }
 };
 
 const findBudgetById = async ({ id, userId }, options = {}) => {
-    const where = { id };
+    const budgetId = normalizeId(id);
+    if (budgetId === null) {
+        return null;
+    }
 
-    const normalizedUserId = normalizeIntegerId(userId);
+    const where = { id: budgetId };
+    const normalizedUserId = normalizeId(userId);
     if (normalizedUserId !== null) {
         where.userId = normalizedUserId;
     }
@@ -269,143 +249,119 @@ const findBudgetById = async ({ id, userId }, options = {}) => {
     return Budget.findOne({ where, ...options });
 };
 
-const createBudget = async (payload = {}, options = {}) => {
-    const normalizedPayload = normalizeBudgetPayload(payload);
-    const created = await Budget.create(normalizedPayload, options);
-    clearListBudgetsCache();
-    return getPlainRecord(created);
+const createBudget = async (data = {}, options = {}) => {
+    const payload = buildBudgetPayload(data);
+    const budget = await Budget.create(payload, options);
+    clearCache();
+    return typeof budget.get === 'function' ? budget.get({ plain: true }) : budget;
 };
 
-const updateBudget = async (budgetId, updates = {}, options = {}) => {
-    const transactionOptions = { transaction: options?.transaction };
-    const budget = await Budget.findByPk(budgetId, transactionOptions);
+const updateBudget = async (budgetId, data = {}, options = {}) => {
+    const targetId = normalizeId(budgetId);
+    if (targetId === null) {
+        return null;
+    }
 
+    const budget = await Budget.findByPk(targetId, { transaction: options.transaction });
     if (!budget) {
         return null;
     }
 
-    if (updates.monthlyLimit !== undefined) {
-        const normalized = normalizeAmount(updates.monthlyLimit);
-        if (normalized !== null) {
-            budget.monthlyLimit = normalized;
-        }
-    }
+    const updates = buildBudgetPayload(data);
+    Object.keys(updates).forEach((key) => {
+        budget[key] = updates[key];
+    });
 
-    if (updates.thresholds !== undefined) {
-        budget.thresholds = normalizeThresholdValues(updates.thresholds);
-    }
+    await budget.save({ transaction: options.transaction });
+    clearCache();
 
-    if (updates.referenceMonth !== undefined) {
-        budget.referenceMonth = normalizeReferenceMonth(updates.referenceMonth);
-    }
-
-    await budget.save(transactionOptions);
-    clearListBudgetsCache();
-    return getPlainRecord(budget);
+    return typeof budget.get === 'function' ? budget.get({ plain: true }) : { ...budget };
 };
 
-const saveBudget = async ({ id, monthlyLimit, thresholds, referenceMonth, userId, financeCategoryId }) => {
+const saveBudget = async ({ id, ...data } = {}, options = {}) => {
     if (id) {
-        const budget = await findBudgetById({ id, userId });
-        if (!budget) {
+        const updated = await updateBudget(id, { id, ...data }, options);
+        if (!updated) {
             const error = new Error('Orçamento não encontrado.');
             error.code = 'BUDGET_NOT_FOUND';
             throw error;
         }
-
-        budget.monthlyLimit = monthlyLimit;
-        budget.thresholds = thresholds;
-        budget.referenceMonth = referenceMonth;
-        budget.userId = userId;
-        budget.financeCategoryId = financeCategoryId;
-
-        await budget.save();
-        clearListBudgetsCache();
-        return budget;
+        return updated;
     }
 
-    const created = await Budget.create({
-        monthlyLimit,
-        thresholds,
-        referenceMonth,
-        userId,
-        financeCategoryId
-    });
-    clearListBudgetsCache();
-    return created;
+    return createBudget(data, options);
+
 };
 
-const deleteBudget = async ({ id, userId }) => {
-    const budget = await findBudgetById({ id, userId });
+const deleteBudget = async ({ id, userId }, options = {}) => {
+    const budget = await findBudgetById({ id, userId }, options);
     if (!budget) {
         const error = new Error('Orçamento não encontrado.');
         error.code = 'BUDGET_NOT_FOUND';
         throw error;
     }
+    if (typeof budget.destroy === 'function') {
+        await budget.destroy({ transaction: options.transaction });
+    }
 
-    await budget.destroy();
-    clearListBudgetsCache();
+    clearCache();
 };
 
-const sumNumeric = (list, key) => list.reduce((total, item) => {
+const sumValues = (items, key) => items.reduce((total, item) => {
     const value = Number.parseFloat(item?.[key]);
-    return total + (Number.isFinite(value) ? value : 0);
+    if (!Number.isFinite(value)) {
+        return total;
+    }
+    return total + value;
 }, 0);
 
-const collectThresholds = (summaries) => {
-    const values = new Map();
-    summaries.forEach((summary) => {
-        if (!Array.isArray(summary?.thresholds)) {
-            return;
-        }
-
-        summary.thresholds.forEach((threshold) => {
-            const amount = normalizeAmount(threshold);
-            if (amount !== null && amount > 0) {
-                const key = amount.toFixed(2);
-                if (!values.has(key)) {
-                    values.set(key, amount);
+const flattenThresholds = (items) => {
+    const values = [];
+    items.forEach((item) => {
+        if (Array.isArray(item?.thresholds)) {
+            item.thresholds.forEach((threshold) => {
+                const normalized = normalizeNumber(threshold);
+                if (normalized !== null) {
+                    values.push(normalized);
                 }
-            }
-        });
+            });
+        }
     });
-
-    const result = Array.from(values.values());
-    result.sort((a, b) => a - b);
-    return result;
+    return values;
 };
 
-const getBudgetConsumptionSummary = async (budgetId, filters = {}, options = {}) => {
-    const requestOptions = {
-        ...options,
+const getBudgetConsumptionSummary = async (budgetId, filters = {}) => {
+    const overview = await financeReportingService.getBudgetSummaries(filters, {
         includeCategoryConsumption: true,
-        budgetId
-    };
+        budgetIds: [budgetId]
+    });
 
-    const overview = await financeReportingService.getBudgetSummaries(filters, requestOptions);
-    const summaries = Array.isArray(overview?.summaries) ? overview.summaries : [];
-    const filteredSummaries = summaries.filter((summary) => summary?.budgetId === budgetId);
+    const summaries = Array.isArray(overview?.summaries)
+        ? overview.summaries.filter((item) => normalizeId(item?.budgetId) === normalizeId(budgetId))
+        : [];
 
-    const totalLimit = sumNumeric(filteredSummaries, 'monthlyLimit');
-    const totalConsumption = sumNumeric(filteredSummaries, 'consumption');
-    const thresholds = collectThresholds(filteredSummaries);
+    const totalLimit = sumValues(summaries, 'monthlyLimit');
+    const totalConsumption = sumValues(summaries, 'consumption');
+    const thresholds = flattenThresholds(summaries);
 
-    const resolver = financeReportingService?.utils?.resolveBudgetStatus;
+    const resolver = financeReportingService.utils?.resolveBudgetStatus;
     const statusMeta = typeof resolver === 'function'
         ? resolver(totalConsumption, totalLimit, thresholds)
-        : null;
+        : { key: 'unknown', label: 'Indefinido' };
 
     return {
-        budgetId,
+        budgetId: normalizeId(budgetId),
         totalLimit,
         totalConsumption,
-        status: statusMeta?.key || null,
         thresholds,
-        months: Array.isArray(overview?.months) ? overview.months : [],
+        status: statusMeta.key,
+        statusLabel: statusMeta.label,
+        statusMeta,
+        months: Array.isArray(overview?.months) ? [...overview.months] : [],
+        summaries,
         categoryConsumption: Array.isArray(overview?.categoryConsumption)
-            ? overview.categoryConsumption
-            : [],
-        summaries: filteredSummaries
+            ? [...overview.categoryConsumption]
+            : []
     };
 };
 
@@ -417,6 +373,6 @@ module.exports = {
     deleteBudget,
     getBudgetConsumptionSummary,
     __testing: {
-        clearCache: clearListBudgetsCache
+        clearCache
     }
 };
