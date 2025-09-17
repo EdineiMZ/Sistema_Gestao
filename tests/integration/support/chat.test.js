@@ -58,8 +58,8 @@ const TEST_TICKET = {
     id: 101,
     subject: 'Suporte estratégico',
     description: 'Precisamos de suporte avançado.',
-    status: 'open',
-    userId: 1,
+    status: 'pending',
+    creatorId: 1,
     get() {
         return { ...this };
     }
@@ -89,7 +89,7 @@ describe('Support chat socket handshake', () => {
             {
                 id: 1,
                 ticketId: TEST_TICKET.id,
-                senderId: TEST_TICKET.userId,
+                senderId: TEST_TICKET.creatorId,
                 senderRole: 'client',
                 messageType: 'text',
                 content: 'Mensagem inicial',
@@ -139,7 +139,7 @@ describe('Support chat socket handshake', () => {
     it('permite que o solicitante do ticket realize o handshake e receba o histórico', async () => {
         const agent = request.agent(app);
         const loginResponse = await agent.post('/login').send({
-            id: TEST_TICKET.userId,
+            id: TEST_TICKET.creatorId,
             name: 'Cliente',
             role: 'client',
             active: true
@@ -167,7 +167,7 @@ describe('Support chat socket handshake', () => {
     it('bloqueia usuários sem perfil admin de ingressarem como atendentes', async () => {
         const agent = request.agent(app);
         const loginResponse = await agent.post('/login').send({
-            id: TEST_TICKET.userId,
+            id: TEST_TICKET.creatorId,
             name: 'Cliente',
             role: 'client',
             active: true
@@ -190,7 +190,7 @@ describe('Support chat socket handshake', () => {
     it('registra mensagens ao enviar texto para o chat', async () => {
         const agent = request.agent(app);
         const loginResponse = await agent.post('/login').send({
-            id: TEST_TICKET.userId,
+            id: TEST_TICKET.creatorId,
             name: 'Cliente',
             role: 'client',
             active: true

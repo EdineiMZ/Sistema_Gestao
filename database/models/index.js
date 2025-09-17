@@ -182,10 +182,22 @@ if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEnt
     });
 }
 
-if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.requester)) {
+if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.creator)) {
     SupportTicket.belongsTo(User, {
-        as: 'requester',
-        foreignKey: 'userId'
+        as: 'creator',
+        foreignKey: 'creatorId',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+    });
+}
+
+if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.assignee)) {
+    SupportTicket.belongsTo(User, {
+        as: 'assignee',
+        foreignKey: 'assignedToId',
+        constraints: false,
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
     });
 }
 

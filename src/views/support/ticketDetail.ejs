@@ -42,19 +42,28 @@
                 <div class="card-body p-4 p-lg-5">
                     <h2 class="h4 fw-semibold mb-3">Detalhes do chamado</h2>
                     <p class="lead text-body-secondary mb-4"><%= ticketSafe.subject %></p>
-                    <article class="prose">
-                        <% (ticketSafe.description || '').split(/\n+/).forEach((paragraph) => { %>
-                            <% if (paragraph.trim()) { %>
-                                <p class="text-body"><%= paragraph %></p>
-                            <% } %>
-                        <% }); %>
-                    </article>
+                    <% const descriptionText = ticketSafe.description || ticketSafe.initialMessage || ''; %>
+                    <% if (descriptionText) { %>
+                        <article class="prose">
+                            <% descriptionText.split(/\n+/).forEach((paragraph) => { %>
+                                <% if (paragraph.trim()) { %>
+                                    <p class="text-body"><%= paragraph %></p>
+                                <% } %>
+                            <% }); %>
+                        </article>
+                    <% } else { %>
+                        <div class="alert alert-info mt-3" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Nenhum detalhamento inicial disponível. Consulte o histórico de mensagens para mais informações.
+                        </div>
+                    <% } %>
 
-                    <% if (ticketSafe.requester && isAdmin) { %>
+                    <% const ticketOwner = ticketSafe.creator || ticketSafe.requester; %>
+                    <% if (ticketOwner && isAdmin) { %>
                         <div class="mt-4 p-3 rounded-4 bg-body-tertiary">
                             <h3 class="h6 text-uppercase text-muted mb-2">Solicitante</h3>
-                            <div class="fw-semibold"><%= ticketSafe.requester.name || 'Usuário' %></div>
-                            <div class="text-muted small"><%= ticketSafe.requester.email %></div>
+                            <div class="fw-semibold"><%= ticketOwner.name || 'Usuário' %></div>
+                            <div class="text-muted small"><%= ticketOwner.email %></div>
                         </div>
                     <% } %>
                 </div>
