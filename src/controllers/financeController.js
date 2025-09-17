@@ -1,11 +1,12 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceGoal, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
+const { buildImportPreview } = financeImportService;
 const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
@@ -20,6 +21,41 @@ const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => (
     value: interval.value,
     label: interval.label
 }));
+
+const wantsJsonResponse = (req = {}) => {
+    if (!req || typeof req !== 'object') {
+        return false;
+    }
+
+    if (req.xhr === true) {
+        return true;
+    }
+
+    const headers = req.headers || {};
+    const acceptHeader = typeof req.get === 'function'
+        ? req.get('accept')
+        : headers.accept || headers.Accept || '';
+
+    if (typeof headers['x-requested-with'] === 'string'
+        && headers['x-requested-with'].toLowerCase() === 'xmlhttprequest') {
+        return true;
+    }
+
+    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
+        return true;
+    }
+
+    const query = req.query || {};
+    if (query.format === 'json' || query.format === 'JSON') {
+        return true;
+    }
+
+    if (query.ajax === '1' || query.ajax === 1 || query.ajax === true) {
+        return true;
+    }
+
+    return false;
+};
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -259,6 +295,23 @@ const serializeGoalForView = (goal) => {
     };
 };
 
+const loadFinanceGoals = async () => {
+    if (!FinanceGoal || typeof FinanceGoal.findAll !== 'function') {
+        return [];
+    }
+
+    try {
+        return await FinanceGoal.findAll({
+            order: [['month', 'ASC']]
+        });
+    } catch (error) {
+        if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+            console.warn('Não foi possível carregar metas financeiras:', error);
+        }
+        return [];
+    }
+};
+
 const filterValidStorageKeys = (storageKeys = []) => {
     if (!Array.isArray(storageKeys)) {
         return [];
@@ -369,9 +422,7 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const goalsPromise = FinanceGoal.findAll({
-                order: [['month', 'ASC']]
-            });
+            const goalsPromise = loadFinanceGoals();
 
             const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
 
@@ -381,6 +432,8 @@ module.exports = {
                 || projections.find((item) => item.isCurrent)
                 || null;
             const projectionAlerts = projections.filter((item) => item.needsAttention);
+            const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
+            const goalSummary = summary.goalSummary || null;
 
             const importPreview = req.session?.financeImportPreview || null;
             if (importPreview) {
@@ -395,6 +448,13 @@ module.exports = {
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
+                projectionList: projections,
+                projectionAlerts,
+                highlightProjection: projectionHighlight,
+                financeGoals,
+                goalSummary,
+                currencyFormatter,
+                formatCurrency,
                 importPreview,
                 recurringIntervalOptions
             });
