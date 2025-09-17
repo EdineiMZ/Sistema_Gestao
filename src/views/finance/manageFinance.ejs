@@ -1,5 +1,7 @@
 <%- include('../partials/header') %>
 
+<% const intervalOptions = Array.isArray(recurringIntervalOptions) ? recurringIntervalOptions : []; %>
+
 <div class="row fade-in responsive-page-row gy-4">
     <div class="col-12">
         <div class="card card-soft responsive-panel">
@@ -278,6 +280,245 @@
 
     <div class="col-12">
         <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-column gap-4">
+                <div>
+                    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start gap-3 mb-3">
+                        <div>
+                            <span class="app-chip mb-2"><i class="bi bi-funnel me-2"></i>Filtros inteligentes</span>
+                            <h3 class="fw-semibold mb-1">Visão consolidada</h3>
+                            <p class="text-muted mb-0">
+                                Período analisado: <span class="fw-semibold"><%= computedPeriodLabel %></span>
+                            </p>
+                        </div>
+                        <div class="text-muted small">
+                            Ajuste o período, o tipo e o status para refinar a análise e exportações.
+                        </div>
+                    </div>
+                    <form
+                        class="row g-3 align-items-end responsive-filter-grid"
+                        data-filter-form
+                        action="/finance"
+                        method="GET"
+                        novalidate
+                    >
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="filterStartDate">Início</label>
+                            <input
+                                type="date"
+                                class="form-control"
+                                id="filterStartDate"
+                                name="startDate"
+                                value="<%= filterValues.startDate || '' %>"
+                            />
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="filterEndDate">Fim</label>
+                            <input
+                                type="date"
+                                class="form-control"
+                                id="filterEndDate"
+                                name="endDate"
+                                value="<%= filterValues.endDate || '' %>"
+                            />
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="filterType">Tipo</label>
+                            <select
+                                class="form-select"
+                                id="filterType"
+                                name="type"
+                                data-auto-submit="true"
+                            >
+                                <option value="" <%= filterValues.type ? '' : 'selected' %>>Todos</option>
+                                <option value="payable" <%= filterValues.type === 'payable' ? 'selected' : '' %>>A pagar</option>
+                                <option value="receivable" <%= filterValues.type === 'receivable' ? 'selected' : '' %>>A receber</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="filterStatus">Status</label>
+                            <select
+                                class="form-select"
+                                id="filterStatus"
+                                name="status"
+                                data-auto-submit="true"
+                            >
+                                <option value="" <%= filterValues.status ? '' : 'selected' %>>Todos</option>
+                                <option value="pending" <%= filterValues.status === 'pending' ? 'selected' : '' %>>Pendente</option>
+                                <option value="paid" <%= filterValues.status === 'paid' ? 'selected' : '' %>>Pago</option>
+                                <option value="overdue" <%= filterValues.status === 'overdue' ? 'selected' : '' %>>Atrasado</option>
+                                <option value="cancelled" <%= filterValues.status === 'cancelled' ? 'selected' : '' %>>Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-xl-4 col-xxl-4 ms-auto">
+                            <div class="d-flex flex-column flex-sm-row justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary w-100 w-sm-auto" data-filter-clear>
+                                    Limpar
+                                </button>
+                                <button type="submit" class="btn btn-gradient w-100 w-sm-auto">
+                                    Aplicar filtros
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-success-subtle text-success">Receitas</span>
+                                    <i class="bi bi-arrow-up-right-circle text-success fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1"><%= formatCurrency(summaryTotals.receivable) %></h4>
+                                <p class="text-muted small mb-0">Entradas previstas no período selecionado.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-danger-subtle text-danger">Despesas</span>
+                                    <i class="bi bi-arrow-down-right-circle text-danger fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1"><%= formatCurrency(summaryTotals.payable) %></h4>
+                                <p class="text-muted small mb-0">Saídas planejadas dentro do período.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-primary-subtle text-primary">Saldo</span>
+                                    <i class="bi bi-wallet2 text-primary fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1 <%= netClass %>"><%= formatCurrency(summaryTotals.net) %></h4>
+                                <p class="text-muted small mb-0">Resultado projetado após receitas e despesas.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-warning-subtle text-warning">Riscos</span>
+                                    <i class="bi bi-exclamation-octagon text-warning fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1 text-warning"><%= formatCurrency(summaryTotals.overdue) %></h4>
+                                <p class="text-muted small mb-0">Pagamentos em atraso demandando atenção imediata.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 align-items-stretch">
+                    <div class="col-12 col-lg-7">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <h4 class="fw-semibold mb-1">Performance mensal</h4>
+                                        <p class="text-muted small mb-0">Comparativo de entradas e saídas para decisões estratégicas.</p>
+                                    </div>
+                                    <span class="badge rounded-pill bg-light text-muted"><%= computedPeriodLabel %></span>
+                                </div>
+                                <div class="ratio ratio-16x9">
+                                    <canvas
+                                        id="financePerformanceChart"
+                                        aria-label="Gráfico de desempenho financeiro mensal"
+                                        role="img"
+                                    ></canvas>
+                                </div>
+                                <% if (hasMonthlySummary) { %>
+                                    <div class="table-responsive small mt-4">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Mês</th>
+                                                    <th scope="col" class="text-end">A receber</th>
+                                                    <th scope="col" class="text-end">A pagar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <% summaryMonthly.forEach((item) => { %>
+                                                    <tr>
+                                                        <td><%= formatMonthLabel(item.month) %></td>
+                                                        <td class="text-end"><%= formatCurrency(item.receivable) %></td>
+                                                        <td class="text-end"><%= formatCurrency(item.payable) %></td>
+                                                    </tr>
+                                                <% }) %>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <% } else { %>
+                                    <p class="text-muted small mt-4 mb-0">
+                                        Cadastre lançamentos ou ajuste os filtros para visualizar tendências históricas.
+                                    </p>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <h4 class="fw-semibold mb-1">Status por categoria</h4>
+                                        <p class="text-muted small mb-0">Distribuição de valores em cada etapa.</p>
+                                    </div>
+                                    <span class="badge rounded-pill bg-light text-muted">Atualizado em tempo real</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-3">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Tipo</th>
+                                                <% statusKeys.forEach((statusKey) => { %>
+                                                    <th scope="col" class="text-end"><%= statusLabels[statusKey] %></th>
+                                                <% }) %>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% Object.keys(typeLabels).forEach((typeKey) => { %>
+                                                <tr>
+                                                    <td class="fw-semibold"><%= typeLabels[typeKey] %></td>
+                                                    <% statusKeys.forEach((statusKey) => { %>
+                                                        <% const statusValue = summaryStatus && summaryStatus[typeKey] ? summaryStatus[typeKey][statusKey] : 0; %>
+                                                        <td class="text-end"><%= formatCurrency(statusValue) %></td>
+                                                    <% }) %>
+                                                </tr>
+                                            <% }) %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="bg-light rounded-3 p-3 mt-auto">
+                                    <div class="d-flex flex-column gap-2 small">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Pagamentos liquidados</span>
+                                            <span class="fw-semibold text-success"><%= formatCurrency(summaryTotals.paid) %></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Pendências</span>
+                                            <span class="fw-semibold text-primary"><%= formatCurrency(summaryTotals.pending) %></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Atrasos</span>
+                                            <span class="fw-semibold text-warning"><%= formatCurrency(summaryTotals.overdue) %></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
                     <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
@@ -339,7 +580,17 @@
                         <% entries.forEach(entry => { %>
                             <tr>
                                 <td><%= entry.id %></td>
-                                <td><%= entry.description %></td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-semibold"><%= entry.description %></span>
+                                        <% if (entry.attachments && entry.attachments.length) { %>
+                                            <span class="text-muted small">
+                                                <i class="bi bi-paperclip me-1" aria-hidden="true"></i>
+                                                <%= entry.attachments.length %> anexo<%= entry.attachments.length > 1 ? 's' : '' %>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </td>
                                 <td>
                                     <% if (entry.type === 'payable') { %>
                                         <span class="badge text-bg-danger">Pagar</span>
@@ -383,6 +634,7 @@
                                             <form
                                                 action="/finance/update/<%= entry.id %>?_method=PUT"
                                                 method="POST"
+                                                enctype="multipart/form-data"
                                                 class="modal-content"
                                             >
                                                 <div class="modal-header">
@@ -469,6 +721,48 @@
                                                             placeholder="Ex.: mensal, trimestral"
                                                         />
                                                     </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Anexos cadastrados</label>
+                                                        <% if (entry.attachments && entry.attachments.length) { %>
+                                                            <ul class="list-group list-group-flush rounded shadow-sm">
+                                                                <% entry.attachments.forEach((attachment) => { %>
+                                                                    <li class="list-group-item d-flex align-items-center justify-content-between gap-3">
+                                                                        <div class="d-flex align-items-center gap-2 text-truncate">
+                                                                            <i class="bi bi-paperclip text-primary" aria-hidden="true"></i>
+                                                                            <span class="text-truncate" title="<%= attachment.fileName %>"><%= attachment.fileName %></span>
+                                                                        </div>
+                                                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2 text-sm-end">
+                                                                            <span class="text-muted small"><%= Math.max(1, Math.round((attachment.size || 0) / 1024)) %> KB</span>
+                                                                            <a
+                                                                                class="btn btn-outline-primary btn-sm"
+                                                                                href="/finance/attachments/<%= attachment.id %>/download"
+                                                                            >
+                                                                                <i class="bi bi-download me-1" aria-hidden="true"></i>Baixar
+                                                                            </a>
+                                                                        </div>
+                                                                    </li>
+                                                                <% }); %>
+                                                            </ul>
+                                                        <% } else { %>
+                                                            <p class="text-muted small mb-0">Nenhum anexo disponível para este lançamento.</p>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label" for="entry-attachments-<%= entry.id %>">
+                                                            Adicionar novos anexos
+                                                        </label>
+                                                        <input
+                                                            type="file"
+                                                            class="form-control"
+                                                            id="entry-attachments-<%= entry.id %>"
+                                                            name="attachments"
+                                                            multiple
+                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                                                        />
+                                                        <div class="form-text">
+                                                            Anexe arquivos relevantes (até 10MB por arquivo).
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div class="modal-footer">
                                                     <button
@@ -495,7 +789,7 @@
         <div class="card card-soft responsive-panel">
             <h3 class="fw-semibold mb-2">Novo lançamento</h3>
             <p class="text-muted mb-4">Cadastre receitas ou despesas com recorrência opcional e acompanhe tudo no painel.</p>
-            <form action="/finance/create" method="POST" class="row g-3 responsive-filter-grid">
+            <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid">
                 <div class="col-md-5">
                     <label class="form-label">Descrição</label>
                     <input
@@ -548,6 +842,20 @@
                         placeholder="Ex.: mensal"
                     />
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="new-entry-attachments">Anexar documentos</label>
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="new-entry-attachments"
+                        name="attachments"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                    />
+                    <div class="form-text">
+                        Upload seguro com limite de 10MB por arquivo. Tipos aceitos: PDF, imagens e documentos do Office.
+                    </div>
+                </div>
                 <div class="col-md-12">
                     <div class="responsive-form-actions">
                         <button type="reset" class="btn btn-outline-secondary">Limpar</button>
@@ -559,39 +867,60 @@
     </div>
 </div>
 
+<script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    referrerpolicy="no-referrer"
+    defer
+></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const exportLinks = document.querySelectorAll('[data-export-target]');
-        if (!exportLinks.length) {
-            return;
-        }
+    const rawMonthlySummary = <%- JSON.stringify(summaryMonthly) %>;
+    const monthlySummaryData = Array.isArray(rawMonthlySummary) ? rawMonthlySummary : [];
+    const chartCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
 
-        const buildFiltersQuery = () => {
+    document.addEventListener('DOMContentLoaded', () => {
+        const filterForms = document.querySelectorAll('[data-filter-form]');
+        const exportLinks = document.querySelectorAll('[data-export-target]');
+
+        const buildFiltersQuery = (scope) => {
             if (typeof URLSearchParams === 'undefined') {
                 return window.location.search ? window.location.search.replace(/^\?/, '') : '';
             }
 
             const params = new URLSearchParams(window.location.search || '');
-            const filterForms = document.querySelectorAll('[data-filter-form]');
+            const forms = scope ? [scope] : Array.from(document.querySelectorAll('[data-filter-form]'));
 
-            filterForms.forEach((form) => {
+            forms.filter(Boolean).forEach((form) => {
                 const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
                 fields.forEach((field) => {
-                    const { name } = field;
-                    if (!name) {
+                    if (!field || !field.name) {
                         return;
                     }
 
                     const rawValue = typeof field.value === 'string' ? field.value.trim() : field.value;
                     if (rawValue) {
-                        params.set(name, rawValue);
+                        params.set(field.name, rawValue);
                     } else {
-                        params.delete(name);
+                        params.delete(field.name);
                     }
                 });
             });
 
             return params.toString();
+        };
+
+        const submitFormWithFilters = (form) => {
+            if (!form) {
+                return;
+            }
+
+            const action = form.getAttribute('action') || window.location.pathname || '/finance';
+            const queryString = buildFiltersQuery(form);
+            const finalUrl = queryString ? `${action}?${queryString}` : action;
+
+            window.location.assign(finalUrl);
         };
 
         const applyQueryToLink = (link) => {
@@ -605,18 +934,186 @@
             link.setAttribute('href', finalUrl);
         };
 
-        exportLinks.forEach((link) => {
-            applyQueryToLink(link);
+        const refreshExportLinks = () => {
+            if (!exportLinks.length) {
+                return;
+            }
 
-            link.addEventListener('focus', () => applyQueryToLink(link));
-            link.addEventListener('mouseenter', () => applyQueryToLink(link));
-            link.addEventListener('click', () => applyQueryToLink(link));
-            link.addEventListener('auxclick', (event) => {
-                if (event.button === 1) {
-                    applyQueryToLink(link);
+            exportLinks.forEach((link) => {
+                applyQueryToLink(link);
+
+                if (!link.__financeExportListenersBound) {
+                    link.addEventListener('focus', () => applyQueryToLink(link));
+                    link.addEventListener('mouseenter', () => applyQueryToLink(link));
+                    link.addEventListener('click', () => applyQueryToLink(link));
+                    link.addEventListener('auxclick', (event) => {
+                        if (event.button === 1) {
+                            applyQueryToLink(link);
+                        }
+                    });
+                    link.__financeExportListenersBound = true;
                 }
             });
+        };
+
+        filterForms.forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitFormWithFilters(form);
+            });
+
+            const clearButton = form.querySelector('[data-filter-clear]');
+            if (clearButton) {
+                clearButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    form.reset();
+                    submitFormWithFilters(form);
+                });
+            }
+
+            const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+            fields.forEach((field) => {
+                if (!field) {
+                    return;
+                }
+
+                const updateExportTargets = () => refreshExportLinks();
+                field.addEventListener('input', updateExportTargets);
+                field.addEventListener('change', () => {
+                    updateExportTargets();
+
+                    if (field.dataset.autoSubmit === 'true') {
+                        submitFormWithFilters(form);
+                    }
+                });
+            });
         });
+
+        refreshExportLinks();
+
+        const chartElement = document.getElementById('financePerformanceChart');
+
+        const formatChartMonthLabel = (value) => {
+            if (!value) {
+                return '';
+            }
+
+            const safeValue = String(value);
+            const isoDate = `${safeValue}-01T00:00:00`;
+            const parsedDate = new Date(isoDate);
+
+            if (Number.isFinite(parsedDate.getTime())) {
+                return parsedDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+            }
+
+            const parts = safeValue.split('-');
+            if (parts.length === 2) {
+                return `${parts[1]}/${parts[0]}`;
+            }
+
+            return safeValue;
+        };
+
+        const renderFinanceChart = () => {
+            if (!chartElement || typeof window.Chart === 'undefined') {
+                return false;
+            }
+
+            const context = chartElement.getContext('2d');
+            if (!context) {
+                return false;
+            }
+
+            const labels = monthlySummaryData.map((item) => formatChartMonthLabel(item.month));
+            const receivableData = monthlySummaryData.map((item) => {
+                const value = Number.parseFloat(item?.receivable ?? 0);
+                return Number.isFinite(value) ? value : 0;
+            });
+            const payableData = monthlySummaryData.map((item) => {
+                const value = Number.parseFloat(item?.payable ?? 0);
+                return Number.isFinite(value) ? value : 0;
+            });
+
+            if (chartElement.__financeChartInstance) {
+                chartElement.__financeChartInstance.destroy();
+            }
+
+            chartElement.__financeChartInstance = new window.Chart(context, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'A receber',
+                            data: receivableData,
+                            borderColor: '#198754',
+                            backgroundColor: 'rgba(25, 135, 84, 0.15)',
+                            tension: 0.35,
+                            fill: true,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#198754'
+                        },
+                        {
+                            label: 'A pagar',
+                            data: payableData,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.15)',
+                            tension: 0.35,
+                            fill: true,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#dc3545'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const value = Number.isFinite(context.parsed?.y) ? context.parsed.y : 0;
+                                    return `${context.dataset.label}: ${chartCurrencyFormatter.format(value)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 0,
+                                minRotation: 0
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (value) => {
+                                    const numeric = Number(value);
+                                    return chartCurrencyFormatter.format(Number.isFinite(numeric) ? numeric : 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            return true;
+        };
+
+        if (chartElement && monthlySummaryData.length) {
+            const chartRendered = renderFinanceChart();
+            if (!chartRendered) {
+                window.addEventListener('load', renderFinanceChart, { once: true });
+            }
+        }
     });
 </script>
 

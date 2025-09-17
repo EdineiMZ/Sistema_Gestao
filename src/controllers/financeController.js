@@ -2,11 +2,18 @@ const { Op } = require('sequelize');
 const { FinanceEntry } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 
-const { utils: reportingUtils } = financeReportingService;
+const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
+const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
+
+const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
+    value: interval.value,
+    label: interval.label
+}));
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -57,6 +64,15 @@ const formatPeriodLabel = (filters = {}) => {
     return 'Todo o período';
 };
 
+const normalizeFilterValue = (value) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed ? trimmed.toLowerCase() : null;
+};
+
 const buildFiltersFromQuery = (query = {}) => {
     const filters = {};
 
@@ -68,20 +84,52 @@ const buildFiltersFromQuery = (query = {}) => {
         filters.endDate = query.endDate;
     }
 
+    const typeFilter = normalizeFilterValue(query.type);
+    if (typeFilter && FINANCE_TYPES.includes(typeFilter)) {
+        filters.type = typeFilter;
+    }
+
+    const statusFilter = normalizeFilterValue(query.status);
+    if (statusFilter && FINANCE_STATUSES.includes(statusFilter)) {
+        filters.status = statusFilter;
+    }
+
     return filters;
 };
 
 const buildEntriesQueryOptions = (filters = {}) => {
     const options = {
+        include: [
+            {
+                model: FinanceAttachment,
+                as: 'attachments',
+                attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            }
+        ],
         order: [
             ['dueDate', 'ASC'],
-            ['id', 'ASC']
+            ['id', 'ASC'],
+            [{ model: FinanceAttachment, as: 'attachments' }, 'createdAt', 'DESC']
         ]
     };
 
+    const where = {};
+
     const dateFilter = reportingUtils.buildDateFilter(filters);
     if (dateFilter) {
-        options.where = { dueDate: dateFilter };
+        where.dueDate = dateFilter;
+    }
+
+    if (filters.type && FINANCE_TYPES.includes(filters.type)) {
+        where.type = filters.type;
+    }
+
+    if (filters.status && FINANCE_STATUSES.includes(filters.status)) {
+        where.status = filters.status;
+    }
+
+    if (Object.keys(where).length > 0) {
+        options.where = where;
     }
 
     return options;
@@ -206,6 +254,7 @@ module.exports = {
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
                 importPreview
+
             });
         } catch (err) {
             console.error(err);
@@ -399,19 +448,39 @@ module.exports = {
     },
 
     createFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
-            await FinanceEntry.create({
+
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.create({
                 description,
                 type,
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
                 recurringInterval: recurringInterval || null
-            });
+            }, { transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de criação:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao criar lançamento.');
             res.redirect('/finance');
@@ -419,12 +488,19 @@ module.exports = {
     },
 
     updateFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { id } = req.params;
             const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
 
-            const entry = await FinanceEntry.findByPk(id);
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.findByPk(id, { transaction });
+
             if (!entry) {
+                await transaction.rollback();
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
@@ -436,12 +512,27 @@ module.exports = {
             entry.paymentDate = paymentDate || null;
             entry.status = status;
             entry.recurring = (recurring === 'true');
-            entry.recurringInterval = recurringInterval || null;
+            entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
-            await entry.save();
+            await entry.save({ transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
+
             req.flash('success_msg', 'Lançamento atualizado!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de atualização:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao atualizar lançamento.');
             res.redirect('/finance');
@@ -456,7 +547,20 @@ module.exports = {
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
+
+            const attachments = await FinanceAttachment.findAll({
+                where: { financeEntryId: entry.id },
+                attributes: ['storageKey'],
+                raw: true
+            });
+
             await entry.destroy();
+
+            const storageKeys = attachments.map((item) => item.storageKey).filter(Boolean);
+            if (storageKeys.length) {
+                await removeStoredFiles(storageKeys);
+            }
+
             req.flash('success_msg', 'Lançamento removido com sucesso.');
             res.redirect('/finance');
         } catch (err) {
@@ -654,6 +758,42 @@ module.exports = {
                 res.status(500).json({ error: 'Erro ao exportar Excel.' });
             } else {
                 res.end();
+            }
+        }
+    },
+
+    downloadAttachment: async (req, res) => {
+        try {
+            const { attachmentId } = req.params;
+
+            const attachment = await FinanceAttachment.findByPk(attachmentId);
+            if (!attachment) {
+                req.flash('error_msg', 'Anexo não encontrado.');
+                return res.redirect('/finance');
+            }
+
+            let stream;
+            try {
+                stream = fileStorageService.createReadStream(attachment.storageKey);
+            } catch (error) {
+                console.error('Erro ao acessar anexo de finanças:', error);
+                req.flash('error_msg', 'Arquivo de anexo indisponível.');
+                return res.redirect('/finance');
+            }
+
+            res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+            if (Number.isFinite(Number(attachment.size))) {
+                res.setHeader('Content-Length', String(attachment.size));
+            }
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.fileName)}"`);
+            res.setHeader('Cache-Control', 'no-store');
+
+            await pipeline(stream, res);
+        } catch (err) {
+            console.error('Erro ao baixar anexo financeiro:', err);
+            if (!res.headersSent) {
+                req.flash('error_msg', 'Erro ao baixar anexo.');
+                res.redirect('/finance');
             }
         }
     }

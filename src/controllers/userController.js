@@ -48,6 +48,40 @@ const normalizeDate = (value) => {
     return Number.isNaN(date.getTime()) ? null : value;
 };
 
+const normalizeOptionalString = (value) => {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+};
+
+const toPlainUser = (userInstance) => {
+    if (!userInstance) {
+        return null;
+    }
+
+    let plain;
+    if (typeof userInstance.get === 'function') {
+        plain = userInstance.get({ plain: true });
+    } else if (typeof userInstance.toJSON === 'function') {
+        plain = userInstance.toJSON();
+    } else {
+        plain = { ...userInstance };
+    }
+
+    if (plain && plain.password) {
+        delete plain.password;
+    }
+
+    if (plain && plain.dateOfBirth instanceof Date) {
+        plain.dateOfBirth = plain.dateOfBirth.toISOString().split('T')[0];
+    }
+
+    return plain;
+};
+
 module.exports = {
     // Exibe a página de gerenciamento de usuários (somente ativos)
     manageUsers: async (req, res) => {
@@ -253,6 +287,100 @@ module.exports = {
             console.error(err);
             req.flash('error_msg', 'Erro ao excluir usuário.');
             return res.redirect('/users/manage');
+        }
+    },
+
+    showProfile: async (req, res) => {
+        try {
+            const sessionUser = req.user || req.session?.user;
+
+            if (!sessionUser) {
+                req.flash('error_msg', 'Sua sessão expirou. Faça login novamente.');
+                return res.redirect('/login');
+            }
+
+            const dbUser = await User.findByPk(sessionUser.id);
+
+            if (!dbUser) {
+                req.flash('error_msg', 'Usuário não encontrado.');
+                return res.redirect('/');
+            }
+
+            const profile = toPlainUser(dbUser) || {};
+
+            res.locals.profileUser = profile;
+
+            return res.render('users/profile', {
+                pageTitle: 'Meu perfil',
+                profile
+            });
+        } catch (err) {
+            console.error('Erro ao carregar perfil do usuário:', err);
+            req.flash('error_msg', 'Não foi possível carregar seu perfil no momento.');
+            return res.redirect('/');
+        }
+    },
+
+    updateProfile: async (req, res) => {
+        try {
+            const sessionUser = req.user || req.session?.user;
+
+            if (!sessionUser) {
+                req.flash('error_msg', 'Sua sessão expirou. Faça login novamente.');
+                return res.redirect('/login');
+            }
+
+            const user = await User.findByPk(sessionUser.id);
+
+            if (!user) {
+                req.flash('error_msg', 'Usuário não encontrado.');
+                return res.redirect('/');
+            }
+
+            const { name, phone, address, password, dateOfBirth } = req.body;
+
+            if (typeof name === 'string') {
+                user.name = name.trim();
+            }
+
+            if (typeof phone === 'string') {
+                user.phone = normalizeOptionalString(phone);
+            }
+
+            if (typeof address === 'string') {
+                user.address = normalizeOptionalString(address);
+            }
+
+            if (typeof dateOfBirth !== 'undefined') {
+                user.dateOfBirth = normalizeDate(dateOfBirth);
+            }
+
+            if (typeof password === 'string' && password.trim()) {
+                user.password = password.trim();
+            }
+
+            await user.save();
+
+            const plainUser = toPlainUser(user) || {};
+
+            if (req.session) {
+                const currentSessionUser = req.session.user || {};
+                req.session.user = { ...currentSessionUser, ...plainUser };
+            }
+
+            if (req.user) {
+                Object.assign(req.user, plainUser);
+            }
+
+            req.flash('success_msg', 'Perfil atualizado com sucesso!');
+            return res.redirect('/users/profile');
+        } catch (err) {
+            console.error('Erro ao atualizar perfil do usuário:', err);
+            const validationMessage = Array.isArray(err?.errors) && err.errors.length
+                ? err.errors[0].message
+                : 'Não foi possível atualizar seu perfil no momento.';
+            req.flash('error_msg', validationMessage);
+            return res.redirect('/users/profile');
         }
     },
 
