@@ -59,23 +59,12 @@ router.post(
     financeController.saveFinanceGoal
 );
 
-router.post(
-    '/budgets',
-    authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
-    audit('financeBudget.create', (req) => {
-        const categoryId = req.body?.financeCategoryId || 'unknown';
-        return `FinanceBudget:create:${categoryId}`;
-    }),
-    financeController.createBudget
-);
-
 router.put(
-    '/budgets/:id',
+    '/budgets/:id/thresholds',
     authMiddleware,
     permissionMiddleware(USER_ROLES.ADMIN),
-    audit('financeBudget.update', (req) => `FinanceBudget:update:${req.params.id}`),
-    financeController.updateBudget
+    audit('budget.updateThresholds', (req) => `Budget:${req.params.id}`),
+    financeController.updateBudgetThresholds
 );
 
 router.delete(

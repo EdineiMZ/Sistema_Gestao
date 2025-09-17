@@ -53,9 +53,9 @@ const normalizeThresholds = (value) => {
         if (!Number.isFinite(numeric)) {
             throw new Error(THRESHOLD_RANGE_ERROR);
         }
-
-        const rounded = Math.round(numeric * 100) / 100;
-        const normalized = Number(rounded.toFixed(2));
+            return Number(numeric.toFixed(2));
+        })
+        .filter((item) => item !== null && item > 0 && item <= 1);
 
         if (normalized <= 0 || normalized > 1) {
             throw new Error(THRESHOLD_RANGE_ERROR);
@@ -94,13 +94,7 @@ module.exports = (sequelize, DataTypes) => {
                 isArrayOfPositiveNumbers(value) {
                     const list = normalizeThresholds(value);
                     if (list.some((item) => item <= 0 || item > 1)) {
-                        throw new Error(THRESHOLD_RANGE_ERROR);
-                    }
-
-                    for (let index = 1; index < list.length; index += 1) {
-                        if (list[index] <= list[index - 1]) {
-                            throw new Error('Limiares devem estar em ordem crescente e sem duplicidades.');
-                        }
+                        throw new Error('Limiares devem estar entre 0 e 1.');n
                     }
                 }
             }
@@ -166,12 +160,12 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
-
-        if (models.BudgetThresholdStatus) {
-            Budget.hasMany(models.BudgetThresholdStatus, {
-                as: 'thresholdStatuses',
+        if (models.BudgetThresholdLog) {
+            Budget.hasMany(models.BudgetThresholdLog, {
+                as: 'thresholdLogs',
                 foreignKey: 'budgetId',
-                onDelete: 'CASCADE'
+                onDelete: 'CASCADE',
+                hooks: true
             });
         }
     };

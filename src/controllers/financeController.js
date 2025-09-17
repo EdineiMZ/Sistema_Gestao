@@ -1,11 +1,5 @@
 const { Op } = require('sequelize');
-const {
-    FinanceEntry,
-    FinanceAttachment,
-    FinanceGoal,
-    FinanceCategory,
-    sequelize
-} = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceGoal, Budget, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -14,8 +8,7 @@ const budgetService = require('../services/budgetService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const fileStorageService = require('../services/fileStorageService');
-const financeBudgetService = require('../services/financeBudgetService');
-const { validateThresholdList, BUDGET_THRESHOLD_ERROR } = require('../utils/financeBudgetUtils');
+const { getDefaultBudgetThresholds, normalizeThresholdList } = require('../config/budgets');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const {
@@ -1089,107 +1082,93 @@ module.exports = {
         }
     },
 
-    createBudget: async (req, res) => {
+    updateBudgetThresholds: async (req, res) => {
+        const expectsJson = wantsJsonResponse(req);
         try {
-            const filters = buildFiltersFromQuery(req.query);
-            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
-                includeCategoryConsumption: true,
-                entriesPromise
-            });
-
-            return res.status(201).json({
-                id: budget.id,
-                financeCategoryId: budget.financeCategoryId,
-                monthlyLimit: Number(budget.monthlyLimit),
-                thresholds: Array.isArray(budget.thresholds) ? budget.thresholds : [],
-                referenceMonth: budget.referenceMonth
-            });
-        } catch (error) {
-            if (error.name === BUDGET_THRESHOLD_ERROR || error.statusCode === 400) {
-                return res.status(400).json({ message: error.message });
-            }
-
-            console.error('Erro ao criar orçamento financeiro:', error);
-            return res.status(500).json({ message: 'Erro ao criar orçamento.' });
-        }
-    },
-
-    updateBudget: async (req, res) => {
-        try {
-            const userId = req.user?.id;
-            if (!userId) {
-                return res.status(401).json({ message: 'Usuário não autenticado.' });
-            }
-
-            const budgetId = Number(req.params.id);
+            const rawId = req.params?.id;
+            const budgetId = Number.parseInt(rawId, 10);
             if (!Number.isInteger(budgetId) || budgetId <= 0) {
-                return res.status(400).json({ message: 'Orçamento inválido.' });
-            }
-
-            const { financeCategoryId, monthlyLimit, thresholds, referenceMonth } = req.body || {};
-            const updates = {};
-
-            if (financeCategoryId !== undefined) {
-                const resolvedCategoryId = Number(financeCategoryId);
-                if (!Number.isInteger(resolvedCategoryId) || resolvedCategoryId <= 0) {
-                    return res.status(400).json({ message: 'Categoria financeira inválida.' });
+                const message = 'Identificador de orçamento inválido.';
+                if (expectsJson) {
+                    return res.status(400).json({ success: false, error: message });
                 }
-                updates.financeCategoryId = resolvedCategoryId;
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
             }
 
-            if (monthlyLimit !== undefined) {
-                const parsedLimit = normalizeAmountInput(monthlyLimit);
-                if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
-                    return res.status(400).json({ message: 'Limite mensal deve ser maior que zero.' });
+            if (!Budget || typeof Budget.findByPk !== 'function') {
+                const message = 'Recurso de orçamento indisponível.';
+                if (expectsJson) {
+                    return res.status(503).json({ success: false, error: message });
                 }
-                updates.monthlyLimit = parsedLimit;
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
             }
 
-            if (thresholds !== undefined) {
-                try {
-                    updates.thresholds = validateThresholdList(thresholds);
-                } catch (error) {
-                    if (error.name === BUDGET_THRESHOLD_ERROR || error.statusCode === 400) {
-                        return res.status(400).json({ message: error.message });
-                    }
-                    throw error;
-                }
-            }
-
-            if (referenceMonth !== undefined) {
-                updates.referenceMonth = referenceMonth;
-            }
-
-            if (!Object.keys(updates).length) {
-                return res.status(400).json({ message: 'Nenhum dado informado para atualização.' });
-            }
-
-            const budget = await financeBudgetService.updateBudget(budgetId, userId, updates);
-
+            const budget = await Budget.findByPk(budgetId);
             if (!budget) {
-                return res.status(404).json({ message: 'Orçamento não encontrado.' });
+                const message = 'Orçamento não encontrado.';
+                if (expectsJson) {
+                    return res.status(404).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
             }
 
-            return res.status(200).json({
-                id: budget.id,
-                financeCategoryId: budget.financeCategoryId,
-                monthlyLimit: Number(budget.monthlyLimit),
-                thresholds: Array.isArray(budget.thresholds) ? budget.thresholds : [],
-                referenceMonth: budget.referenceMonth
-            });
+            const input = req.body?.thresholds;
+            const hasCustomInput = !(
+                input === undefined
+                || input === null
+                || (typeof input === 'string' && input.trim() === '')
+            );
+
+            let normalizedThresholds = [];
+
+            if (hasCustomInput) {
+                if (Array.isArray(input)) {
+                    normalizedThresholds = Budget.normalizeThresholds(input);
+                } else if (typeof input === 'string') {
+                    normalizedThresholds = Budget.normalizeThresholds(normalizeThresholdList(input));
+                } else {
+                    normalizedThresholds = Budget.normalizeThresholds([input]);
+                }
+
+                if (!normalizedThresholds.length) {
+                    const message = 'Informe ao menos um limiar válido entre 0 e 1.';
+                    if (expectsJson) {
+                        return res.status(400).json({ success: false, error: message });
+                    }
+                    req.flash('error_msg', message);
+                    return res.redirect('/finance');
+                }
+            } else {
+                normalizedThresholds = getDefaultBudgetThresholds();
+            }
+
+            if (!normalizedThresholds.length) {
+                const message = 'Configuração de limiares indisponível. Defina valores entre 0 e 1.';
+                if (expectsJson) {
+                    return res.status(500).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            await budget.update({ thresholds: normalizedThresholds });
+
+            if (expectsJson) {
+                return res.json({ success: true, thresholds: normalizedThresholds });
+            }
+
+            req.flash('success_msg', 'Limiares de orçamento atualizados.');
+            return res.redirect('/finance');
         } catch (error) {
-            if (error.statusCode === 403) {
-                return res.status(403).json({ message: error.message });
+            console.error('Erro ao atualizar limiares de orçamento:', error);
+            if (expectsJson) {
+                return res.status(500).json({ success: false, error: 'Erro ao atualizar limiares de orçamento.' });
             }
-
-            if (error.name === BUDGET_THRESHOLD_ERROR || error.statusCode === 400) {
-                return res.status(400).json({ message: error.message });
-            }
-
-            console.error('Erro ao atualizar orçamento financeiro:', error);
-            return res.status(500).json({ message: 'Erro ao atualizar orçamento.' });
+            req.flash('error_msg', 'Erro ao atualizar limiares de orçamento.');
+            return res.redirect('/finance');
         }
     },
 

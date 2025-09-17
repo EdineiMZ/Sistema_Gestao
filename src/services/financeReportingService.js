@@ -1093,6 +1093,17 @@ const fetchEntries = async (filters = {}) => {
         where.status = filters.status;
     }
 
+    if (Number.isInteger(filters.financeCategoryId)) {
+        where.financeCategoryId = filters.financeCategoryId;
+    } else if (Array.isArray(filters.financeCategoryIds) && filters.financeCategoryIds.length) {
+        const ids = filters.financeCategoryIds
+            .map((value) => Number.parseInt(value, 10))
+            .filter((id) => Number.isInteger(id));
+        if (ids.length) {
+            where.financeCategoryId = { [Op.in]: Array.from(new Set(ids)) };
+        }
+    }
+
     return FinanceEntry.findAll({
         attributes: ['id', 'type', 'status', 'value', 'dueDate'],
         where,
