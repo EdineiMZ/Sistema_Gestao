@@ -18,14 +18,14 @@ const buildBudgetPayload = (overrides = {}) => ({
     ...overrides
 });
 
-test('normalizeThresholds arredonda e valida intervalo permitido', () => {
-    const normalized = Budget.normalizeThresholds([0.123, '0.456', 1]);
-    assert.deepEqual(normalized, [0.12, 0.46, 1]);
+test('normalizeThresholds arredonda valores positivos e mantém absolutos', () => {
+    const normalized = Budget.normalizeThresholds([0.123, '0.456', 1, 2500.789]);
+    assert.deepEqual(normalized, [0.12, 0.46, 1, 2500.79]);
 });
 
-test('normalizeThresholds rejeita valores fora do intervalo 0-1', () => {
-    assert.throws(() => Budget.normalizeThresholds([0, 1.2]), /0 e 1/);
-    assert.throws(() => Budget.normalizeThresholds(['abc']), /números entre 0 e 1/);
+test('normalizeThresholds usa padrões quando não há valores positivos', () => {
+    const normalized = Budget.normalizeThresholds(['abc', 0, -1]);
+    assert.deepEqual(normalized, Budget.getThresholdDefaults());
 });
 
 test('Budget valida ordenação crescente e ausência de duplicidades', async () => {

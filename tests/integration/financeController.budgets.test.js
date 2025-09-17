@@ -106,20 +106,20 @@ describe('FinanceController budgets endpoints', () => {
             });
 
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: 'Informe ao menos um limite de alerta entre 0 e 1.' });
+        expect(response.body).toEqual({ message: 'Informe ao menos um limite de alerta maior que zero.' });
     });
 
-    it('retorna 400 quando algum threshold está fora do intervalo permitido', async () => {
+    it('retorna 400 quando algum threshold não é positivo', async () => {
         const response = await request(app)
             .post('/finance/budgets')
             .send({
                 financeCategoryId: category.id,
                 monthlyLimit: '900.00',
-                thresholds: [0.5, 1.2]
+                thresholds: [0.5, 0]
             });
 
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: 'Cada limite de alerta deve estar entre 0 e 1.' });
+        expect(response.body).toEqual({ message: 'Cada limite de alerta deve ser um número maior que zero.' });
     });
 
     it('atualiza um orçamento existente com dados válidos', async () => {
@@ -160,9 +160,9 @@ describe('FinanceController budgets endpoints', () => {
 
         const response = await request(app)
             .put(`/finance/budgets/${initialBudget.id}`)
-            .send({ thresholds: [0.4, 1.5] });
+            .send({ thresholds: [0.4, -1.5] });
 
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: 'Cada limite de alerta deve estar entre 0 e 1.' });
+        expect(response.body).toEqual({ message: 'Cada limite de alerta deve ser um número maior que zero.' });
     });
 });
