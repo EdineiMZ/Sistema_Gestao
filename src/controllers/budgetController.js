@@ -28,25 +28,37 @@ const parsePositiveNumber = (value, errorMessage) => {
 };
 
 const parseThresholds = (value) => {
+    const emptyThresholdsMessage = 'Informe ao menos um limite de alerta entre 0 e 1.';
+    const invalidThresholdMessage = 'Cada limite de alerta deve estar entre 0 e 1.';
+
     if (value === undefined || value === null || value === '') {
-        return [];
+        throw new ValidationError(emptyThresholdsMessage);
     }
 
     const list = Array.isArray(value) ? value : String(value).split(',');
     const normalized = list
         .map((item) => {
-            if (item === undefined || item === null || item === '') {
+            if (item === undefined || item === null) {
                 return null;
             }
 
-            const numeric = Number(item);
-            if (!Number.isFinite(numeric) || numeric <= 0) {
-                throw new ValidationError('Cada limiar deve ser um número positivo.');
+            const stringItem = typeof item === 'string' ? item.trim() : item;
+            if (stringItem === '') {
+                return null;
+            }
+
+            const numeric = Number(stringItem);
+            if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
+                throw new ValidationError(invalidThresholdMessage);
             }
 
             return Number(numeric.toFixed(2));
         })
         .filter((item) => item !== null);
+
+    if (normalized.length === 0) {
+        throw new ValidationError(emptyThresholdsMessage);
+    }
 
     const uniqueValues = Array.from(new Set(normalized));
     uniqueValues.sort((a, b) => a - b);
