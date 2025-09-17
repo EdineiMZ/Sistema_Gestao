@@ -1,5 +1,22 @@
 'use strict';
 
+const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
+
+const FALLBACK_THRESHOLD_PRESET = Object.freeze([0.5, 0.75, 0.9]);
+
+const getConfiguredThresholdDefaults = () => {
+    const configured = getBudgetThresholdDefaults();
+    if (Array.isArray(configured) && configured.length) {
+        return configured.slice().sort((a, b) => a - b);
+    }
+
+    if (!isBudgetAlertEnabled()) {
+        return [];
+    }
+
+    return FALLBACK_THRESHOLD_PRESET.slice();
+};
+
 const normalizeMonthValue = (value) => {
     if (!value) {
         return null;
@@ -34,7 +51,7 @@ const normalizeMonthValue = (value) => {
 
 const normalizeThresholds = (value) => {
     if (value === undefined || value === null) {
-        return [];
+        return getConfiguredThresholdDefaults();
     }
 
     const rawList = Array.isArray(value) ? value : [value];
@@ -44,19 +61,31 @@ const normalizeThresholds = (value) => {
                 return null;
             }
 
-            const numeric = Number(item);
-            if (!Number.isFinite(numeric)) {
+            const numeric = Number.parseFloat(typeof item === 'string' ? item.replace(',', '.') : item);
+            if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
                 return null;
             }
 
-            return Number(numeric.toFixed(2));
+            return Number(numeric.toFixed(4));
         })
-        .filter((item) => item !== null && item > 0);
+        .filter((item) => item !== null);
+
+    if (!normalized.length) {
+        return getConfiguredThresholdDefaults();
+    }
 
     const uniqueValues = Array.from(new Set(normalized));
     uniqueValues.sort((a, b) => a - b);
 
     return uniqueValues;
+};
+
+const resolveThresholdValues = (value) => {
+    const thresholds = normalizeThresholds(value);
+    if (Array.isArray(thresholds) && thresholds.length) {
+        return thresholds;
+    }
+    return getConfiguredThresholdDefaults();
 };
 
 module.exports = (sequelize, DataTypes) => {
@@ -76,9 +105,9 @@ module.exports = (sequelize, DataTypes) => {
         thresholds: {
             type: DataTypes.JSON,
             allowNull: false,
-            defaultValue: [],
+            defaultValue: () => getConfiguredThresholdDefaults(),
             set(value) {
-                this.setDataValue('thresholds', normalizeThresholds(value));
+                this.setDataValue('thresholds', resolveThresholdValues(value));
             },
             get() {
                 const value = this.getDataValue('thresholds');
@@ -87,8 +116,8 @@ module.exports = (sequelize, DataTypes) => {
             validate: {
                 isArrayOfPositiveNumbers(value) {
                     const list = normalizeThresholds(value);
-                    if (list.some((item) => item <= 0)) {
-                        throw new Error('Limiares devem ser maiores que zero.');
+                    if (list.some((item) => item <= 0 || item > 1)) {
+                        throw new Error('Percentuais de alerta devem estar entre 0 e 1 (ex.: 0.75).');
                     }
                 }
             }
@@ -135,14 +164,13 @@ module.exports = (sequelize, DataTypes) => {
             budget.referenceMonth = normalizedMonth;
         }
 
-        if (!budget.thresholds || !Array.isArray(budget.thresholds) || budget.thresholds.length === 0) {
-            budget.thresholds = [];
-        } else {
-            budget.thresholds = normalizeThresholds(budget.thresholds);
-        }
+        const normalizedThresholds = resolveThresholdValues(budget.thresholds);
+        budget.thresholds = normalizedThresholds;
     });
 
     Budget.normalizeThresholds = normalizeThresholds;
+    Budget.getThresholdDefaults = getConfiguredThresholdDefaults;
+    Budget.resolveThresholdValues = resolveThresholdValues;
 
     Budget.associate = (models) => {
         Budget.belongsTo(models.User, {

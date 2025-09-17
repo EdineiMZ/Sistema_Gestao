@@ -67,6 +67,14 @@ router.delete(
     financeController.deleteFinanceGoal
 );
 
+router.put(
+    '/budgets/:id/thresholds',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeBudget.updateThresholds', (req) => `Budget:${req.params.id}`),
+    financeController.updateBudgetThresholds
+);
+
 router.get(
     '/export/pdf',
     authMiddleware,
