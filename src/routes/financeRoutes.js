@@ -4,11 +4,26 @@ const financeController = require('../controllers/financeController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
+const financeImportUpload = require('../middlewares/financeImportUpload');
 const { USER_ROLES } = require('../constants/roles');
 const { uploadAttachments } = require('../middlewares/financeAttachmentUpload');
 
 // Apenas administradores podem gerenciar finanças
 router.get('/', authMiddleware, permissionMiddleware(USER_ROLES.ADMIN), financeController.listFinanceEntries);
+router.post(
+    '/import/preview',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    financeImportUpload.single('importFile'),
+    financeController.previewFinanceImport
+);
+router.post(
+    '/import/commit',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeEntry.import', (req) => req.importAuditResource || 'FinanceImport'),
+    financeController.commitFinanceImport
+);
 router.post(
     '/create',
     authMiddleware,

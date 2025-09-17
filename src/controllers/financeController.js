@@ -1,10 +1,11 @@
-const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
+const { Op } = require('sequelize');
+const { FinanceEntry } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
-const fileStorageService = require('../services/fileStorageService');
+const financeImportService = require('../services/financeImportService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
@@ -140,53 +141,94 @@ const createSummaryPromise = (entriesPromise, filters) => {
     );
 };
 
-const toArray = (value) => (Array.isArray(value) ? value : []);
-
-const removeStoredFiles = async (storageKeys = []) => {
-    await Promise.all(storageKeys.map(async (storageKey) => {
-        try {
-            await fileStorageService.deleteStoredFile(storageKey);
-        } catch (storageError) {
-            console.error('Erro ao remover arquivo armazenado:', storageError);
-        }
-    }));
+const wantsJsonResponse = (req) => {
+    const acceptHeader = req.headers?.accept || '';
+    return acceptHeader.includes('application/json');
 };
 
-const persistAttachments = async (entryId, files, transaction) => {
-    const storedKeys = [];
-
-    const attachmentFiles = toArray(files).filter((file) => file && Buffer.isBuffer(file.buffer) && file.size > 0);
-    if (!attachmentFiles.length) {
-        return storedKeys;
+const markConflict = (entry, reason, extra = {}) => {
+    if (!entry) {
+        return;
     }
+    entry.conflict = true;
+    if (!entry.conflictReasons.includes(reason)) {
+        entry.conflictReasons.push(reason);
+    }
+    if (extra.existingEntryId) {
+        entry.existingEntryId = extra.existingEntryId;
+    }
+};
 
-    for (const file of attachmentFiles) {
-        const { storageKey, checksum, sanitizedFileName } = await fileStorageService.saveBuffer({
-            buffer: file.buffer,
-            originalName: file.originalname
+const buildImportPreview = async (parsedEntries = []) => {
+    const previewEntries = parsedEntries.map((entry, index) => ({
+        id: index,
+        description: entry.description,
+        type: entry.type,
+        value: entry.value,
+        dueDate: entry.dueDate,
+        paymentDate: entry.paymentDate || '',
+        status: entry.status || 'pending',
+        metadata: entry.metadata || {},
+        hash: financeImportService.createEntryHash(entry),
+        conflict: false,
+        conflictReasons: [],
+        existingEntryId: null,
+        include: true
+    }));
+
+    const internalHashMap = new Map();
+    previewEntries.forEach((entry) => {
+        const existing = internalHashMap.get(entry.hash);
+        if (existing) {
+            markConflict(existing, 'Duplicado no arquivo importado.');
+            markConflict(entry, 'Duplicado no arquivo importado.');
+        } else {
+            internalHashMap.set(entry.hash, entry);
+        }
+    });
+
+    const dueDates = [...new Set(previewEntries.map((item) => item.dueDate))];
+    if (dueDates.length) {
+        const existingEntries = await FinanceEntry.findAll({
+            where: { dueDate: { [Op.in]: dueDates } },
+            attributes: ['id', 'description', 'value', 'dueDate']
         });
 
-        try {
-            await FinanceAttachment.create({
-                financeEntryId: entryId,
-                fileName: sanitizedFileName,
-                mimeType: file.mimetype,
-                size: file.size,
-                checksum,
-                storageKey
-            }, { transaction });
-            storedKeys.push(storageKey);
-        } catch (error) {
-            try {
-                await fileStorageService.deleteStoredFile(storageKey);
-            } catch (storageError) {
-                console.error('Erro ao remover arquivo após falha ao criar anexo:', storageError);
+        const existingHashMap = new Map();
+        existingEntries.forEach((dbEntry) => {
+            const plain = dbEntry.get({ plain: true });
+            const hash = financeImportService.createEntryHash(plain);
+            if (!existingHashMap.has(hash)) {
+                existingHashMap.set(hash, plain);
             }
-            throw error;
-        }
+        });
+
+        previewEntries.forEach((entry) => {
+            if (existingHashMap.has(entry.hash)) {
+                const matched = existingHashMap.get(entry.hash);
+                markConflict(entry, `Conflito com lançamento existente #${matched.id}.`, {
+                    existingEntryId: matched.id
+                });
+            }
+        });
     }
 
-    return storedKeys;
+    let conflictCount = 0;
+    previewEntries.forEach((entry) => {
+        if (entry.conflict) {
+            conflictCount += 1;
+            entry.include = false;
+        }
+    });
+
+    return {
+        entries: previewEntries,
+        totals: {
+            total: previewEntries.length,
+            new: previewEntries.length - conflictCount,
+            conflicting: conflictCount
+        }
+    };
 };
 
 module.exports = {
@@ -198,6 +240,12 @@ module.exports = {
 
             const [entries, summary] = await Promise.all([entriesPromise, summaryPromise]);
 
+            const importPreview = req.session?.financeImportPreview || null;
+            if (importPreview) {
+                res.locals.importPreview = importPreview;
+                req.session.financeImportPreview = null;
+            }
+
             res.render('finance/manageFinance', {
                 entries,
                 filters,
@@ -205,12 +253,197 @@ module.exports = {
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
-                recurringIntervalOptions
+                importPreview
+
             });
         } catch (err) {
             console.error(err);
             req.flash('error_msg', 'Erro ao listar finanças.');
             res.redirect('/');
+        }
+    },
+
+    previewFinanceImport: async (req, res) => {
+        try {
+            if (!req.file) {
+                throw new Error('Selecione um arquivo CSV ou OFX para importar.');
+            }
+
+            const parseResult = financeImportService.parseFinanceFile(req.file.buffer, {
+                filename: req.file.originalname,
+                mimetype: req.file.mimetype
+            });
+
+            if (!parseResult.entries.length) {
+                throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
+            }
+
+            const preview = await buildImportPreview(parseResult.entries);
+            const payload = {
+                fileName: req.file.originalname,
+                uploadedAt: new Date().toISOString(),
+                warnings: parseResult.warnings || [],
+                ...preview
+            };
+
+            if (wantsJsonResponse(req)) {
+                return res.json({ ok: true, preview: payload });
+            }
+
+            req.session.financeImportPreview = payload;
+            req.flash('success_msg', 'Importação analisada. Revise os lançamentos antes de concluir.');
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao pré-processar importação financeira:', error);
+            const message = error.message || 'Não foi possível processar o arquivo.';
+            if (wantsJsonResponse(req)) {
+                return res.status(400).json({ ok: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
+        }
+    },
+
+    commitFinanceImport: async (req, res) => {
+        try {
+            const rawEntries = req.body.entries;
+            if (!rawEntries) {
+                throw new Error('Nenhum lançamento recebido para importação.');
+            }
+
+            const entriesArray = Array.isArray(rawEntries)
+                ? rawEntries
+                : Object.values(rawEntries);
+
+            if (!entriesArray.length) {
+                throw new Error('Nenhum lançamento selecionado para importação.');
+            }
+
+            const preparedEntries = [];
+            const skippedEntries = [];
+            const invalidEntries = [];
+
+            entriesArray.forEach((entry) => {
+                const includeFlag = entry.include ?? entry.selected ?? entry.import ?? entry.shouldImport;
+                const shouldImport = includeFlag === true
+                    || includeFlag === 'true'
+                    || includeFlag === '1'
+                    || includeFlag === 'on';
+
+                if (!shouldImport) {
+                    skippedEntries.push(entry);
+                    return;
+                }
+
+                try {
+                    const prepared = financeImportService.prepareEntryForPersistence(entry);
+                    preparedEntries.push(prepared);
+                } catch (error) {
+                    invalidEntries.push({ entry, message: error.message });
+                }
+            });
+
+            if (!preparedEntries.length) {
+                const baseMessage = invalidEntries.length
+                    ? 'Nenhum lançamento válido para importar. Verifique os dados informados.'
+                    : 'Selecione ao menos um lançamento para importar.';
+                throw new Error(baseMessage);
+            }
+
+            const dueDates = [...new Set(preparedEntries.map((entry) => entry.dueDate))];
+            let existingEntries = [];
+            if (dueDates.length) {
+                existingEntries = await FinanceEntry.findAll({
+                    where: { dueDate: { [Op.in]: dueDates } },
+                    attributes: ['id', 'description', 'value', 'dueDate']
+                });
+            }
+
+            const existingHashes = new Map();
+            existingEntries.forEach((entry) => {
+                const plain = entry.get({ plain: true });
+                const hash = financeImportService.createEntryHash(plain);
+                if (!existingHashes.has(hash)) {
+                    existingHashes.set(hash, plain);
+                }
+            });
+
+            const uniqueHashes = new Set();
+            const finalEntries = [];
+            const duplicateEntries = [];
+
+            preparedEntries.forEach((entry) => {
+                if (uniqueHashes.has(entry.hash)) {
+                    duplicateEntries.push({ entry, reason: 'Duplicado no lote importado.' });
+                    return;
+                }
+                if (existingHashes.has(entry.hash)) {
+                    const existing = existingHashes.get(entry.hash);
+                    duplicateEntries.push({ entry, reason: `Já existe lançamento #${existing.id} com os mesmos dados.` });
+                    return;
+                }
+                uniqueHashes.add(entry.hash);
+                finalEntries.push(entry);
+            });
+
+            let createdRecords = [];
+            if (finalEntries.length) {
+                const payload = finalEntries.map(({ hash, ...fields }) => fields);
+                const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
+                createdRecords = Array.isArray(result) ? result : [];
+            }
+
+            const summary = {
+                created: createdRecords.length,
+                duplicates: duplicateEntries.length,
+                invalid: invalidEntries.length,
+                skipped: skippedEntries.length,
+                totalReceived: entriesArray.length
+            };
+
+            req.importAuditResource = `FinanceImport:created=${summary.created}:duplicates=${summary.duplicates}`;
+
+            const parts = [];
+            parts.push(`${summary.created} lançamento(s) importado(s).`);
+            if (summary.duplicates) {
+                parts.push(`${summary.duplicates} duplicado(s) ignorado(s).`);
+            }
+            if (summary.invalid) {
+                parts.push(`${summary.invalid} registro(s) inválido(s).`);
+            }
+            if (summary.skipped) {
+                parts.push(`${summary.skipped} registro(s) não selecionado(s).`);
+            }
+
+            const message = parts.join(' ').trim();
+
+            req.session.financeImportPreview = null;
+
+            if (wantsJsonResponse(req)) {
+                const statusCode = summary.created ? 201 : 400;
+                return res.status(statusCode).json({
+                    ok: Boolean(summary.created),
+                    message,
+                    summary,
+                    createdIds: createdRecords.map((record) => record.id).filter((id) => id !== undefined && id !== null)
+                });
+            }
+
+            if (summary.created) {
+                req.flash('success_msg', `Importação concluída. ${message}`);
+            } else {
+                req.flash('error_msg', message || 'Nenhum lançamento foi importado.');
+            }
+
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao concluir importação financeira:', error);
+            const message = error.message || 'Erro ao concluir importação.';
+            if (wantsJsonResponse(req)) {
+                return res.status(400).json({ ok: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
         }
     },
 
