@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { Op } = require('sequelize');
 
-const { FinanceEntry } = require('../../database/models');
+const { FinanceEntry, FinanceCategory } = require('../../database/models');
 
 const stripDiacritics = (value) => {
     return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -211,9 +211,125 @@ const splitCsvLine = (line, delimiter) => {
     return values;
 };
 
+const fallbackSlugify = (value) => {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    const stringValue = sanitizeDescription(value);
+    if (!stringValue) {
+        return null;
+    }
+
+    const normalized = stripDiacritics(stringValue)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    return normalized || null;
+};
+
+const normalizeCategorySlug = (value) => {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    const source = sanitizeDescription(value);
+    if (!source) {
+        return null;
+    }
+
+    if (FinanceCategory && typeof FinanceCategory.normalizeSlug === 'function') {
+        try {
+            return FinanceCategory.normalizeSlug(source);
+        } catch (error) {
+            return fallbackSlugify(source);
+        }
+    }
+
+    return fallbackSlugify(source);
+};
+
+const extractCategorySlugFromInput = (input) => {
+    if (!input || typeof input !== 'object') {
+        return null;
+    }
+
+    const candidates = [
+        input.financeCategorySlug,
+        input.categorySlug,
+        input.categoryKey,
+        input.category,
+        input.financeCategory,
+        input.categoryName,
+        input.metadata?.originalCategory,
+        input.metadata?.category,
+        input.metadata?.categoryName
+    ];
+
+    for (const candidate of candidates) {
+        const slug = normalizeCategorySlug(candidate);
+        if (slug) {
+            return slug;
+        }
+    }
+
+    return null;
+};
+
+const buildCategoryResolver = async ({ ownerId, FinanceCategoryModel = FinanceCategory } = {}) => {
+    if (!FinanceCategoryModel || !ownerId) {
+        return {
+            resolveSlug: async () => null,
+            isAllowedId: () => false
+        };
+    }
+
+    const categories = await FinanceCategoryModel.scope('all').findAll({
+        where: { ownerId },
+        attributes: ['id', 'name', 'slug']
+    });
+
+    const slugMap = new Map();
+    const allowedIds = new Set();
+
+    categories.forEach((record) => {
+        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+        const slug = normalizeCategorySlug(plain.slug || plain.name);
+        if (slug && !slugMap.has(slug)) {
+            slugMap.set(slug, plain.id);
+        }
+        if (plain.id !== undefined && plain.id !== null) {
+            allowedIds.add(Number(plain.id));
+        }
+    });
+
+    return {
+        resolveSlug: async (slug) => {
+            if (!slug) {
+                return null;
+            }
+            return slugMap.get(slug) || null;
+        },
+        isAllowedId: (id) => {
+            if (id === undefined || id === null) {
+                return true;
+            }
+            const numeric = Number(id);
+            if (!Number.isInteger(numeric)) {
+                return false;
+            }
+            return allowedIds.has(numeric);
+        }
+    };
+};
+
 const aliasMap = {
     description: ['description', 'descricao', 'descrição', 'historico', 'histórico', 'memo', 'name', 'history'],
-    type: ['type', 'tipo', 'natureza', 'categoria', 'transactiontype', 'trntype'],
+    type: ['type', 'tipo', 'natureza', 'transactiontype', 'trntype'],
+    category: ['category', 'categoria', 'financecategory'],
     value: ['value', 'valor', 'amount', 'quantia', 'montante'],
     dueDate: ['duedate', 'data', 'date', 'datavencimento', 'vencimento', 'posteddate', 'dtposted'],
     paymentDate: ['paymentdate', 'datapagamento', 'payment_date', 'data_pagamento', 'dtpayment'],
@@ -282,8 +398,10 @@ const parseCsvContent = (content) => {
                 ? normalizeDate(values[headerIndexes.paymentDate], 'data de pagamento')
                 : null;
             const typeRaw = headerIndexes.type !== undefined ? values[headerIndexes.type] : null;
+            const categoryRaw = headerIndexes.category !== undefined ? values[headerIndexes.category] : null;
             const statusRaw = headerIndexes.status !== undefined ? values[headerIndexes.status] : null;
             const type = inferType(typeRaw, numericAmount);
+            const categorySlug = normalizeCategorySlug(categoryRaw);
 
             entries.push({
                 description,
@@ -296,8 +414,11 @@ const parseCsvContent = (content) => {
                     source: 'csv',
                     line: lineIndex + 1,
                     originalType: typeRaw || null,
-                    rawAmount: amountRaw
-                }
+                    rawAmount: amountRaw,
+                    originalCategory: sanitizeDescription(categoryRaw) || null,
+                    categorySlug
+                },
+                financeCategorySlug: categorySlug || null
             });
         } catch (error) {
             warnings.push(`Linha ${lineIndex + 1}: ${error.message}`);
@@ -357,6 +478,8 @@ const parseOfxContent = (content) => {
             const descriptionRaw = extractTagValue(block, 'MEMO') || extractTagValue(block, 'NAME') || `Transação ${index + 1}`;
             const statusRaw = extractTagValue(block, 'STATUS');
             const paymentDateRaw = extractTagValue(block, 'DTAVAIL') || null;
+            const categoryRaw = extractTagValue(block, 'CATEGORY');
+            const categorySlug = normalizeCategorySlug(categoryRaw);
 
             entries.push({
                 description: sanitizeDescription(descriptionRaw),
@@ -369,8 +492,11 @@ const parseOfxContent = (content) => {
                     source: 'ofx',
                     index: index + 1,
                     originalType: typeRaw || null,
-                    rawAmount: amountRaw
-                }
+                    rawAmount: amountRaw,
+                    originalCategory: sanitizeDescription(categoryRaw) || null,
+                    categorySlug
+                },
+                financeCategorySlug: categorySlug || null
             });
         } catch (error) {
             warnings.push(`Transação ${index + 1}: ${error.message}`);
@@ -396,7 +522,7 @@ const parseFinanceFile = (buffer, { filename = '', mimetype = '' } = {}) => {
     return parseCsvContent(content);
 };
 
-const prepareEntryForPersistence = (input) => {
+const prepareEntryForPersistence = async (input, options = {}) => {
     if (!input) {
         throw new Error('Entrada inválida.');
     }
@@ -411,6 +537,32 @@ const prepareEntryForPersistence = (input) => {
     const dueDate = normalizeDate(input.dueDate, 'data de vencimento');
     const paymentDate = input.paymentDate ? normalizeDate(input.paymentDate, 'data de pagamento') : null;
     const status = normalizeStatus(input.status);
+    const categoryResolver = options.categoryResolver;
+
+    const rawCategoryId = input.financeCategoryId ?? input.categoryId ?? null;
+    const categorySlug = extractCategorySlugFromInput(input);
+
+    let financeCategoryId = null;
+
+    if (rawCategoryId !== null && rawCategoryId !== undefined) {
+        const numericId = Number(rawCategoryId);
+        if (!Number.isInteger(numericId)) {
+            throw new Error('Categoria informada é inválida.');
+        }
+        if (!categoryResolver || typeof categoryResolver.isAllowedId !== 'function' || !categoryResolver.isAllowedId(numericId)) {
+            throw new Error('Categoria informada não pertence ao usuário autenticado.');
+        }
+        financeCategoryId = numericId;
+    } else if (categorySlug) {
+        if (!categoryResolver || typeof categoryResolver.resolveSlug !== 'function') {
+            throw new Error('Categoria informada não pôde ser validada.');
+        }
+        const resolvedId = await categoryResolver.resolveSlug(categorySlug);
+        if (!resolvedId) {
+            throw new Error('Categoria informada não encontrada para o usuário autenticado.');
+        }
+        financeCategoryId = resolvedId;
+    }
 
     const financeCategoryId = normalizeCategoryId(
         input.financeCategoryId
@@ -495,6 +647,7 @@ const buildInvalidPreviewEntry = (rawEntry, metadata, errorMessage) => {
                 ?? ''
         ),
         metadata,
+        financeCategorySlug: metadata?.categorySlug || null,
         hash: null,
         conflict: true,
         include: false,
@@ -502,16 +655,29 @@ const buildInvalidPreviewEntry = (rawEntry, metadata, errorMessage) => {
     };
 };
 
-const buildImportPreview = async (rawEntries = []) => {
+const createFinanceCategoryResolver = async (options = {}) => buildCategoryResolver(options);
+
+const buildImportPreview = async (rawEntries = [], options = {}) => {
     const entriesArray = Array.isArray(rawEntries) ? rawEntries : [];
 
-    const previewEntries = entriesArray.map((rawEntry) => {
+    let categoryResolver = options.categoryResolver || null;
+    if (!categoryResolver) {
+        categoryResolver = await buildCategoryResolver({
+            ownerId: options.ownerId,
+            FinanceCategoryModel: options.FinanceCategoryModel || FinanceCategory
+        });
+    }
+
+    const previewEntries = await Promise.all(entriesArray.map(async (rawEntry) => {
         const metadata = cloneMetadata(rawEntry?.metadata);
+        metadata.originalCategory = metadata.originalCategory || sanitizeDescription(rawEntry?.category || rawEntry?.financeCategory || rawEntry?.financeCategorySlug) || null;
+        metadata.categorySlug = metadata.categorySlug || extractCategorySlugFromInput(rawEntry);
 
         try {
-            const prepared = prepareEntryForPersistence(rawEntry);
+            const prepared = await prepareEntryForPersistence(rawEntry, { categoryResolver });
             return {
                 ...prepared,
+                financeCategorySlug: metadata.categorySlug || null,
                 metadata,
                 conflict: false,
                 include: true,
@@ -528,7 +694,7 @@ const buildImportPreview = async (rawEntries = []) => {
                 )
             };
         }
-    });
+    }));
 
     const validEntries = previewEntries.filter((entry) => entry.hash);
     const dueDates = [...new Set(validEntries.map((entry) => entry.dueDate).filter(Boolean))];
@@ -606,5 +772,6 @@ module.exports = {
     normalizeStatus,
     createEntryHash,
     prepareEntryForPersistence,
-    buildImportPreview
+    buildImportPreview,
+    createFinanceCategoryResolver
 };
