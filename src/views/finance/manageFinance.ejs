@@ -85,6 +85,34 @@
         ? alertsList
         : (Array.isArray(projectionAlerts) ? projectionAlerts : []);
 %>
+<% const categoriesInput = (typeof categories !== 'undefined' && Array.isArray(categories))
+    ? categories
+    : ((typeof locals !== 'undefined' && locals && Array.isArray(locals.categories))
+        ? locals.categories
+        : []);
+%>
+<% const categoriesSource = Array.isArray(categoriesInput) ? categoriesInput : []; %>
+<% const safeCategories = categoriesSource
+    .map((category) => {
+        if (!category || typeof category !== 'object') {
+            return null;
+        }
+
+        const rawId = Number.parseInt(category.id, 10);
+        if (!Number.isFinite(rawId) || rawId <= 0) {
+            return null;
+        }
+
+        const nameValue = category.name ? String(category.name).trim() : '';
+        const colorValue = category.color ? String(category.color).trim() : '#6c757d';
+
+        const safeName = nameValue || 'Sem categoria';
+        const safeColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorValue) ? colorValue : '#6c757d';
+
+        return { id: rawId, name: safeName, color: safeColor };
+    })
+    .filter((category) => category);
+%>
 <% const currentHighlightProjection =
     (typeof highlightProjection !== 'undefined' && highlightProjection)
         || (typeof projectionHighlight !== 'undefined' ? projectionHighlight : null);
@@ -394,6 +422,7 @@
                                     <tr>
                                         <th class="text-center">Importar</th>
                                         <th>Descrição</th>
+                                        <th>Categoria</th>
                                         <th class="text-center">Tipo</th>
                                         <th>Valor (R$)</th>
                                         <th>Vencimento</th>
@@ -428,6 +457,28 @@
                                                     value="<%= entry.description %>"
                                                     required
                                                 />
+                                            </td>
+                                            <td>
+                                                <% const importCategoryId = Number.parseInt(
+                                                    entry.categoryId ?? entry.financeCategoryId ?? '',
+                                                    10
+                                                ); %>
+                                                <select
+                                                    class="form-select form-select-sm"
+                                                    name="entries[<%= index %>][categoryId]"
+                                                    data-category-select
+                                                    data-category-id="<%= Number.isFinite(importCategoryId) ? importCategoryId : '' %>"
+                                                >
+                                                    <option value="" <%= Number.isFinite(importCategoryId) ? '' : 'selected' %>>Sem categoria</option>
+                                                    <% safeCategories.forEach(function(category) { %>
+                                                        <option
+                                                            value="<%= category.id %>"
+                                                            <%= importCategoryId === category.id ? 'selected' : '' %>
+                                                        >
+                                                            <%= category.name %>
+                                                        </option>
+                                                    <% }) %>
+                                                </select>
                                             </td>
                                             <td class="text-center">
                                                 <select class="form-select form-select-sm" name="entries[<%= index %>][type]" required>
@@ -819,6 +870,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Descrição</th>
+                            <th>Categoria</th>
                             <th>Tipo</th>
                             <th>Valor</th>
                             <th>Vencimento</th>
@@ -841,6 +893,26 @@
                                             </span>
                                         <% } %>
                                     </div>
+                                </td>
+                                <td>
+                                    <% const entryCategory = entry.category || {}; %>
+                                    <% const rawEntryCategoryId = Number.parseInt(entry.financeCategoryId || entryCategory.id || '', 10); %>
+                                    <% const entryCategoryId = Number.isFinite(rawEntryCategoryId) && rawEntryCategoryId > 0 ? rawEntryCategoryId : null; %>
+                                    <% const entryCategoryName = entryCategory && entryCategory.name ? String(entryCategory.name).trim() : 'Sem categoria'; %>
+                                    <% const entryCategoryColor = (entryCategory && entryCategory.color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(entryCategory.color)) ? entryCategory.color : '#6c757d'; %>
+                                    <% if (entryCategoryId) { %>
+                                        <span
+                                            class="badge rounded-pill text-white"
+                                            style="background-color: <%= entryCategoryColor %>;"
+                                            data-category-id="<%= entryCategoryId %>"
+                                        >
+                                            <%= entryCategoryName %>
+                                        </span>
+                                    <% } else { %>
+                                        <span class="badge bg-secondary-subtle text-secondary-emphasis" data-category-id="">
+                                            Sem categoria
+                                        </span>
+                                    <% } %>
                                 </td>
                                 <td>
                                     <% if (entry.type === 'payable') { %>
@@ -915,6 +987,26 @@
                                                         <select class="form-select" name="type" required>
                                                             <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
                                                             <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Categoria</label>
+                                                        <% const modalCategoryId = Number.parseInt(entry.financeCategoryId || (entry.category && entry.category.id) || '', 10); %>
+                                                        <select
+                                                            class="form-select"
+                                                            name="financeCategoryId"
+                                                            data-category-select
+                                                            data-category-id="<%= Number.isFinite(modalCategoryId) ? modalCategoryId : '' %>"
+                                                        >
+                                                            <option value="" <%= Number.isFinite(modalCategoryId) ? '' : 'selected' %>>Sem categoria</option>
+                                                            <% safeCategories.forEach(function(category) { %>
+                                                                <option
+                                                                    value="<%= category.id %>"
+                                                                    <%= modalCategoryId === category.id ? 'selected' : '' %>
+                                                                >
+                                                                    <%= category.name %>
+                                                                </option>
+                                                            <% }) %>
                                                         </select>
                                                     </div>
                                                     <div class="mb-3">
@@ -1059,6 +1151,20 @@
                         <option value="receivable">Receber</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label">Categoria</label>
+                    <select
+                        class="form-select"
+                        name="financeCategoryId"
+                        data-category-select
+                        data-category-id=""
+                    >
+                        <option value="" selected>Sem categoria</option>
+                        <% safeCategories.forEach(function(category) { %>
+                            <option value="<%= category.id %>"><%= category.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label">Valor (R$)</label>
                     <input
@@ -1136,6 +1242,16 @@
     document.addEventListener('DOMContentLoaded', () => {
         const filterForms = document.querySelectorAll('[data-filter-form]');
         const exportLinks = document.querySelectorAll('[data-export-target]');
+        const categorySelects = document.querySelectorAll('[data-category-select]');
+
+        const sanitizeCategoryId = (value) => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+
+            const normalized = String(value).trim();
+            return /^\d+$/.test(normalized) ? normalized : '';
+        };
 
         const buildFiltersQuery = (scope) => {
             if (typeof URLSearchParams === 'undefined') {
@@ -1241,6 +1357,23 @@
                 });
             });
         });
+
+        if (categorySelects.length) {
+            categorySelects.forEach((select) => {
+                const applySanitizedDataset = () => {
+                    const sanitized = sanitizeCategoryId(select.value);
+                    if (sanitized) {
+                        select.dataset.categoryId = sanitized;
+                    } else {
+                        delete select.dataset.categoryId;
+                    }
+                };
+
+                applySanitizedDataset();
+                select.addEventListener('change', applySanitizedDataset);
+                select.addEventListener('input', applySanitizedDataset);
+            });
+        }
 
         refreshExportLinks();
 

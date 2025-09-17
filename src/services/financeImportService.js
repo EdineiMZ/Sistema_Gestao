@@ -17,6 +17,24 @@ const sanitizeDescription = (value) => {
     return normalizeWhitespace(String(value));
 };
 
+const sanitizeCategoryName = (value) => {
+    const sanitized = normalizeWhitespace(String(value ?? ''));
+    return sanitized || 'Sem categoria';
+};
+
+const normalizeCategoryId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const parsed = Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+};
+
 const normalizeStatus = (value) => {
     const allowed = new Set(['pending', 'paid', 'overdue', 'cancelled']);
     if (!value) {
@@ -394,6 +412,17 @@ const prepareEntryForPersistence = (input) => {
     const paymentDate = input.paymentDate ? normalizeDate(input.paymentDate, 'data de pagamento') : null;
     const status = normalizeStatus(input.status);
 
+    const financeCategoryId = normalizeCategoryId(
+        input.financeCategoryId
+            ?? input.categoryId
+            ?? input.category?.id
+    );
+    const categoryName = sanitizeCategoryName(
+        input.categoryName
+            ?? input.category?.name
+            ?? ''
+    );
+
     return {
         description,
         type,
@@ -401,6 +430,8 @@ const prepareEntryForPersistence = (input) => {
         dueDate,
         paymentDate,
         status,
+        financeCategoryId,
+        categoryName,
         hash: createEntryHash({ description, value: Math.abs(numericAmount), dueDate })
     };
 };
@@ -453,6 +484,16 @@ const buildInvalidPreviewEntry = (rawEntry, metadata, errorMessage) => {
         dueDate: normalizedDueDate,
         paymentDate: normalizedPaymentDate,
         status: normalizeStatus(rawEntry?.status),
+        financeCategoryId: normalizeCategoryId(
+            rawEntry?.financeCategoryId
+                ?? rawEntry?.categoryId
+                ?? rawEntry?.category?.id
+        ),
+        categoryName: sanitizeCategoryName(
+            rawEntry?.categoryName
+                ?? rawEntry?.category?.name
+                ?? ''
+        ),
         metadata,
         hash: null,
         conflict: true,
@@ -474,10 +515,18 @@ const buildImportPreview = async (rawEntries = []) => {
                 metadata,
                 conflict: false,
                 include: true,
-                conflictReasons: []
+                conflictReasons: [],
+                categoryId: prepared.financeCategoryId
             };
         } catch (error) {
-            return buildInvalidPreviewEntry(rawEntry, metadata, error.message);
+            return {
+                ...buildInvalidPreviewEntry(rawEntry, metadata, error.message),
+                categoryId: normalizeCategoryId(
+                    rawEntry?.financeCategoryId
+                        ?? rawEntry?.categoryId
+                        ?? rawEntry?.category?.id
+                )
+            };
         }
     });
 

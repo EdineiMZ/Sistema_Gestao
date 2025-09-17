@@ -1,5 +1,11 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, FinanceGoal, sequelize } = require('../../database/models');
+const {
+    FinanceEntry,
+    FinanceAttachment,
+    FinanceGoal,
+    FinanceCategory,
+    sequelize
+} = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -133,6 +139,24 @@ const sanitizeText = (value) => {
     return String(value).replace(/\s+/g, ' ').trim();
 };
 
+const sanitizeCategoryName = (value) => {
+    const sanitized = sanitizeText(value);
+    return sanitized || 'Sem categoria';
+};
+
+const normalizeCategoryId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const number = Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(number) || number <= 0) {
+        return null;
+    }
+
+    return number;
+};
+
 const formatDateLabel = (value) => {
     if (!value) {
         return null;
@@ -200,8 +224,13 @@ const buildEntriesQueryOptions = (filters = {}) => {
                 model: FinanceAttachment,
                 as: 'attachments',
                 attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            },
+            FinanceCategory && {
+                model: FinanceCategory,
+                as: 'category',
+                attributes: ['id', 'name', 'color']
             }
-        ],
+        ].filter(Boolean),
         order: [
             ['dueDate', 'ASC'],
             ['id', 'ASC'],
@@ -479,7 +508,50 @@ module.exports = {
                 }
             })();
 
-            const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
+            const userId = req.user?.id || req.session?.user?.id || null;
+
+            const categoriesPromise = (async () => {
+                if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
+                    return [];
+                }
+
+                const where = {};
+                if (userId) {
+                    where[Op.or] = [{ ownerId: userId }, { ownerId: null }];
+                } else {
+                    where.ownerId = null;
+                }
+
+                try {
+                    const records = await FinanceCategory.findAll({
+                        where,
+                        order: [['name', 'ASC']]
+                    });
+                    return records.map((record) => {
+                        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+                        return {
+                            id: normalizeCategoryId(plain.id),
+                            name: sanitizeCategoryName(plain.name),
+                            color: (() => {
+                                const candidate = sanitizeText(plain.color);
+                                return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
+                            })()
+                        };
+                    }).filter((category) => Number.isFinite(category.id));
+                } catch (error) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error('Erro ao carregar categorias financeiras:', error);
+                    }
+                    return [];
+                }
+            })();
+
+            const [entries, summary, goals, categories] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                goalsPromise,
+                categoriesPromise
+            ]);
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -510,7 +582,8 @@ module.exports = {
                 currencyFormatter,
                 formatCurrency,
                 importPreview,
-                recurringIntervalOptions
+                recurringIntervalOptions,
+                categories
             });
         } catch (err) {
             console.error('Erro ao listar finanças (controller):', err);
@@ -541,6 +614,14 @@ module.exports = {
                 warnings: parseResult.warnings || [],
                 ...preview
             };
+
+            if (Array.isArray(payload.entries)) {
+                payload.entries = payload.entries.map((entry = {}) => ({
+                    ...entry,
+                    categoryId: normalizeCategoryId(entry.financeCategoryId ?? entry.categoryId),
+                    categoryName: sanitizeCategoryName(entry.categoryName)
+                }));
+            }
 
             if (wantsJsonResponse(req)) {
                 return res.json({ ok: true, preview: payload });
@@ -593,7 +674,10 @@ module.exports = {
 
                 try {
                     const prepared = financeImportService.prepareEntryForPersistence(entry);
-                    preparedEntries.push(prepared);
+                    preparedEntries.push({
+                        ...prepared,
+                        categoryId: normalizeCategoryId(prepared.financeCategoryId)
+                    });
                 } catch (error) {
                     invalidEntries.push({ entry, message: error.message });
                 }
@@ -644,7 +728,7 @@ module.exports = {
 
             let createdRecords = [];
             if (finalEntries.length) {
-                const payload = finalEntries.map(({ hash, ...fields }) => fields);
+                const payload = finalEntries.map(({ hash, categoryName, categoryId, ...fields }) => fields);
                 const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
                 createdRecords = Array.isArray(result) ? result : [];
             }
@@ -709,6 +793,9 @@ module.exports = {
 
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -717,6 +804,7 @@ module.exports = {
                 type,
                 value,
                 dueDate,
+                financeCategoryId,
                 recurring: (recurring === 'true'),
                 recurringInterval: normalizeRecurringInterval(recurringInterval)
             };
@@ -758,7 +846,20 @@ module.exports = {
 
         try {
             const { id } = req.params;
-            const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
+            const {
+                description,
+                type,
+                value,
+                dueDate,
+                paymentDate,
+                status,
+                recurring,
+                recurringInterval
+            } = req.body;
+
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -783,6 +884,7 @@ module.exports = {
             entry.dueDate = dueDate;
             entry.paymentDate = paymentDate || null;
             entry.status = status;
+            entry.financeCategoryId = financeCategoryId;
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
