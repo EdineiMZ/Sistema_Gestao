@@ -17,6 +17,58 @@ const {
 } = financeConstants;
 const { normalizeRecurringInterval } = reportingUtils;
 
+const wantsJsonResponse = (req) => {
+    if (!req || typeof req !== 'object') {
+        return false;
+    }
+
+    if (req.xhr) {
+        return true;
+    }
+
+    const getHeader = (name) => {
+        if (typeof req.get === 'function') {
+            const value = req.get(name);
+            if (value) {
+                return value;
+            }
+        }
+        const headers = req.headers || {};
+        const key = Object.keys(headers).find((header) => header.toLowerCase() === name.toLowerCase());
+        return key ? headers[key] : undefined;
+    };
+
+    const requestedWith = getHeader('X-Requested-With');
+    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
+        return true;
+    }
+
+    const acceptHeader = getHeader('Accept');
+    const checkAccept = (value) => {
+        if (typeof value === 'string') {
+            const normalized = value.toLowerCase();
+            return normalized.includes('application/json')
+                || normalized.includes('text/json')
+                || normalized.includes('+json');
+        }
+        if (Array.isArray(value)) {
+            return value.some((item) => typeof item === 'string' && checkAccept(item));
+        }
+        return false;
+    };
+
+    if (checkAccept(acceptHeader)) {
+        return true;
+    }
+
+    const contentType = getHeader('Content-Type');
+    if (typeof contentType === 'string' && contentType.toLowerCase().includes('application/json')) {
+        return true;
+    }
+
+    return false;
+};
+
 const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
     value: interval.value,
     label: interval.label
@@ -206,9 +258,24 @@ const buildEntriesQueryOptions = (filters = {}) => {
 };
 
 const createSummaryPromise = (entriesPromise, filters) => {
-    return entriesPromise.then(entries =>
-        financeReportingService.getFinanceSummary(filters, { entries })
-    );
+    return entriesPromise.then(async (entries) => {
+        try {
+            return await financeReportingService.getFinanceSummary(filters, { entries });
+        } catch (error) {
+            if (process.env.NODE_ENV !== 'test') {
+                console.error('Erro ao calcular resumo financeiro:', error);
+            }
+            const statusSummary = reportingUtils.buildStatusSummaryFromEntries(entries);
+            const monthlySummary = reportingUtils.buildMonthlySummaryFromEntries(entries);
+            const totals = reportingUtils.buildTotalsFromStatus(statusSummary);
+            return {
+                projections: [],
+                statusSummary,
+                monthlySummary,
+                totals
+            };
+        }
+    });
 };
 
 const parseMonthInput = (value) => {
@@ -416,13 +483,137 @@ const beginTransaction = async () => {
     return sequelizeInstance.transaction();
 };
 
+async function buildImportPreview(rawEntries = []) {
+    if (!Array.isArray(rawEntries) || rawEntries.length === 0) {
+        return {
+            entries: [],
+            totals: { total: 0, new: 0, conflicting: 0 },
+            invalidEntries: []
+        };
+    }
+
+    const normalizedEntries = [];
+    const invalidEntries = [];
+
+    rawEntries.forEach((entry, index) => {
+        try {
+            const prepared = financeImportService.prepareEntryForPersistence(entry);
+            normalizedEntries.push({
+                index,
+                prepared,
+                original: entry
+            });
+        } catch (error) {
+            invalidEntries.push({
+                entry,
+                index,
+                message: error?.message || 'Registro inválido.'
+            });
+        }
+    });
+
+    const dueDates = [...new Set(normalizedEntries.map((item) => item.prepared.dueDate))];
+    let existingEntries = [];
+    if (dueDates.length) {
+        existingEntries = await FinanceEntry.findAll({
+            where: { dueDate: { [Op.in]: dueDates } },
+            attributes: ['id', 'description', 'value', 'dueDate']
+        });
+    }
+
+    const existingHashes = new Map();
+    existingEntries.forEach((entry) => {
+        const plain = entry.get({ plain: true });
+        const hash = financeImportService.createEntryHash(plain);
+        if (!existingHashes.has(hash)) {
+            existingHashes.set(hash, plain);
+        }
+    });
+
+    const previewEntries = normalizedEntries.map(({ index, prepared, original }) => {
+        const conflictReasons = [];
+        const existing = existingHashes.get(prepared.hash);
+        if (existing) {
+            const reference = existing.id ? `#${existing.id}` : 'existente';
+            conflictReasons.push(`Já existe lançamento ${reference} com os mesmos dados.`);
+        }
+
+        return {
+            include: conflictReasons.length === 0,
+            conflict: conflictReasons.length > 0,
+            conflictReasons,
+            hash: prepared.hash,
+            description: prepared.description,
+            type: prepared.type,
+            value: prepared.value,
+            dueDate: prepared.dueDate,
+            paymentDate: prepared.paymentDate,
+            status: prepared.status,
+            metadata: original?.metadata || {},
+            originalIndex: index
+        };
+    });
+
+    const groupedByHash = new Map();
+    previewEntries.forEach((entry) => {
+        const list = groupedByHash.get(entry.hash) || [];
+        list.push(entry);
+        groupedByHash.set(entry.hash, list);
+    });
+
+    groupedByHash.forEach((list) => {
+        if (list.length > 1) {
+            list.forEach((entry) => {
+                if (!entry.conflictReasons.includes('Duplicado no arquivo importado.')) {
+                    entry.conflictReasons.push('Duplicado no arquivo importado.');
+                }
+                entry.conflict = true;
+                entry.include = false;
+            });
+        }
+    });
+
+    previewEntries.forEach((entry) => {
+        if (entry.conflictReasons.length) {
+            entry.conflict = true;
+            entry.include = false;
+        }
+    });
+
+    const totals = {
+        total: previewEntries.length,
+        new: previewEntries.filter((entry) => !entry.conflict).length,
+        conflicting: previewEntries.filter((entry) => entry.conflict).length
+    };
+
+    return {
+        entries: previewEntries,
+        totals,
+        invalidEntries
+    };
+}
+
 module.exports = {
     listFinanceEntries: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const goalsPromise = loadFinanceGoals();
+            const goalsPromise = (async () => {
+                if (typeof FinanceGoal?.findAll !== 'function') {
+                    return [];
+                }
+                try {
+                    return await FinanceGoal.findAll({
+                        order: [['month', 'ASC']]
+                    });
+                } catch (goalError) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error('Erro ao carregar metas financeiras:', goalError);
+                    }
+                    return [];
+                }
+            })();
 
             const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
 
@@ -433,7 +624,6 @@ module.exports = {
                 || null;
             const projectionAlerts = projections.filter((item) => item.needsAttention);
             const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
-            const goalSummary = summary.goalSummary || null;
 
             const importPreview = req.session?.financeImportPreview || null;
             if (importPreview) {
@@ -448,18 +638,18 @@ module.exports = {
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
-                projectionList: projections,
+                financeProjections: projections,
                 projectionAlerts,
-                highlightProjection: projectionHighlight,
+                projectionHighlight,
+                goalSummary: summary.goalSummary || null,
                 financeGoals,
-                goalSummary,
                 currencyFormatter,
                 formatCurrency,
                 importPreview,
                 recurringIntervalOptions
             });
         } catch (err) {
-            console.error(err);
+            console.error('Erro ao listar finanças (controller):', err);
             req.flash('error_msg', 'Erro ao listar finanças.');
             res.redirect('/');
         }
