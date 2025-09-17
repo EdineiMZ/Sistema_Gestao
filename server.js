@@ -3,6 +3,7 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
+const SequelizeStore = require('connect-session-sequelize')(session.Store);
 const flash = require('connect-flash');
 const methodOverride = require('method-override');
 const path = require('path');
@@ -49,7 +50,23 @@ const adminRoutes = require('./src/routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'segredo';
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
+if (!SESSION_SECRET) {
+    throw new Error('A variável de ambiente SESSION_SECRET é obrigatória para iniciar o servidor.');
+}
+
+const sessionStore = new SequelizeStore({
+    db: sequelize,
+    tableName: 'sessions',
+    checkExpirationInterval: 15 * 60 * 1000,
+    expiration: 7 * 24 * 60 * 60 * 1000
+});
+
+const sessionStoreSyncPromise = sessionStore.sync().catch((error) => {
+    console.error('Não foi possível inicializar a tabela de sessões:', error);
+    process.exit(1);
+});
 
 // Segurança
 app.use(
@@ -98,9 +115,17 @@ app.use(methodOverride('_method'));
 
 // Sessão
 app.use(session({
+    name: 'sgi.sid',
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    store: sessionStore,
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 12 * 60 * 60 * 1000
+    }
 }));
 app.use(flash());
 
@@ -234,8 +259,7 @@ app.use('/audit', auditRoutes);
 app.use('/admin', adminRoutes);
 
 // Conexão DB
-sequelize
-    .sync()
+Promise.all([sequelize.sync(), sessionStoreSyncPromise])
     .then(() => {
         console.log('Banco de dados sincronizado com sucesso!');
         // Sobe o servidor
@@ -255,5 +279,6 @@ sequelize
         }
     })
     .catch(err => {
-        console.error('Erro ao sincronizar DB:', err);
+        console.error('Erro ao sincronizar dependências iniciais:', err);
+        process.exit(1);
     });
