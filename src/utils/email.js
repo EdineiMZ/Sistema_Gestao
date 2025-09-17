@@ -504,8 +504,11 @@ const buildBudgetAlertContext = (budgetInput = {}, options = {}) => {
         routePath = BUDGET_ALERT_DEFAULT_ROUTE,
         expiresIn,
         now = new Date(),
-        secret
+        secret,
+        timeZone = 'UTC'
     } = options;
+
+    const resolvedTimeZone = typeof timeZone === 'string' && timeZone.trim() ? timeZone.trim() : 'UTC';
 
     const budgetId = budgetInput?.budgetId ?? budgetInput?.id ?? null;
     const monthlyLimit = toNumber(budgetInput?.monthlyLimit ?? budgetInput?.limit);
@@ -569,11 +572,17 @@ const buildBudgetAlertContext = (budgetInput = {}, options = {}) => {
         statusDescription
     });
 
+    const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        timeZone: resolvedTimeZone
+    });
+
     const formatDateLabel = (date) => {
         if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
             return '';
         }
-        return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+        return dateFormatter.format(date);
     };
 
     const statusTone = {
