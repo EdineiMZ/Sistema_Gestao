@@ -31,6 +31,253 @@
 
     <div class="col-12">
         <div class="card card-soft responsive-panel">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <h3 class="fw-semibold mb-1">Importar lançamentos</h3>
+                        <p class="text-muted mb-0">
+                            Carregue extratos em CSV ou OFX para acelerar o registro de receitas e despesas com validação automática.
+                        </p>
+                    </div>
+                    <div class="text-muted small text-lg-end">
+                        Formatos aceitos<br />
+                        <span class="fw-semibold text-primary">CSV · OFX</span>
+                    </div>
+                </div>
+                <form
+                    class="mt-4"
+                    action="/finance/import/preview"
+                    method="POST"
+                    enctype="multipart/form-data"
+                    novalidate
+                >
+                    <div class="row g-3 align-items-center">
+                        <div class="col-12 col-lg">
+                            <div class="input-group input-group-lg shadow-sm">
+                                <span class="input-group-text bg-white">
+                                    <i class="bi bi-upload" aria-hidden="true"></i>
+                                </span>
+                                <input
+                                    class="form-control form-control-lg"
+                                    type="file"
+                                    name="importFile"
+                                    accept=".csv,.ofx,text/csv,application/ofx,application/x-ofx"
+                                    required
+                                    aria-label="Selecionar arquivo CSV ou OFX para importação"
+                                />
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-auto d-grid d-lg-block">
+                            <button class="btn btn-primary btn-lg w-100" type="submit">
+                                <i class="bi bi-search me-2" aria-hidden="true"></i>
+                                Analisar arquivo
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-text mt-2">
+                        Os arquivos são processados em memória e descartados após a análise. Revise os lançamentos sugeridos antes de concluir.
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <% if (typeof importPreview !== 'undefined' && importPreview) { %>
+        <div class="col-12">
+            <div class="card card-soft border border-primary-subtle responsive-panel">
+                <div class="card-header bg-light d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">
+                            <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
+                            Pré-visualização
+                        </span>
+                        <h3 class="fw-semibold mt-2 mb-0">Revisar lançamentos importados</h3>
+                    </div>
+                    <div class="text-muted small text-lg-end">
+                        <div class="fw-semibold text-dark"><%= importPreview.fileName %></div>
+                        <div>Processado em <%= new Date(importPreview.uploadedAt).toLocaleString('pt-BR') %></div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis">
+                                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+                                <strong><%= importPreview.totals.new %></strong> novo(s)
+                            </span>
+                            <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>
+                                <strong><%= importPreview.totals.conflicting %></strong> conflito(s)
+                            </span>
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
+                                <i class="bi bi-list-check me-1" aria-hidden="true"></i>
+                                <strong><%= importPreview.totals.total %></strong> registro(s)
+                            </span>
+                        </div>
+                        <div class="text-muted small">
+                            Ajuste as informações ou desmarque lançamentos conflitantes antes de importar.
+                        </div>
+                    </div>
+
+                    <% if (importPreview.warnings && importPreview.warnings.length) { %>
+                        <div class="alert alert-warning shadow-sm" role="alert">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-info-circle fs-4" aria-hidden="true"></i>
+                                <div>
+                                    <h6 class="fw-semibold mb-2">Avisos de leitura</h6>
+                                    <ul class="list-unstyled mb-0 small">
+                                        <% importPreview.warnings.forEach(function(warning) { %>
+                                            <li><i class="bi bi-dot me-1"></i><%= warning %></li>
+                                        <% }); %>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+
+                    <form action="/finance/import/commit" method="POST" class="mt-4">
+                        <div class="table-responsive table-modern responsive-table">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-center">Importar</th>
+                                        <th>Descrição</th>
+                                        <th class="text-center">Tipo</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Vencimento</th>
+                                        <th>Pagamento</th>
+                                        <th>Status</th>
+                                        <th>Origem</th>
+                                        <th class="text-center">Situação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% importPreview.entries.forEach(function(entry, index) { %>
+                                        <tr class="<%= entry.conflict ? 'table-warning' : '' %>">
+                                            <td class="text-center">
+                                                <div class="form-check form-switch d-inline-flex align-items-center justify-content-center">
+                                                    <input
+                                                        class="form-check-input"
+                                                        type="checkbox"
+                                                        name="entries[<%= index %>][include]"
+                                                        value="1"
+                                                        id="importEntry<%= index %>"
+                                                        <%= entry.include ? 'checked' : '' %>
+                                                    />
+                                                </div>
+                                                <input type="hidden" name="entries[<%= index %>][hash]" value="<%= entry.hash %>" />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    class="form-control form-control-sm"
+                                                    name="entries[<%= index %>][description]"
+                                                    value="<%= entry.description %>"
+                                                    required
+                                                />
+                                            </td>
+                                            <td class="text-center">
+                                                <select class="form-select form-select-sm" name="entries[<%= index %>][type]" required>
+                                                    <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
+                                                    <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">R$</span>
+                                                    <input
+                                                        type="number"
+                                                        class="form-control"
+                                                        name="entries[<%= index %>][value]"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value="<%= Number(entry.value || 0).toFixed(2) %>"
+                                                        required
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="date"
+                                                    class="form-control form-control-sm"
+                                                    name="entries[<%= index %>][dueDate]"
+                                                    value="<%= entry.dueDate %>"
+                                                    required
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="date"
+                                                    class="form-control form-control-sm"
+                                                    name="entries[<%= index %>][paymentDate]"
+                                                    value="<%= entry.paymentDate ? entry.paymentDate : '' %>"
+                                                />
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm" name="entries[<%= index %>][status]">
+                                                    <option value="pending" <%= entry.status === 'pending' ? 'selected' : '' %>>Pendente</option>
+                                                    <option value="paid" <%= entry.status === 'paid' ? 'selected' : '' %>>Pago</option>
+                                                    <option value="overdue" <%= entry.status === 'overdue' ? 'selected' : '' %>>Em atraso</option>
+                                                    <option value="cancelled" <%= entry.status === 'cancelled' ? 'selected' : '' %>>Cancelado</option>
+                                                </select>
+                                            </td>
+                                            <td class="text-muted small">
+                                                <% if (entry.metadata && entry.metadata.source) { %>
+                                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis"><%= entry.metadata.source.toUpperCase() %></span>
+                                                <% } %>
+                                                <% if (entry.metadata && entry.metadata.line) { %>
+                                                    <div>Linha <%= entry.metadata.line %></div>
+                                                <% } else if (entry.metadata && entry.metadata.index) { %>
+                                                    <div>Registro <%= entry.metadata.index %></div>
+                                                <% } %>
+                                            </td>
+                                            <td class="text-center">
+                                                <% if (entry.conflictReasons.length) { %>
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis d-inline-flex align-items-center gap-2 mb-2">
+                                                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                                                        Conflito
+                                                    </span>
+                                                    <div class="small text-muted text-start">
+                                                        <% entry.conflictReasons.forEach(function(reason) { %>
+                                                            <div><i class="bi bi-dot"></i><%= reason %></div>
+                                                        <% }); %>
+                                                    </div>
+                                                <% } else { %>
+                                                    <span class="badge bg-success-subtle text-success-emphasis d-inline-flex align-items-center gap-2">
+                                                        <i class="bi bi-check-circle" aria-hidden="true"></i>
+                                                        Novo
+                                                    </span>
+                                                <% } %>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4">
+                            <div class="text-muted small">
+                                Importação preparada em <%= new Date(importPreview.uploadedAt).toLocaleString('pt-BR') %>.<br />
+                                <span class="fw-semibold"><%= importPreview.totals.new %></span> lançamento(s) pronto(s) para importação.
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="/finance" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                    Cancelar prévia
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-cloud-arrow-down me-2" aria-hidden="true"></i>
+                                    Importar lançamentos selecionados
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <% } %>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
                     <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
