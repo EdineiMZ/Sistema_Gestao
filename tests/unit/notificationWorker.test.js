@@ -1,19 +1,19 @@
 process.env.NODE_ENV = 'test';
 
-const scheduleMock = jest.fn();
-const processBudgetAlertsMock = jest.fn();
-const processNotificationsMock = jest.fn();
+const mockSchedule = jest.fn();
+const mockProcessBudgetAlerts = jest.fn();
+const mockProcessNotifications = jest.fn();
 
 jest.mock('node-cron', () => ({
-    schedule: (...args) => scheduleMock(...args),
+    schedule: (...args) => mockSchedule(...args),
 }));
 
 jest.mock('../../src/services/budgetAlertService', () => ({
-    processBudgetAlerts: (...args) => processBudgetAlertsMock(...args),
+    processBudgetAlerts: (...args) => mockProcessBudgetAlerts(...args),
 }));
 
 jest.mock('../../src/services/notificationService', () => ({
-    processNotifications: (...args) => processNotificationsMock(...args),
+    processNotifications: (...args) => mockProcessNotifications(...args),
 }));
 
 describe('notificationWorker', () => {
@@ -26,8 +26,8 @@ describe('notificationWorker', () => {
         jest.resetModules();
         scheduledCallback = null;
 
-        scheduleMock.mockReset();
-        scheduleMock.mockImplementation((expression, handler) => {
+        mockSchedule.mockReset();
+        mockSchedule.mockImplementation((expression, handler) => {
             scheduledCallback = handler;
             return {
                 stop: jest.fn(),
@@ -35,10 +35,10 @@ describe('notificationWorker', () => {
             };
         });
 
-        processBudgetAlertsMock.mockReset();
-        processBudgetAlertsMock.mockResolvedValue({ processedAlerts: 2 });
-        processNotificationsMock.mockReset();
-        processNotificationsMock.mockResolvedValue(undefined);
+        mockProcessBudgetAlerts.mockReset();
+        mockProcessBudgetAlerts.mockResolvedValue({ processedAlerts: 2 });
+        mockProcessNotifications.mockReset();
+        mockProcessNotifications.mockResolvedValue(undefined);
 
         workerModule = require('../../src/services/notificationWorker');
         workerModule.__testUtils.resetMetrics();
@@ -55,23 +55,23 @@ describe('notificationWorker', () => {
         workerModule.startWorker({ immediate: true, cronExpression: '* * * * *' });
         await flushPromises();
 
-        expect(processBudgetAlertsMock).toHaveBeenCalledTimes(1);
-        expect(processNotificationsMock).toHaveBeenCalledTimes(1);
-        expect(scheduleMock).toHaveBeenCalledTimes(1);
+        expect(mockProcessBudgetAlerts).toHaveBeenCalledTimes(1);
+        expect(mockProcessNotifications).toHaveBeenCalledTimes(1);
+        expect(mockSchedule).toHaveBeenCalledTimes(1);
         expect(typeof scheduledCallback).toBe('function');
 
         await scheduledCallback();
-        expect(processBudgetAlertsMock).toHaveBeenCalledTimes(2);
-        expect(processNotificationsMock).toHaveBeenCalledTimes(2);
+        expect(mockProcessBudgetAlerts).toHaveBeenCalledTimes(2);
+        expect(mockProcessNotifications).toHaveBeenCalledTimes(2);
     });
 
     it('mantém o ciclo ativo quando o serviço de alertas falha', async () => {
         const failure = new Error('budget-failure');
-        processBudgetAlertsMock.mockRejectedValueOnce(failure);
+        mockProcessBudgetAlerts.mockRejectedValueOnce(failure);
 
         await workerModule.__testUtils.runWorkerCycle();
 
-        expect(processNotificationsMock).toHaveBeenCalledTimes(1);
+        expect(mockProcessNotifications).toHaveBeenCalledTimes(1);
         const metrics = workerModule.getWorkerMetrics();
         expect(metrics.budgetAlertFailures).toBeGreaterThanOrEqual(1);
         expect(metrics.cyclesCompleted).toBe(1);

@@ -1,5 +1,6 @@
 'use strict';
 
+const { Op: SequelizeModuleOp } = require('sequelize');
 const { FinanceEntry, FinanceGoal, Budget, FinanceCategory, Sequelize } = require('../../database/models');
 const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
 const {
@@ -9,7 +10,7 @@ const {
     normalizeRecurringInterval
 } = require('../constants/financeRecurringIntervals');
 
-const { Op } = Sequelize;
+const Op = (Sequelize && Sequelize.Op) || SequelizeModuleOp;
 
 const FINANCE_TYPES = ['payable', 'receivable'];
 const FINANCE_STATUSES = ['pending', 'paid', 'overdue', 'cancelled'];
