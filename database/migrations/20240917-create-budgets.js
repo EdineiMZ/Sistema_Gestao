@@ -35,7 +35,8 @@ module.exports = {
             thresholds: {
                 type: Sequelize.JSON,
                 allowNull: false,
-                defaultValue: []
+                defaultValue: [],
+                comment: 'Limiares de alerta normalizados entre 0 e 1 (com duas casas decimais).'
             },
             referenceMonth: {
                 type: Sequelize.DATEONLY,
