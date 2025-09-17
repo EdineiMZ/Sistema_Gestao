@@ -10,6 +10,7 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
+const budgetService = require('../services/budgetService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const fileStorageService = require('../services/fileStorageService');
@@ -553,7 +554,7 @@ module.exports = {
                     throw error;
                 }
             })();
-            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
                 includeCategoryConsumption: true,
                 entriesPromise
             });
@@ -616,24 +617,31 @@ module.exports = {
                 res.locals.importPreview = importPreview;
                 req.session.financeImportPreview = null;
             }
-            res.render('finance/manageFinance', {
-                entries: safeEntries,
-                filters,
-                periodLabel: formatPeriodLabel(filters),
-                statusSummary: summary.statusSummary,
-                monthlySummary: summary.monthlySummary,
-                financeTotals: summary.totals,
-                financeProjections: projections,
-                projectionAlerts,
-                projectionHighlight,
-                goalSummary: summary.goalSummary || null,
-                financeGoals,
-                currencyFormatter,
-                formatCurrency,
-                importPreview,
-                recurringIntervalOptions,
-                categories
-            });
+
+            res.render(
+                'finance/manageFinance',
+                {
+                    entries,
+                    filters,
+                    formatCurrency,
+                    periodLabel: formatPeriodLabel(filters),
+                    statusSummary: summary.statusSummary,
+                    monthlySummary: summary.monthlySummary,
+                    financeTotals: summary.totals,
+                    budgetSummaries,
+                    categoryConsumption,
+                    budgetMonths,
+                    importPreview,
+                    recurringIntervalOptions,
+                    budgetStatusMeta: budgetService.constants?.DEFAULT_STATUS_META || null
+                },
+                (renderError, html) => {
+                    if (renderError) {
+                        throw renderError;
+                    }
+                    res.send(html);
+                }
+            );
         } catch (err) {
             console.error('Erro ao listar finanças:', err);
             req.flash('error_msg', 'Erro ao listar finanças.');
@@ -1083,39 +1091,12 @@ module.exports = {
 
     createBudget: async (req, res) => {
         try {
-            const userId = req.user?.id;
-            if (!userId) {
-                return res.status(401).json({ message: 'Usuário não autenticado.' });
-            }
-
-            const { financeCategoryId, monthlyLimit, thresholds, referenceMonth } = req.body || {};
-
-            const resolvedCategoryId = Number(financeCategoryId);
-            if (!Number.isInteger(resolvedCategoryId) || resolvedCategoryId <= 0) {
-                return res.status(400).json({ message: 'Categoria financeira inválida.' });
-            }
-
-            const parsedLimit = normalizeAmountInput(monthlyLimit);
-            if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
-                return res.status(400).json({ message: 'Limite mensal deve ser maior que zero.' });
-            }
-
-            let normalizedThresholds;
-            try {
-                normalizedThresholds = validateThresholdList(thresholds);
-            } catch (error) {
-                if (error.name === BUDGET_THRESHOLD_ERROR || error.statusCode === 400) {
-                    return res.status(400).json({ message: error.message });
-                }
-                throw error;
-            }
-
-            const budget = await financeBudgetService.createBudget({
-                userId,
-                financeCategoryId: resolvedCategoryId,
-                monthlyLimit: parsedLimit,
-                thresholds: normalizedThresholds,
-                referenceMonth
+            const filters = buildFiltersFromQuery(req.query);
+            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
             });
 
             return res.status(201).json({
@@ -1355,9 +1336,18 @@ module.exports = {
     exportExcel: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
-            const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summary = await financeReportingService.getFinanceSummary(filters, { entries });
-            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
+            });
+
+            const [entries, summary, budgetOverview] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                budgetOverviewPromise
+            ]);
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
