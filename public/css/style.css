@@ -405,6 +405,18 @@ body {
     box-shadow: 0 22px 45px rgba(67, 97, 238, 0.18);
 }
 
+.card-soft-static {
+    border: none;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 0.25s ease;
+}
+
+.card-soft-static:hover {
+    box-shadow: 0 22px 45px rgba(67, 97, 238, 0.18);
+}
+
 .section-title {
     font-weight: 600;
     font-size: 2.1rem;
@@ -1710,6 +1722,7 @@ body.theme-dark {
 }
 
 .app-shell.theme-dark .card-soft,
+.app-shell.theme-dark .card-soft-static,
 .app-shell.theme-dark .step-card,
 .app-shell.theme-dark .feature-card,
 .app-shell.theme-dark .security-card,
@@ -1754,6 +1767,7 @@ body.theme-dark {
 }
 
 .app-shell.theme-dark .card-soft:hover,
+.app-shell.theme-dark .card-soft-static:hover,
 .app-shell.theme-dark .step-card:hover {
     box-shadow: 0 24px 48px rgba(15, 23, 42, 0.6);
 }
@@ -1875,6 +1889,7 @@ body.theme-dark {
     }
 
     .card-soft,
+    .card-soft-static,
     .step-card {
         box-shadow: none;
     }
