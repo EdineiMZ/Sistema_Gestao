@@ -166,6 +166,14 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
+
+        if (models.BudgetThresholdStatus) {
+            Budget.hasMany(models.BudgetThresholdStatus, {
+                as: 'thresholdStatuses',
+                foreignKey: 'budgetId',
+                onDelete: 'CASCADE'
+            });
+        }
     };
 
     return Budget;

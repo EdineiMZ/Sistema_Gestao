@@ -1,169 +1,83 @@
-const budgetAlertService = require('../../src/services/budgetAlertService');
-const financeReportingService = require('../../src/services/financeReportingService');
+const mockFindOrCreate = jest.fn();
+const mockFindOne = jest.fn();
 
-jest.mock('../../src/services/financeReportingService', () => ({
-    getBudgetSummaries: jest.fn(),
-    getCategoryConsumption: jest.fn()
+jest.mock('../../database/models', () => ({
+    BudgetThresholdStatus: {
+        findOrCreate: mockFindOrCreate,
+        findOne: mockFindOne
+    }
 }));
+
+const { registerBudgetAlertTrigger } = require('../../src/services/budgetAlertService');
 
 describe('budgetAlertService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    const mockOverview = (summaries = [], categoryConsumption = []) => {
-        financeReportingService.getBudgetSummaries.mockResolvedValue({
-            summaries,
-            categoryConsumption,
-            months: ['2024-01']
+    it('registra um novo disparo quando não existe status prévio', async () => {
+        const mockRecord = { id: 10 };
+        const now = new Date('2024-09-10T10:00:00Z');
+
+        mockFindOrCreate.mockResolvedValueOnce([mockRecord, true]);
+
+        const result = await registerBudgetAlertTrigger({
+            budgetId: 5,
+            threshold: 50,
+            referenceMonth: '2024-09',
+            triggeredAt: now
         });
-        financeReportingService.getCategoryConsumption.mockResolvedValue(categoryConsumption);
-    };
 
-    it('retorna lista vazia quando não existem budgets ativos', async () => {
-        mockOverview([
-            { budgetId: 1, monthlyLimit: 0 },
-            { budgetId: 2, monthlyLimit: -10 }
-        ]);
-
-        const result = await budgetAlertService.getBudgetAlerts();
-
-        expect(result).toEqual([]);
-        expect(financeReportingService.getBudgetSummaries).toHaveBeenCalledWith({}, expect.objectContaining({ includeCategoryConsumption: true }));
-        expect(financeReportingService.getCategoryConsumption).not.toHaveBeenCalled();
-    });
-
-    it('ignora budgets abaixo dos thresholds definidos', async () => {
-        mockOverview([
-            {
-                budgetId: 3,
-                categoryId: 9,
-                categoryName: 'Marketing',
-                monthlyLimit: 1000,
-                consumption: 400,
-                thresholds: [0.5, 0.8],
-                month: '2024-01',
-                monthLabel: 'janeiro/2024'
-            }
-        ]);
-
-        const result = await budgetAlertService.getBudgetAlerts({});
-
-        expect(result).toEqual([]);
-        expect(financeReportingService.getCategoryConsumption).toHaveBeenCalledWith({}, expect.objectContaining({ budgetOverview: expect.any(Object) }));
-    });
-
-    it('identifica o maior limiar atingido e calcula os percentuais', async () => {
-        const summaries = [
-            {
-                budgetId: 7,
-                categoryId: 12,
-                categoryName: 'Operações',
-                categorySlug: 'operacoes',
-                categoryColor: '#123456',
-                monthlyLimit: 1000,
-                consumption: 950,
-                thresholds: [0.5, 0.75, 0.9],
-                month: '2024-02',
-                monthLabel: 'fevereiro/2024',
-                remaining: 50,
-                status: 'warning',
-                statusLabel: 'Atenção'
-            }
-        ];
-        const categoryConsumption = [
-            {
-                categoryId: 12,
-                totalLimit: 1000,
-                totalConsumption: 950,
-                remaining: 50,
-                averagePercentage: 95,
-                highestPercentage: 95,
-                months: 1,
-                status: 'warning',
-                statusLabel: 'Atenção'
-            }
-        ];
-
-        mockOverview(summaries, categoryConsumption);
-
-        const result = await budgetAlertService.getBudgetAlerts({ region: 'sul' }, { userId: 15 });
-
-        expect(result).toHaveLength(1);
-        const alert = result[0];
-        expect(alert.budgetId).toBe(7);
-        expect(alert.category).toEqual({
-            id: 12,
-            name: 'Operações',
-            slug: 'operacoes',
-            color: '#123456'
-        });
-        expect(alert.consumptionRatio).toBeCloseTo(0.95, 4);
-        expect(alert.consumptionPercentage).toBe(95);
-        expect(alert.thresholdReached).toBe(0.9);
-        expect(alert.thresholdsReached).toEqual([0.5, 0.75, 0.9]);
-        expect(alert.month).toBe('2024-02');
-        expect(alert.referencePeriod).toEqual({
-            month: '2024-02',
-            label: 'fevereiro/2024',
-            startDate: '2024-02-01',
-            endDate: '2024-02-29'
-        });
-        expect(alert.categoryTotals).toEqual({
-            totalLimit: 1000,
-            totalConsumption: 950,
-            remaining: 50,
-            averagePercentage: 95,
-            highestPercentage: 95,
-            months: 1,
-            status: 'warning',
-            statusLabel: 'Atenção',
-            statusMeta: null
-        });
-    });
-
-    it('considera thresholds com valores inconsistentes e múltiplos meses', async () => {
-        const summaries = [
-            {
-                budgetId: 9,
-                categoryId: 33,
-                categoryName: 'TI',
-                monthlyLimit: 500,
-                consumption: 600,
-                thresholds: [0, null, '0.8', 1.2, -1],
-                month: '2024-03'
+        expect(mockFindOrCreate).toHaveBeenCalledTimes(1);
+        expect(mockFindOrCreate).toHaveBeenCalledWith({
+            where: {
+                budgetId: 5,
+                referenceMonth: '2024-09-01',
+                threshold: '50.00'
             },
-            {
-                budgetId: 9,
-                categoryId: 33,
-                categoryName: 'TI',
-                monthlyLimit: 500,
-                consumption: 200,
-                thresholds: [0.6],
-                month: '2024-04'
-            }
-        ];
+            defaults: {
+                triggeredAt: now
+            },
+            transaction: null
+        });
 
-        const categoryConsumption = [
-            {
-                categoryId: 33,
-                totalLimit: 1000,
-                totalConsumption: 800,
-                remaining: 200,
-                averagePercentage: 80,
-                highestPercentage: 120,
-                months: 2
-            }
-        ];
+        expect(result.shouldDispatch).toBe(true);
+        expect(result.created).toBe(true);
+        expect(result.record).toBe(mockRecord);
+    });
 
-        mockOverview(summaries, categoryConsumption);
+    it('evita disparo duplicado quando já existe registro para o limiar', async () => {
+        const existingRecord = { id: 99, update: jest.fn().mockResolvedValue(null) };
 
-        const result = await budgetAlertService.getBudgetAlerts();
+        mockFindOrCreate.mockResolvedValueOnce([existingRecord, false]);
 
-        expect(result).toHaveLength(1);
-        const alert = result[0];
-        expect(alert.thresholdsReached).toEqual([0.8, 1.2]);
-        expect(alert.thresholdReached).toBe(1.2);
-        expect(alert.consumptionRatio).toBe(1.2);
+        const result = await registerBudgetAlertTrigger({
+            budgetId: '8',
+            threshold: '75',
+            referenceMonth: '2024-09-15',
+            triggeredAt: '2024-09-20T12:00:00Z'
+        });
+
+        expect(mockFindOrCreate).toHaveBeenCalledTimes(1);
+        expect(mockFindOrCreate).toHaveBeenCalledWith({
+            where: {
+                budgetId: 8,
+                referenceMonth: '2024-09-01',
+                threshold: '75.00'
+            },
+            defaults: {
+                triggeredAt: expect.any(Date)
+            },
+            transaction: null
+        });
+
+        expect(existingRecord.update).toHaveBeenCalledTimes(1);
+        expect(existingRecord.update).toHaveBeenCalledWith({
+            triggeredAt: expect.any(Date)
+        }, { transaction: null });
+
+        expect(result.shouldDispatch).toBe(false);
+        expect(result.created).toBe(false);
+        expect(result.record).toBe(existingRecord);
     });
 });
