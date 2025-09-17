@@ -138,19 +138,27 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
         segmentFiltersFingerprint: buildFingerprint(notification.segmentFilters || {})
     };
 
+    const hasDispatchLogModel = Boolean(
+        NotificationDispatchLog
+        && typeof NotificationDispatchLog.findAll === 'function'
+        && typeof NotificationDispatchLog.create === 'function'
+    );
+
     let existingLogs = [];
-    try {
-        existingLogs = await NotificationDispatchLog.findAll({
-            where: {
-                notificationId: notification.id,
-                cycleKey
-            },
-            attributes: ['recipient', 'contextHash'],
-            raw: true
-        });
-    } catch (error) {
-        console.error('Erro ao carregar histórico de envios da notificação:', error);
-        existingLogs = [];
+    if (hasDispatchLogModel) {
+        try {
+            existingLogs = await NotificationDispatchLog.findAll({
+                where: {
+                    notificationId: notification.id,
+                    cycleKey
+                },
+                attributes: ['recipient', 'contextHash'],
+                raw: true
+            });
+        } catch (error) {
+            console.error('Erro ao carregar histórico de envios da notificação:', error);
+            existingLogs = [];
+        }
     }
 
     const sentSet = new Set(existingLogs.map((entry) => `${entry.recipient}|${entry.contextHash}`));
@@ -181,26 +189,30 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
 
         const result = await sendFn({ normalizedRecipient, contextPayload });
 
-        try {
-            await NotificationDispatchLog.create({
-                notificationId: notification.id,
-                recipient: normalizedRecipient,
-                cycleKey,
-                contextHash,
-                context: contextPayload,
-                sentAt: new Date()
-            });
-            sentSet.add(dedupeKey);
-        } catch (error) {
-            if (error?.name === 'SequelizeUniqueConstraintError') {
+        if (hasDispatchLogModel) {
+            try {
+                await NotificationDispatchLog.create({
+                    notificationId: notification.id,
+                    recipient: normalizedRecipient,
+                    cycleKey,
+                    contextHash,
+                    context: contextPayload,
+                    sentAt: new Date()
+                });
                 sentSet.add(dedupeKey);
-                console.warn(
-                    `Envio duplicado detectado para notificação ${notification.id} e destinatário ${normalizedRecipient}. ` +
-                    'Registro já existente.'
-                );
-            } else {
-                throw error;
+            } catch (error) {
+                if (error?.name === 'SequelizeUniqueConstraintError') {
+                    sentSet.add(dedupeKey);
+                    console.warn(
+                        `Envio duplicado detectado para notificação ${notification.id} e destinatário ${normalizedRecipient}. ` +
+                        'Registro já existente.'
+                    );
+                } else {
+                    throw error;
+                }
             }
+        } else {
+            sentSet.add(dedupeKey);
         }
 
         return { skipped: false, result };
