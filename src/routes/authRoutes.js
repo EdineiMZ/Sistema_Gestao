@@ -27,6 +27,8 @@ router.post(
     authController.register        // se passou, cria usuário
 );
 
+router.get('/verify-email', authController.verifyEmail);
+
 // Rota de logout
 router.get('/logout', authController.logout);
 
