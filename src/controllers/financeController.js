@@ -156,220 +156,22 @@ const sanitizeText = (value) => {
     return String(value).replace(/\s+/g, ' ').trim();
 };
 
-const normalizeIdentifier = (value) => {
-    if (value === null || value === undefined) {
+const sanitizeCategoryName = (value) => {
+    const sanitized = sanitizeText(value);
+    return sanitized || 'Sem categoria';
+};
+
+const normalizeCategoryId = (value) => {
+    if (value === null || value === undefined || value === '') {
         return null;
     }
 
-    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
-        return value;
-    }
-
-    if (typeof value === 'object') {
-        if (value.id !== undefined) {
-            return normalizeIdentifier(value.id);
-        }
+    const number = Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(number) || number <= 0) {
         return null;
     }
 
-    const stringValue = String(value).trim();
-    if (!stringValue || ['null', 'undefined'].includes(stringValue.toLowerCase())) {
-        return null;
-    }
-
-    const parsed = Number.parseInt(stringValue, 10);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-        throw new Error('Categoria financeira inválida.');
-    }
-
-    return parsed;
-};
-
-const resolveCurrentUserId = (req) => {
-    if (!req) {
-        return null;
-    }
-
-    const source = req.user || req.session?.user || null;
-    if (!source) {
-        return null;
-    }
-
-    try {
-        return normalizeIdentifier(source.id);
-    } catch (error) {
-        return null;
-    }
-};
-
-const fetchCategoryForUser = async (categoryId, userId) => {
-    if (!categoryId) {
-        return null;
-    }
-
-    if (!FinanceCategory || typeof FinanceCategory.findOne !== 'function') {
-        throw new Error('Categorias financeiras indisponíveis no momento.');
-    }
-
-    const where = { id: categoryId };
-    if (userId) {
-        where[Op.or] = [
-            { ownerId: userId },
-            { ownerId: null }
-        ];
-    } else {
-        where.ownerId = null;
-    }
-
-    const category = await FinanceCategory.findOne({
-        where,
-        attributes: ['id', 'name', 'slug', 'color', 'ownerId']
-    });
-
-    if (!category) {
-        throw new Error('Categoria financeira não encontrada ou não permitida.');
-    }
-
-    return typeof category.get === 'function' ? category.get({ plain: true }) : category;
-};
-
-const createCategoryResolver = (userId) => {
-    const cache = new Map();
-    return async (categoryId) => {
-        if (!categoryId) {
-            return null;
-        }
-
-        if (cache.has(categoryId)) {
-            return cache.get(categoryId);
-        }
-
-        const category = await fetchCategoryForUser(categoryId, userId);
-        cache.set(categoryId, category);
-        return category;
-    };
-};
-
-const toPlainRecord = (record) => {
-    if (!record) {
-        return null;
-    }
-
-    if (typeof record.get === 'function') {
-        return record.get({ plain: true });
-    }
-
-    return record;
-};
-
-const sanitizeCategoryForView = (category) => {
-    const plain = toPlainRecord(category);
-    if (!plain) {
-        return null;
-    }
-
-    const color = typeof plain.color === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(plain.color)
-        ? plain.color
-        : '#6c757d';
-
-    return {
-        id: normalizeIdentifier(plain.id) || null,
-        name: sanitizeText(plain.name),
-        slug: sanitizeText(plain.slug),
-        color
-    };
-};
-
-const serializeAttachmentForView = (attachment) => {
-    const plain = toPlainRecord(attachment) || {};
-    return {
-        id: normalizeIdentifier(plain.id) || null,
-        fileName: sanitizeText(plain.fileName),
-        mimeType: sanitizeText(plain.mimeType),
-        size: plain.size ?? null,
-        createdAt: plain.createdAt || null
-    };
-};
-
-const serializeEntryForView = (entry) => {
-    const plain = toPlainRecord(entry) || {};
-    const category = sanitizeCategoryForView(plain.category);
-    const attachments = Array.isArray(plain.attachments)
-        ? plain.attachments.map(serializeAttachmentForView)
-        : [];
-
-    let normalizedValue = null;
-    try {
-        normalizedValue = parseAmount(plain.value);
-    } catch (error) {
-        normalizedValue = null;
-    }
-
-    return {
-        id: normalizeIdentifier(plain.id) || null,
-        description: sanitizeText(plain.description),
-        type: plain.type === 'receivable' ? 'receivable' : 'payable',
-        value: normalizedValue !== null ? normalizedValue.toFixed(2) : sanitizeText(plain.value),
-        dueDate: plain.dueDate ? String(plain.dueDate) : null,
-        paymentDate: plain.paymentDate ? String(plain.paymentDate) : null,
-        status: sanitizeText(plain.status || 'pendente'),
-        recurring: Boolean(plain.recurring),
-        recurringInterval: plain.recurringInterval ? sanitizeText(plain.recurringInterval) : null,
-        financeCategoryId: category ? category.id : null,
-        category,
-        categoryLabel: category ? category.name : '—',
-        attachments
-    };
-};
-
-const extractCategoryInputValue = (entry) => {
-    if (!entry || typeof entry !== 'object') {
-        return undefined;
-    }
-
-    if (entry.categoryId !== undefined) {
-        return entry.categoryId;
-    }
-
-    if (entry.financeCategoryId !== undefined) {
-        return entry.financeCategoryId;
-    }
-
-    if (entry.category && entry.category.id !== undefined) {
-        return entry.category.id;
-    }
-
-    return undefined;
-};
-
-const hasCategoryValue = (value) => {
-    if (value === null || value === undefined) {
-        return false;
-    }
-
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) {
-            return false;
-        }
-        if (['null', 'undefined'].includes(trimmed.toLowerCase())) {
-            return false;
-        }
-        return true;
-    }
-
-    if (typeof value === 'number') {
-        return Number.isFinite(value);
-    }
-
-    if (typeof value === 'object') {
-        if ('id' in value) {
-            return hasCategoryValue(value.id);
-        }
-        return false;
-    }
-
-    return false;
+    return number;
 };
 
 const formatDateLabel = (value) => {
@@ -562,7 +364,18 @@ const buildEntriesQueryOptions = (filters = {}) => {
     }
 
     const options = {
-        include,
+        include: [
+            {
+                model: FinanceAttachment,
+                as: 'attachments',
+                attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            },
+            FinanceCategory && {
+                model: FinanceCategory,
+                as: 'category',
+                attributes: ['id', 'name', 'color']
+            }
+        ].filter(Boolean),
         order: [
             ['dueDate', 'ASC'],
             ['id', 'ASC'],
@@ -841,8 +654,50 @@ module.exports = {
                 entriesPromise
             });
 
-            const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
-            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+            const userId = req.user?.id || req.session?.user?.id || null;
+
+            const categoriesPromise = (async () => {
+                if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
+                    return [];
+                }
+
+                const where = {};
+                if (userId) {
+                    where[Op.or] = [{ ownerId: userId }, { ownerId: null }];
+                } else {
+                    where.ownerId = null;
+                }
+
+                try {
+                    const records = await FinanceCategory.findAll({
+                        where,
+                        order: [['name', 'ASC']]
+                    });
+                    return records.map((record) => {
+                        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+                        return {
+                            id: normalizeCategoryId(plain.id),
+                            name: sanitizeCategoryName(plain.name),
+                            color: (() => {
+                                const candidate = sanitizeText(plain.color);
+                                return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
+                            })()
+                        };
+                    }).filter((category) => Number.isFinite(category.id));
+                } catch (error) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error('Erro ao carregar categorias financeiras:', error);
+                    }
+                    return [];
+                }
+            })();
+
+            const [entries, summary, goals, categories] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                goalsPromise,
+                categoriesPromise
+            ]);
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -872,7 +727,8 @@ module.exports = {
                 currencyFormatter,
                 formatCurrency,
                 importPreview,
-                recurringIntervalOptions
+                recurringIntervalOptions,
+                categories
             });
         } catch (err) {
             console.error('Erro ao listar finanças:', err);
@@ -904,6 +760,14 @@ module.exports = {
                 warnings: parseResult.warnings || [],
                 ...preview
             };
+
+            if (Array.isArray(payload.entries)) {
+                payload.entries = payload.entries.map((entry = {}) => ({
+                    ...entry,
+                    categoryId: normalizeCategoryId(entry.financeCategoryId ?? entry.categoryId),
+                    categoryName: sanitizeCategoryName(entry.categoryName)
+                }));
+            }
 
             if (wantsJsonResponse(req)) {
                 return res.json({ ok: true, preview: payload });
@@ -958,20 +822,10 @@ module.exports = {
 
                 try {
                     const prepared = financeImportService.prepareEntryForPersistence(entry);
-                    const rawCategoryInput = extractCategoryInputValue(entry);
-
-                    if (hasCategoryValue(rawCategoryInput)) {
-                        const parsedCategoryId = normalizeIdentifier(rawCategoryInput);
-                        if (parsedCategoryId) {
-                            const category = await resolveCategory(parsedCategoryId);
-                            const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
-                            prepared.financeCategoryId = resolvedId || null;
-                        } else {
-                            prepared.financeCategoryId = null;
-                        }
-                    }
-
-                    preparedEntries.push(prepared);
+                    preparedEntries.push({
+                        ...prepared,
+                        categoryId: normalizeCategoryId(prepared.financeCategoryId)
+                    });
                 } catch (error) {
                     invalidEntries.push({ entry, message: error.message });
                 }
@@ -1022,7 +876,7 @@ module.exports = {
 
             let createdRecords = [];
             if (finalEntries.length) {
-                const payload = finalEntries.map(({ hash, ...fields }) => fields);
+                const payload = finalEntries.map(({ hash, categoryName, categoryId, ...fields }) => fields);
                 const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
                 createdRecords = Array.isArray(result) ? result : [];
             }
@@ -1086,29 +940,10 @@ module.exports = {
         let storedKeys = [];
 
         try {
-            const {
-                description,
-                type,
-                value,
-                dueDate,
-                recurring,
-                recurringInterval,
-                categoryId
-            } = req.body;
-
-            const currentUserId = resolveCurrentUserId(req);
-            let finalCategoryId = null;
-            try {
-                const parsedCategoryId = normalizeIdentifier(categoryId);
-                if (parsedCategoryId) {
-                    const category = await fetchCategoryForUser(parsedCategoryId, currentUserId);
-                    const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
-                    finalCategoryId = resolvedId;
-                }
-            } catch (validationError) {
-                req.flash('error_msg', validationError.message || 'Categoria financeira inválida.');
-                return res.redirect('/finance');
-            }
+            const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -1117,6 +952,7 @@ module.exports = {
                 type,
                 value,
                 dueDate,
+                financeCategoryId,
                 recurring: (recurring === 'true'),
                 recurringInterval: normalizeRecurringInterval(recurringInterval),
                 financeCategoryId: finalCategoryId
@@ -1167,23 +1003,12 @@ module.exports = {
                 paymentDate,
                 status,
                 recurring,
-                recurringInterval,
-                categoryId
+                recurringInterval
             } = req.body;
 
-            const currentUserId = resolveCurrentUserId(req);
-            let finalCategoryId = null;
-            try {
-                const parsedCategoryId = normalizeIdentifier(categoryId);
-                if (parsedCategoryId) {
-                    const category = await fetchCategoryForUser(parsedCategoryId, currentUserId);
-                    const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
-                    finalCategoryId = resolvedId;
-                }
-            } catch (validationError) {
-                req.flash('error_msg', validationError.message || 'Categoria financeira inválida.');
-                return res.redirect('/finance');
-            }
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -1208,6 +1033,7 @@ module.exports = {
             entry.dueDate = dueDate;
             entry.paymentDate = paymentDate || null;
             entry.status = status;
+            entry.financeCategoryId = financeCategoryId;
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
             entry.financeCategoryId = finalCategoryId;
