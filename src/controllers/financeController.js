@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, FinanceGoal, Budget, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceCategory, FinanceGoal, Budget, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -8,8 +8,7 @@ const budgetService = require('../services/budgetService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const fileStorageService = require('../services/fileStorageService');
-const { getDefaultBudgetThresholds, normalizeThresholdList } = require('../config/budgets');
-
+const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const {
     FINANCE_TYPES,
@@ -194,6 +193,52 @@ const formatPeriodLabel = (filters = {}) => {
         return `Até ${end}`;
     }
     return 'Todo o período';
+};
+
+const BUDGET_THRESHOLD_ERROR_MESSAGE = 'Percentuais de alerta devem ser números entre 0 e 1 (ex.: 0.75).';
+
+const parseThresholdInput = (value) => {
+    if (value === null || value === undefined) {
+        return { normalized: [], invalid: [] };
+    }
+
+    const rawList = Array.isArray(value)
+        ? value
+        : typeof value === 'string'
+            ? value.split(/[,;\s]+/)
+            : [value];
+
+    const normalized = [];
+    const invalid = [];
+
+    rawList.forEach((item) => {
+        if (item === null || item === undefined) {
+            return;
+        }
+
+        const raw = typeof item === 'string' ? item.trim() : String(item).trim();
+        if (!raw) {
+            return;
+        }
+
+        const sanitized = raw.replace(',', '.');
+        const numeric = Number.parseFloat(sanitized);
+        if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
+            invalid.push(raw);
+            return;
+        }
+
+        normalized.push(Number(numeric.toFixed(4)));
+    });
+
+    if (!normalized.length) {
+        return { normalized: [], invalid };
+    }
+
+    const unique = Array.from(new Set(normalized));
+    unique.sort((a, b) => a - b);
+
+    return { normalized: unique, invalid };
 };
 
 const isMissingTableDbError = (error, tableName) => {
@@ -626,7 +671,13 @@ module.exports = {
                     budgetMonths,
                     importPreview,
                     recurringIntervalOptions,
-                    budgetStatusMeta: budgetService.constants?.DEFAULT_STATUS_META || null
+                    budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null,
+                    budgetThresholdDefaults: typeof financeReportingService.utils?.getConfiguredBudgetThresholds === 'function'
+                        ? financeReportingService.utils.getConfiguredBudgetThresholds()
+                        : getBudgetThresholdDefaults(),
+                    budgetAlertsEnabled: typeof financeReportingService.utils?.budgetAlertEnabled === 'boolean'
+                        ? financeReportingService.utils.budgetAlertEnabled
+                        : isBudgetAlertEnabled()
                 },
                 (renderError, html) => {
                     if (renderError) {
@@ -1083,7 +1134,88 @@ module.exports = {
     },
 
     updateBudgetThresholds: async (req, res) => {
-        const expectsJson = wantsJsonResponse(req);
+        const wantsJson = wantsJsonResponse(req);
+        const idParam = req.params?.id;
+        const budgetId = Number.parseInt(idParam, 10);
+
+        if (!Number.isInteger(budgetId) || budgetId <= 0) {
+            const message = 'Orçamento não encontrado.';
+            if (wantsJson) {
+                return res.status(404).json({ success: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
+        }
+
+        const { normalized, invalid } = parseThresholdInput(req.body?.thresholds);
+        if (invalid.length) {
+            const message = BUDGET_THRESHOLD_ERROR_MESSAGE;
+            if (wantsJson) {
+                return res.status(400).json({
+                    success: false,
+                    message,
+                    invalidValues: invalid.map((item) => item)
+                });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
+        }
+
+        const applyDefaults = normalized.length === 0;
+        const thresholds = applyDefaults ? getBudgetThresholdDefaults() : normalized;
+
+        try {
+            const budget = await Budget.findByPk(budgetId);
+            if (!budget || Number(budget.userId) !== Number(req.user?.id)) {
+                const message = 'Orçamento não encontrado.';
+                if (wantsJson) {
+                    return res.status(404).json({ success: false, message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            budget.thresholds = thresholds;
+            await budget.save();
+
+            const successMessage = applyDefaults
+                ? 'Percentuais padrão aplicados ao orçamento.'
+                : 'Percentuais de alerta atualizados com sucesso.';
+
+            const responsePayload = {
+                id: budget.id,
+                thresholds: Array.isArray(budget.thresholds) ? budget.thresholds : [],
+                appliedDefaults: applyDefaults,
+                alertEnabled: isBudgetAlertEnabled()
+            };
+
+            if (wantsJson) {
+                return res.json({
+                    success: true,
+                    message: successMessage,
+                    budget: responsePayload
+                });
+            }
+
+            req.flash('success_msg', successMessage);
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao atualizar limiares de orçamento:', error);
+            const validationMessage = Array.isArray(error?.errors) && error.errors.length
+                ? error.errors.map((item) => item.message).join(' ')
+                : 'Erro ao atualizar limiares de orçamento.';
+            const statusCode = error?.name === 'SequelizeValidationError' ? 400 : 500;
+
+            if (wantsJson) {
+                return res.status(statusCode).json({ success: false, message: validationMessage });
+            }
+
+            req.flash('error_msg', validationMessage);
+            return res.redirect('/finance');
+        }
+    },
+
+    exportPdf: async (req, res) => {
         try {
             const rawId = req.params?.id;
             const budgetId = Number.parseInt(rawId, 10);

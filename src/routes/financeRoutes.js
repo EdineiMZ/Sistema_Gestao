@@ -59,20 +59,20 @@ router.post(
     financeController.saveFinanceGoal
 );
 
-router.put(
-    '/budgets/:id/thresholds',
-    authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
-    audit('budget.updateThresholds', (req) => `Budget:${req.params.id}`),
-    financeController.updateBudgetThresholds
-);
-
 router.delete(
     '/goals/:id',
     authMiddleware,
     permissionMiddleware(USER_ROLES.ADMIN),
     audit('financeGoal.delete', (req) => `FinanceGoal:${req.params.id}`),
     financeController.deleteFinanceGoal
+);
+
+router.put(
+    '/budgets/:id/thresholds',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeBudget.updateThresholds', (req) => `Budget:${req.params.id}`),
+    financeController.updateBudgetThresholds
 );
 
 router.get(
