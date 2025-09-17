@@ -1,7 +1,22 @@
 'use strict';
 
-require('chart.js/auto');
-const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
+let ChartJSNodeCanvas;
+let chartRuntimeAvailable = true;
+
+try {
+    require('chart.js/auto');
+    ({ ChartJSNodeCanvas } = require('chartjs-node-canvas'));
+} catch (error) {
+    if (error?.code === 'MODULE_NOT_FOUND' && /chart\.js/.test(error?.message || '')) {
+        chartRuntimeAvailable = false;
+        ChartJSNodeCanvas = null;
+        console.warn(
+            'Biblioteca Chart.js não encontrada. A geração de gráficos financeiros será desabilitada.'
+        );
+    } else {
+        throw error;
+    }
+}
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 400;
@@ -218,6 +233,10 @@ const buildChartConfiguration = (summary = {}, options = {}) => {
 };
 
 const generateFinanceReportChart = async (summary = {}, options = {}) => {
+    if (!chartRuntimeAvailable || !ChartJSNodeCanvas) {
+        return null;
+    }
+
     const chartConfiguration = buildChartConfiguration(summary, options);
 
     if (!chartConfiguration) {

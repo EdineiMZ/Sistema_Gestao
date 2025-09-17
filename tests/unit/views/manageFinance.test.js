@@ -54,5 +54,33 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('option value="monthly"');
         expect(html).toContain('>Mensal<');
     });
+
+    it('renders filter form with active parameters and auto-submit controls', async () => {
+        const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
+
+        expect(html).toContain('data-filter-form');
+        expect(html).toContain('name="startDate"');
+        expect(html).toContain('value="2024-05-01"');
+        expect(html).toContain('name="endDate"');
+        expect(html).toContain('value="2024-05-31"');
+        expect(html).toContain('<option value="receivable" selected>');
+        expect(html).toContain('<option value="paid" selected>');
+        expect(html).toContain('data-auto-submit="true"');
+    });
+
+    it('shows finance summaries, chart area and status distribution', async () => {
+        const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
+        const normalizedHtml = html.replace(/\u00a0/g, ' ');
+
+        expect(normalizedHtml).toContain('Visão consolidada');
+        expect(normalizedHtml).toContain('Performance mensal');
+        expect(normalizedHtml).toContain('Status por categoria');
+        expect(normalizedHtml).toContain('R$ 3.200,75');
+        expect(normalizedHtml).toContain('R$ 1.850,25');
+        expect(normalizedHtml).toContain('abril de 2024');
+        expect(normalizedHtml).toContain('maio de 2024');
+        expect(normalizedHtml).toContain('financePerformanceChart');
+        expect(normalizedHtml).toContain('chart.umd.min.js');
+    });
 });
 
