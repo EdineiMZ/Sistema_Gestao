@@ -59,7 +59,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // --- Início das associações manuais ---
-const { User, Appointment, Room, Procedure } = db;
+const { User, Appointment, Room, Procedure, FinanceCategory, FinanceEntry, Budget } = db;
 
 /**
  * Exemplo de associações:
@@ -118,6 +118,41 @@ if (Procedure && Appointment) {
 }
 
 // --- Fim das associações manuais ---
+
+if (Budget && User && !(Budget.associations && Budget.associations.user)) {
+    Budget.belongsTo(User, {
+        as: 'user',
+        foreignKey: 'userId'
+    });
+}
+
+if (Budget && FinanceCategory && !(Budget.associations && Budget.associations.category)) {
+    Budget.belongsTo(FinanceCategory, {
+        as: 'category',
+        foreignKey: 'financeCategoryId'
+    });
+}
+
+if (FinanceCategory && Budget && !(FinanceCategory.associations && FinanceCategory.associations.budgets)) {
+    FinanceCategory.hasMany(Budget, {
+        as: 'budgets',
+        foreignKey: 'financeCategoryId'
+    });
+}
+
+if (FinanceCategory && FinanceEntry && !(FinanceCategory.associations && FinanceCategory.associations.entries)) {
+    FinanceCategory.hasMany(FinanceEntry, {
+        as: 'entries',
+        foreignKey: 'financeCategoryId'
+    });
+}
+
+if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEntry.associations.category)) {
+    FinanceEntry.belongsTo(FinanceCategory, {
+        as: 'category',
+        foreignKey: 'financeCategoryId'
+    });
+}
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

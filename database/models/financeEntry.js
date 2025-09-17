@@ -95,6 +95,13 @@ module.exports = (sequelize, DataTypes) => {
             onDelete: 'CASCADE',
             hooks: true
         });
+
+        if (models.FinanceCategory) {
+            FinanceEntry.belongsTo(models.FinanceCategory, {
+                as: 'category',
+                foreignKey: 'financeCategoryId'
+            });
+        }
     };
 
     return FinanceEntry;

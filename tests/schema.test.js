@@ -20,10 +20,19 @@ const migrations = [
   require('../database/migrations/20240908-convert-user-role-to-enum'),
   require('../database/migrations/20240909-add-status-and-previewtext-to-notifications'),
   require('../database/migrations/20240911-fix-accent-color-on-notifications'),
+  require('../database/migrations/20240912-create-notification-dispatch-logs'),
+  require('../database/migrations/20240913-create-finance-goals'),
+  require('../database/migrations/20240915-create-finance-attachments'),
+  require('../database/migrations/20240916-create-finance-categories'),
+  require('../database/migrations/20240917-create-budgets'),
 ];
 
 (async () => {
   try {
+    if (sequelize.getDialect() === 'sqlite') {
+      await sequelize.query('PRAGMA foreign_keys = ON;');
+    }
+
     await queryInterface.createTable('Users', {
       id: {
         type: DataTypes.INTEGER,
@@ -49,11 +58,11 @@ const migrations = [
       },
     });
 
-    const now = new Date();
+    const seedNow = new Date();
     await queryInterface.bulkInsert('Users', [
-      { name: 'Cliente Base', role: 0, createdAt: now, updatedAt: now },
-      { name: 'Colaborador Base', role: 1, createdAt: now, updatedAt: now },
-      { name: 'Especialista Base', role: 2, createdAt: now, updatedAt: now },
+      { name: 'Cliente Base', role: 0, createdAt: seedNow, updatedAt: seedNow },
+      { name: 'Colaborador Base', role: 1, createdAt: seedNow, updatedAt: seedNow },
+      { name: 'Especialista Base', role: 2, createdAt: seedNow, updatedAt: seedNow },
     ]);
 
     await queryInterface.createTable('Notifications', {
@@ -72,6 +81,26 @@ const migrations = [
       },
       scheduledAt: {
         type: DataTypes.DATE,
+        allowNull: true,
+      },
+      createdAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      updatedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+    });
+
+    await queryInterface.createTable('FinanceEntries', {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+      description: {
+        type: DataTypes.STRING,
         allowNull: true,
       },
       createdAt: {
@@ -202,13 +231,149 @@ const migrations = [
       throw new Error('Tipo da coluna "accentColor" deveria ser textual.');
     }
 
-    console.log('Verificação das colunas creditBalance, messageHtml, scheduledAt, status, previewText e accentColor concluída com sucesso.');
+    const financeCategoriesTable = await queryInterface.describeTable('FinanceCategories');
+    if (!financeCategoriesTable.name) {
+      throw new Error('Tabela FinanceCategories deveria possuir coluna "name".');
+    }
+
+    if (financeCategoriesTable.name.allowNull) {
+      throw new Error('Coluna "name" em FinanceCategories deveria ser NOT NULL.');
+    }
+
+    if (!financeCategoriesTable.slug || financeCategoriesTable.slug.allowNull) {
+      throw new Error('Coluna "slug" em FinanceCategories deveria ser NOT NULL.');
+    }
+
+    if (!financeCategoriesTable.color || financeCategoriesTable.color.allowNull) {
+      throw new Error('Coluna "color" em FinanceCategories deveria ser NOT NULL.');
+    }
+
+    const colorDefault = financeCategoriesTable.color.defaultValue;
+    const normalizedColorDefault = typeof colorDefault === 'string'
+      ? colorDefault.replace(/['"`]/g, '').toLowerCase()
+      : colorDefault;
+
+    if ((normalizedColorDefault || '').toLowerCase() !== '#6c757d') {
+      throw new Error('Valor padrão da coluna "color" deveria ser "#6c757d".');
+    }
+
+    const isActiveDefault = financeCategoriesTable.isActive.defaultValue;
+    const normalizedIsActiveDefault = typeof isActiveDefault === 'string'
+      ? isActiveDefault.replace(/['"`]/g, '').toLowerCase()
+      : String(isActiveDefault).toLowerCase();
+
+    if (!['1', 'true'].includes(normalizedIsActiveDefault)) {
+      throw new Error('Valor padrão da coluna "isActive" deveria ser verdadeiro.');
+    }
+
+    const categoryIndexes = await queryInterface.showIndex('FinanceCategories');
+    const hasOwnerSlugUnique = categoryIndexes.some((index) => index.name === 'finance_categories_owner_slug_unique' && index.unique);
+    if (!hasOwnerSlugUnique) {
+      throw new Error('Índice único (ownerId, slug) não encontrado em FinanceCategories.');
+    }
+
+    const budgetsTable = await queryInterface.describeTable('Budgets');
+    if (!budgetsTable.userId || budgetsTable.userId.allowNull) {
+      throw new Error('Coluna "userId" em Budgets deveria ser NOT NULL.');
+    }
+
+    if (!budgetsTable.financeCategoryId || budgetsTable.financeCategoryId.allowNull) {
+      throw new Error('Coluna "financeCategoryId" em Budgets deveria ser NOT NULL.');
+    }
+
+    if (!budgetsTable.monthlyLimit || budgetsTable.monthlyLimit.allowNull) {
+      throw new Error('Coluna "monthlyLimit" em Budgets deveria ser NOT NULL.');
+    }
+
+    if (!budgetsTable.thresholds) {
+      throw new Error('Coluna "thresholds" não encontrada na tabela Budgets.');
+    }
+
+    const budgetsIndexes = await queryInterface.showIndex('Budgets');
+    const hasBudgetUnique = budgetsIndexes.some((index) => index.name === 'budgets_user_category_unique' && index.unique);
+    if (!hasBudgetUnique) {
+      throw new Error('Índice único (userId, financeCategoryId) não encontrado em Budgets.');
+    }
+
+    const budgetNow = new Date();
+    const [users] = await sequelize.query('SELECT id FROM Users ORDER BY id LIMIT 1');
+    const userId = users[0]?.id;
+    if (!userId) {
+      throw new Error('Usuário base não encontrado para validar relacionamentos de Budget.');
+    }
+
+    await queryInterface.bulkInsert('FinanceCategories', [{
+      name: 'Custos Fixos',
+      slug: 'custos-fixos',
+      color: '#123abc',
+      ownerId: userId,
+      isActive: true,
+      createdAt: budgetNow,
+      updatedAt: budgetNow,
+    }]);
+
+    const [categories] = await sequelize.query('SELECT id, ownerId FROM FinanceCategories ORDER BY id DESC LIMIT 1');
+    const categoryId = categories[0]?.id;
+    if (!categoryId) {
+      throw new Error('Falha ao inserir categoria financeira para testes.');
+    }
+
+    await queryInterface.bulkInsert('Budgets', [{
+      userId,
+      financeCategoryId: categoryId,
+      monthlyLimit: 1500.50,
+      thresholds: JSON.stringify([0.5, 0.75, 0.9]),
+      referenceMonth: '2024-09-01',
+      createdAt: budgetNow,
+      updatedAt: budgetNow,
+    }]);
+
+    let duplicateError = null;
+    try {
+      await queryInterface.bulkInsert('Budgets', [{
+        userId,
+        financeCategoryId: categoryId,
+        monthlyLimit: 2000,
+        thresholds: JSON.stringify([0.5]),
+        referenceMonth: '2024-10-01',
+        createdAt: budgetNow,
+        updatedAt: budgetNow,
+      }]);
+    } catch (error) {
+      duplicateError = error;
+    }
+
+    if (!duplicateError) {
+      throw new Error('Inserção duplicada em Budgets deveria violar índice único.');
+    }
+
+    await queryInterface.bulkDelete('Users', { id: userId });
+
+    const [remainingBudgets] = await sequelize.query('SELECT COUNT(*) as count FROM Budgets');
+    const budgetsCount = Number(remainingBudgets[0]?.count || 0);
+    if (budgetsCount !== 0) {
+      throw new Error('Registros em Budgets deveriam ser removidos ao excluir usuário associado.');
+    }
+
+    const [remainingCategories] = await sequelize.query('SELECT ownerId FROM FinanceCategories ORDER BY id DESC LIMIT 1');
+    const ownerAfterDelete = remainingCategories[0]?.ownerId;
+    if (ownerAfterDelete !== null && ownerAfterDelete !== undefined) {
+      throw new Error('ownerId da categoria deveria ser definido como NULL após exclusão do usuário.');
+    }
+
+    console.log('Verificações das colunas e relacionamentos das tabelas Users, Notifications, FinanceCategories e Budgets concluídas com sucesso.');
   } catch (error) {
     console.error('Teste de schema falhou:', error);
     process.exitCode = 1;
   } finally {
-    await queryInterface.dropTable('Users').catch(() => {});
+    await queryInterface.dropTable('Budgets').catch(() => {});
+    await queryInterface.dropTable('FinanceCategories').catch(() => {});
+    await queryInterface.dropTable('FinanceAttachments').catch(() => {});
+    await queryInterface.dropTable('FinanceGoals').catch(() => {});
+    await queryInterface.dropTable('NotificationDispatchLogs').catch(() => {});
+    await queryInterface.dropTable('FinanceEntries').catch(() => {});
     await queryInterface.dropTable('Notifications').catch(() => {});
+    await queryInterface.dropTable('Users').catch(() => {});
     await sequelize.close();
   }
 })();
