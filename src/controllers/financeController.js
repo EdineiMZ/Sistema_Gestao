@@ -1,14 +1,20 @@
 const { Op } = require('sequelize');
-const { FinanceEntry } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
+const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
-const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
+const {
+    FINANCE_TYPES,
+    FINANCE_STATUSES,
+    FINANCE_RECURRING_INTERVALS
+} = financeConstants;
+const { normalizeRecurringInterval } = reportingUtils;
 
 const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
     value: interval.value,
@@ -231,6 +237,110 @@ const buildImportPreview = async (parsedEntries = []) => {
     };
 };
 
+const filterValidStorageKeys = (storageKeys = []) => {
+    if (!Array.isArray(storageKeys)) {
+        return [];
+    }
+
+    return storageKeys
+        .map((key) => (typeof key === 'string' ? key.trim() : ''))
+        .filter((key) => Boolean(key));
+};
+
+async function removeStoredFiles(storageKeys = []) {
+    const validKeys = filterValidStorageKeys(storageKeys);
+    if (!validKeys.length) {
+        return;
+    }
+
+    const tasks = validKeys.map(async (storageKey) => {
+        try {
+            await fileStorageService.deleteStoredFile(storageKey);
+        } catch (error) {
+            console.error('Erro ao remover arquivo de armazenamento financeiro:', error);
+        }
+    });
+
+    await Promise.allSettled(tasks);
+}
+
+async function persistAttachments(entryId, files = [], transaction) {
+    if (!entryId || !Array.isArray(files) || !files.length) {
+        return [];
+    }
+
+    const storedKeys = [];
+    const attachmentPayload = [];
+
+    try {
+        for (const file of files) {
+            if (!file || !Buffer.isBuffer(file.buffer) || !file.buffer.length) {
+                continue;
+            }
+
+            const { storageKey, checksum, sanitizedFileName } = await fileStorageService.saveBuffer({
+                buffer: file.buffer,
+                originalName: file.originalname || file.originalName || 'anexo'
+            });
+
+            storedKeys.push(storageKey);
+
+            const size = Number.isFinite(Number(file.size))
+                ? Number(file.size)
+                : file.buffer.length;
+
+            attachmentPayload.push({
+                financeEntryId: entryId,
+                fileName: sanitizedFileName,
+                mimeType: file.mimetype || 'application/octet-stream',
+                size,
+                checksum,
+                storageKey
+            });
+        }
+
+        if (!attachmentPayload.length) {
+            return storedKeys;
+        }
+
+        const bulkCreateOptions = { validate: true };
+        if (transaction) {
+            bulkCreateOptions.transaction = transaction;
+        }
+
+        await FinanceAttachment.bulkCreate(attachmentPayload, bulkCreateOptions);
+
+        return storedKeys;
+    } catch (error) {
+        await removeStoredFiles(storedKeys);
+        throw error;
+    }
+}
+
+const resolveSequelizeInstance = () => {
+    if (sequelize && typeof sequelize.transaction === 'function') {
+        return sequelize;
+    }
+
+    if (FinanceEntry?.sequelize && typeof FinanceEntry.sequelize.transaction === 'function') {
+        return FinanceEntry.sequelize;
+    }
+
+    if (FinanceAttachment?.sequelize && typeof FinanceAttachment.sequelize.transaction === 'function') {
+        return FinanceAttachment.sequelize;
+    }
+
+    return null;
+};
+
+const beginTransaction = async () => {
+    const sequelizeInstance = resolveSequelizeInstance();
+    if (!sequelizeInstance) {
+        return null;
+    }
+    return sequelizeInstance.transaction();
+};
+
 module.exports = {
     listFinanceEntries: async (req, res) => {
         try {
@@ -253,7 +363,8 @@ module.exports = {
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
-                importPreview
+                importPreview,
+                recurringIntervalOptions
 
             });
         } catch (err) {
@@ -454,20 +565,29 @@ module.exports = {
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
 
-            transaction = await sequelize.transaction();
+            transaction = await beginTransaction();
 
-            const entry = await FinanceEntry.create({
+            const createPayload = {
                 description,
                 type,
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
-                recurringInterval: recurringInterval || null
-            }, { transaction });
+                recurringInterval: normalizeRecurringInterval(recurringInterval)
+            };
+
+            let entry;
+            if (transaction) {
+                entry = await FinanceEntry.create(createPayload, { transaction });
+            } else {
+                entry = await FinanceEntry.create(createPayload);
+            }
 
             storedKeys = await persistAttachments(entry.id, req.files, transaction);
 
-            await transaction.commit();
+            if (transaction) {
+                await transaction.commit();
+            }
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
         } catch (err) {
@@ -495,12 +615,19 @@ module.exports = {
             const { id } = req.params;
             const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
 
-            transaction = await sequelize.transaction();
+            transaction = await beginTransaction();
 
-            const entry = await FinanceEntry.findByPk(id, { transaction });
+            let entry;
+            if (transaction) {
+                entry = await FinanceEntry.findByPk(id, { transaction });
+            } else {
+                entry = await FinanceEntry.findByPk(id);
+            }
 
             if (!entry) {
-                await transaction.rollback();
+                if (transaction) {
+                    await transaction.rollback();
+                }
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
@@ -514,11 +641,17 @@ module.exports = {
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
-            await entry.save({ transaction });
+            if (transaction) {
+                await entry.save({ transaction });
+            } else {
+                await entry.save();
+            }
 
             storedKeys = await persistAttachments(entry.id, req.files, transaction);
 
-            await transaction.commit();
+            if (transaction) {
+                await transaction.commit();
+            }
 
             req.flash('success_msg', 'Lançamento atualizado!');
             res.redirect('/finance');
