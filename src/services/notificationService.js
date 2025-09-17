@@ -10,6 +10,7 @@ const {
     sequelize
 } = require('../../database/models');
 const crypto = require('node:crypto');
+const logger = require('../utils/logger');
 const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
