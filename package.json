@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "dev:tunnel": "node scripts/dev-with-ngrok.js",
     "notifications": "node notification-worker.js",
     "test": "npm run test:health && npm run test:schema && npm run test:unit && npm run test:integration",
     "test:health": "node scripts/health-check.js",
@@ -40,6 +41,7 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@ngrok/ngrok": "^1.5.2",
     "jest": "^29.7.0",
     "nodemon": "^3.1.9",
     "supertest": "^6.3.4"
