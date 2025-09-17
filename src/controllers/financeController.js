@@ -1,5 +1,11 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, FinanceGoal, sequelize } = require('../../database/models');
+const {
+    FinanceEntry,
+    FinanceAttachment,
+    FinanceGoal,
+    FinanceCategory,
+    sequelize
+} = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -133,6 +139,222 @@ const sanitizeText = (value) => {
     return String(value).replace(/\s+/g, ' ').trim();
 };
 
+const normalizeIdentifier = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+        return value;
+    }
+
+    if (typeof value === 'object') {
+        if (value.id !== undefined) {
+            return normalizeIdentifier(value.id);
+        }
+        return null;
+    }
+
+    const stringValue = String(value).trim();
+    if (!stringValue || ['null', 'undefined'].includes(stringValue.toLowerCase())) {
+        return null;
+    }
+
+    const parsed = Number.parseInt(stringValue, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error('Categoria financeira inválida.');
+    }
+
+    return parsed;
+};
+
+const resolveCurrentUserId = (req) => {
+    if (!req) {
+        return null;
+    }
+
+    const source = req.user || req.session?.user || null;
+    if (!source) {
+        return null;
+    }
+
+    try {
+        return normalizeIdentifier(source.id);
+    } catch (error) {
+        return null;
+    }
+};
+
+const fetchCategoryForUser = async (categoryId, userId) => {
+    if (!categoryId) {
+        return null;
+    }
+
+    if (!FinanceCategory || typeof FinanceCategory.findOne !== 'function') {
+        throw new Error('Categorias financeiras indisponíveis no momento.');
+    }
+
+    const where = { id: categoryId };
+    if (userId) {
+        where[Op.or] = [
+            { ownerId: userId },
+            { ownerId: null }
+        ];
+    } else {
+        where.ownerId = null;
+    }
+
+    const category = await FinanceCategory.findOne({
+        where,
+        attributes: ['id', 'name', 'slug', 'color', 'ownerId']
+    });
+
+    if (!category) {
+        throw new Error('Categoria financeira não encontrada ou não permitida.');
+    }
+
+    return typeof category.get === 'function' ? category.get({ plain: true }) : category;
+};
+
+const createCategoryResolver = (userId) => {
+    const cache = new Map();
+    return async (categoryId) => {
+        if (!categoryId) {
+            return null;
+        }
+
+        if (cache.has(categoryId)) {
+            return cache.get(categoryId);
+        }
+
+        const category = await fetchCategoryForUser(categoryId, userId);
+        cache.set(categoryId, category);
+        return category;
+    };
+};
+
+const toPlainRecord = (record) => {
+    if (!record) {
+        return null;
+    }
+
+    if (typeof record.get === 'function') {
+        return record.get({ plain: true });
+    }
+
+    return record;
+};
+
+const sanitizeCategoryForView = (category) => {
+    const plain = toPlainRecord(category);
+    if (!plain) {
+        return null;
+    }
+
+    const color = typeof plain.color === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(plain.color)
+        ? plain.color
+        : '#6c757d';
+
+    return {
+        id: normalizeIdentifier(plain.id) || null,
+        name: sanitizeText(plain.name),
+        slug: sanitizeText(plain.slug),
+        color
+    };
+};
+
+const serializeAttachmentForView = (attachment) => {
+    const plain = toPlainRecord(attachment) || {};
+    return {
+        id: normalizeIdentifier(plain.id) || null,
+        fileName: sanitizeText(plain.fileName),
+        mimeType: sanitizeText(plain.mimeType),
+        size: plain.size ?? null,
+        createdAt: plain.createdAt || null
+    };
+};
+
+const serializeEntryForView = (entry) => {
+    const plain = toPlainRecord(entry) || {};
+    const category = sanitizeCategoryForView(plain.category);
+    const attachments = Array.isArray(plain.attachments)
+        ? plain.attachments.map(serializeAttachmentForView)
+        : [];
+
+    let normalizedValue = null;
+    try {
+        normalizedValue = parseAmount(plain.value);
+    } catch (error) {
+        normalizedValue = null;
+    }
+
+    return {
+        id: normalizeIdentifier(plain.id) || null,
+        description: sanitizeText(plain.description),
+        type: plain.type === 'receivable' ? 'receivable' : 'payable',
+        value: normalizedValue !== null ? normalizedValue.toFixed(2) : sanitizeText(plain.value),
+        dueDate: plain.dueDate ? String(plain.dueDate) : null,
+        paymentDate: plain.paymentDate ? String(plain.paymentDate) : null,
+        status: sanitizeText(plain.status || 'pendente'),
+        recurring: Boolean(plain.recurring),
+        recurringInterval: plain.recurringInterval ? sanitizeText(plain.recurringInterval) : null,
+        financeCategoryId: category ? category.id : null,
+        category,
+        categoryLabel: category ? category.name : '—',
+        attachments
+    };
+};
+
+const extractCategoryInputValue = (entry) => {
+    if (!entry || typeof entry !== 'object') {
+        return undefined;
+    }
+
+    if (entry.categoryId !== undefined) {
+        return entry.categoryId;
+    }
+
+    if (entry.financeCategoryId !== undefined) {
+        return entry.financeCategoryId;
+    }
+
+    if (entry.category && entry.category.id !== undefined) {
+        return entry.category.id;
+    }
+
+    return undefined;
+};
+
+const hasCategoryValue = (value) => {
+    if (value === null || value === undefined) {
+        return false;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return false;
+        }
+        if (['null', 'undefined'].includes(trimmed.toLowerCase())) {
+            return false;
+        }
+        return true;
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value);
+    }
+
+    if (typeof value === 'object') {
+        if ('id' in value) {
+            return hasCategoryValue(value.id);
+        }
+        return false;
+    }
+
+    return false;
+};
+
 const formatDateLabel = (value) => {
     if (!value) {
         return null;
@@ -194,14 +416,24 @@ const buildFiltersFromQuery = (query = {}) => {
 };
 
 const buildEntriesQueryOptions = (filters = {}) => {
+    const include = [
+        {
+            model: FinanceAttachment,
+            as: 'attachments',
+            attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+        }
+    ];
+
+    if (FinanceCategory) {
+        include.push({
+            model: FinanceCategory,
+            as: 'category',
+            attributes: ['id', 'name', 'slug', 'color']
+        });
+    }
+
     const options = {
-        include: [
-            {
-                model: FinanceAttachment,
-                as: 'attachments',
-                attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
-            }
-        ],
+        include,
         order: [
             ['dueDate', 'ASC'],
             ['id', 'ASC'],
@@ -480,6 +712,7 @@ module.exports = {
             })();
 
             const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -496,7 +729,7 @@ module.exports = {
             }
 
             res.render('finance/manageFinance', {
-                entries,
+                entries: safeEntries,
                 filters,
                 periodLabel: formatPeriodLabel(filters),
                 statusSummary: summary.statusSummary,
@@ -575,11 +808,13 @@ module.exports = {
                 throw new Error('Nenhum lançamento selecionado para importação.');
             }
 
+            const currentUserId = resolveCurrentUserId(req);
+            const resolveCategory = createCategoryResolver(currentUserId);
             const preparedEntries = [];
             const skippedEntries = [];
             const invalidEntries = [];
 
-            entriesArray.forEach((entry) => {
+            for (const entry of entriesArray) {
                 const includeFlag = entry.include ?? entry.selected ?? entry.import ?? entry.shouldImport;
                 const shouldImport = includeFlag === true
                     || includeFlag === 'true'
@@ -588,16 +823,29 @@ module.exports = {
 
                 if (!shouldImport) {
                     skippedEntries.push(entry);
-                    return;
+                    continue;
                 }
 
                 try {
                     const prepared = financeImportService.prepareEntryForPersistence(entry);
+                    const rawCategoryInput = extractCategoryInputValue(entry);
+
+                    if (hasCategoryValue(rawCategoryInput)) {
+                        const parsedCategoryId = normalizeIdentifier(rawCategoryInput);
+                        if (parsedCategoryId) {
+                            const category = await resolveCategory(parsedCategoryId);
+                            const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
+                            prepared.financeCategoryId = resolvedId || null;
+                        } else {
+                            prepared.financeCategoryId = null;
+                        }
+                    }
+
                     preparedEntries.push(prepared);
                 } catch (error) {
                     invalidEntries.push({ entry, message: error.message });
                 }
-            });
+            }
 
             if (!preparedEntries.length) {
                 const baseMessage = invalidEntries.length
@@ -708,7 +956,29 @@ module.exports = {
         let storedKeys = [];
 
         try {
-            const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
+            const {
+                description,
+                type,
+                value,
+                dueDate,
+                recurring,
+                recurringInterval,
+                categoryId
+            } = req.body;
+
+            const currentUserId = resolveCurrentUserId(req);
+            let finalCategoryId = null;
+            try {
+                const parsedCategoryId = normalizeIdentifier(categoryId);
+                if (parsedCategoryId) {
+                    const category = await fetchCategoryForUser(parsedCategoryId, currentUserId);
+                    const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
+                    finalCategoryId = resolvedId;
+                }
+            } catch (validationError) {
+                req.flash('error_msg', validationError.message || 'Categoria financeira inválida.');
+                return res.redirect('/finance');
+            }
 
             transaction = await beginTransaction();
 
@@ -718,7 +988,8 @@ module.exports = {
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
-                recurringInterval: normalizeRecurringInterval(recurringInterval)
+                recurringInterval: normalizeRecurringInterval(recurringInterval),
+                financeCategoryId: finalCategoryId
             };
 
             let entry;
@@ -758,7 +1029,31 @@ module.exports = {
 
         try {
             const { id } = req.params;
-            const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
+            const {
+                description,
+                type,
+                value,
+                dueDate,
+                paymentDate,
+                status,
+                recurring,
+                recurringInterval,
+                categoryId
+            } = req.body;
+
+            const currentUserId = resolveCurrentUserId(req);
+            let finalCategoryId = null;
+            try {
+                const parsedCategoryId = normalizeIdentifier(categoryId);
+                if (parsedCategoryId) {
+                    const category = await fetchCategoryForUser(parsedCategoryId, currentUserId);
+                    const resolvedId = normalizeIdentifier(category?.id) || parsedCategoryId;
+                    finalCategoryId = resolvedId;
+                }
+            } catch (validationError) {
+                req.flash('error_msg', validationError.message || 'Categoria financeira inválida.');
+                return res.redirect('/finance');
+            }
 
             transaction = await beginTransaction();
 
@@ -785,6 +1080,7 @@ module.exports = {
             entry.status = status;
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
+            entry.financeCategoryId = finalCategoryId;
 
             if (transaction) {
                 await entry.save({ transaction });
@@ -930,6 +1226,7 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
             const chartImage = await reportChartService.generateFinanceReportChart(summary);
 
             const document = new PDFDocument({
@@ -982,16 +1279,17 @@ module.exports = {
             document.fontSize(14).fillColor('#000000').text('Lançamentos', { underline: true });
             document.moveDown(0.5);
 
-            if (!entries.length) {
+            if (!safeEntries.length) {
                 document.fontSize(11).text('Nenhum lançamento encontrado para o período selecionado.');
             } else {
-                document.fontSize(11).text('Descrição | Tipo | Valor | Vencimento | Status');
+                document.fontSize(11).text('Descrição | Categoria | Tipo | Valor | Vencimento | Status');
                 document.moveDown(0.3);
                 document.fontSize(10);
 
-                entries.forEach((entry) => {
+                safeEntries.forEach((entry) => {
                     const line = [
                         sanitizeText(entry.description),
+                        sanitizeText(entry.categoryLabel || '—'),
                         entry.type === 'payable' ? 'Pagar' : 'Receber',
                         formatCurrency(entry.value),
                         formatDateLabel(entry.dueDate) || '—',
@@ -1017,6 +1315,7 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
@@ -1070,24 +1369,27 @@ module.exports = {
             const worksheet = workbook.addWorksheet('Lançamentos');
             worksheet.columns = [
                 { header: 'Descrição', key: 'description', width: 40 },
+                { header: 'Categoria', key: 'category', width: 24 },
                 { header: 'Tipo', key: 'type', width: 15 },
                 { header: 'Valor (R$)', key: 'value', width: 18 },
                 { header: 'Vencimento', key: 'dueDate', width: 18 },
                 { header: 'Status', key: 'status', width: 18 }
             ];
 
-            if (!entries.length) {
+            if (!safeEntries.length) {
                 worksheet.addRow({
                     description: 'Nenhum lançamento para o período selecionado',
+                    category: '',
                     type: '',
                     value: '',
                     dueDate: '',
                     status: ''
                 });
             } else {
-                entries.forEach((entry) => {
+                safeEntries.forEach((entry) => {
                     worksheet.addRow({
                         description: sanitizeText(entry.description),
+                        category: sanitizeText(entry.categoryLabel || '—'),
                         type: entry.type === 'payable' ? 'Pagar' : 'Receber',
                         value: parseAmount(entry.value),
                         dueDate: formatDateLabel(entry.dueDate) || '',
