@@ -32,31 +32,37 @@ const normalizeMonthValue = (value) => {
     return normalized.toISOString().slice(0, 10);
 };
 
+const THRESHOLD_RANGE_ERROR = 'Limiares devem ser números entre 0 e 1, com até duas casas decimais.';
+
 const normalizeThresholds = (value) => {
     if (value === undefined || value === null) {
         return [];
     }
 
     const rawList = Array.isArray(value) ? value : [value];
-    const normalized = rawList
-        .map((item) => {
-            if (item === undefined || item === null || item === '') {
-                return null;
-            }
+    if (rawList.length === 0) {
+        return [];
+    }
 
-            const numeric = Number(item);
-            if (!Number.isFinite(numeric)) {
-                return null;
-            }
+    return rawList.map((item) => {
+        if (item === undefined || item === null || item === '') {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
 
+        const numeric = Number(item);
+        if (!Number.isFinite(numeric)) {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
             return Number(numeric.toFixed(2));
         })
         .filter((item) => item !== null && item > 0 && item <= 1);
 
-    const uniqueValues = Array.from(new Set(normalized));
-    uniqueValues.sort((a, b) => a - b);
+        if (normalized <= 0 || normalized > 1) {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
 
-    return uniqueValues;
+        return normalized;
+    });
 };
 
 module.exports = (sequelize, DataTypes) => {
@@ -88,7 +94,7 @@ module.exports = (sequelize, DataTypes) => {
                 isArrayOfPositiveNumbers(value) {
                     const list = normalizeThresholds(value);
                     if (list.some((item) => item <= 0 || item > 1)) {
-                        throw new Error('Limiares devem estar entre 0 e 1.');
+                        throw new Error('Limiares devem estar entre 0 e 1.');n
                     }
                 }
             }
@@ -154,7 +160,6 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
-
         if (models.BudgetThresholdLog) {
             Budget.hasMany(models.BudgetThresholdLog, {
                 as: 'thresholdLogs',

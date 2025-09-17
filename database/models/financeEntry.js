@@ -55,6 +55,20 @@ module.exports = (sequelize, DataTypes) => {
                 }
             }
         },
+        financeCategoryId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: 'FinanceCategories',
+                key: 'id'
+            },
+            onDelete: 'SET NULL',
+            validate: {
+                isInt: {
+                    msg: 'Categoria financeira inválida.'
+                }
+            }
+        },
         status: {
             type: DataTypes.STRING, // 'pending', 'paid', 'overdue'
             defaultValue: 'pending',

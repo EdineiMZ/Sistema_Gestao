@@ -1,0 +1,28 @@
+<% const resolvedBadgeClass = typeof badgeClass === 'string' ? badgeClass : 'bg-primary-subtle text-primary'; %>
+<% const resolvedBadgeLabel = typeof badgeLabel === 'string' ? badgeLabel : 'Indicador'; %>
+<% const resolvedSubtitle = typeof subtitle === 'string' ? subtitle : ''; %>
+<% const resolvedValue = typeof value === 'string' || typeof value === 'number' ? value : '—'; %>
+<% const resolvedValueClass = typeof valueClass === 'string' ? valueClass : ''; %>
+<% const resolvedFooter = typeof footer === 'string' ? footer : ''; %>
+
+<div class="col-sm-6 col-xl-3">
+    <div class="card border-0 shadow-sm h-100 metric-card">
+        <div class="card-body d-flex flex-column gap-3">
+            <div class="d-flex align-items-center justify-content-between">
+                <span class="badge rounded-pill <%= resolvedBadgeClass %>">
+                    <%= resolvedBadgeLabel %>
+                </span>
+                <% if (icon) { %>
+                    <i class="bi <%= icon %> fs-4" aria-hidden="true"></i>
+                <% } %>
+            </div>
+            <div>
+                <p class="text-muted small mb-1"><%= resolvedSubtitle %></p>
+                <h4 class="fw-semibold mb-0 <%= resolvedValueClass %>"><%= resolvedValue %></h4>
+            </div>
+            <% if (resolvedFooter) { %>
+                <div class="text-muted small"><%= resolvedFooter %></div>
+            <% } %>
+        </div>
+    </div>
+</div>

@@ -15,7 +15,6 @@ const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
 const { Op } = require('sequelize');
 const { processBudgetAlerts } = require('./budgetAlertService');
-
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
 
@@ -157,7 +156,7 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
                 raw: true
             });
         } catch (error) {
-            console.error('Erro ao carregar histórico de envios da notificação:', error);
+            logger.error('Erro ao carregar histórico de envios da notificação:', error);
             existingLogs = [];
         }
     }
@@ -204,7 +203,7 @@ const createDispatchTracker = async (notification, { now = new Date() } = {}) =>
             } catch (error) {
                 if (error?.name === 'SequelizeUniqueConstraintError') {
                     sentSet.add(dedupeKey);
-                    console.warn(
+                    logger.warn(
                         `Envio duplicado detectado para notificação ${notification.id} e destinatário ${normalizedRecipient}. ` +
                         'Registro já existente.'
                     );
@@ -406,7 +405,7 @@ const ensureMessageHtmlColumnExists = async () => {
 
     if (!hasMessageHtml) {
         if (!messageHtmlWarningIssued) {
-            console.warn(
+            logger.warn(
                 'Aviso: coluna "messageHtml" ausente na tabela "Notifications". ' +
                 'Processamento de notificações interrompido até que a migração seja aplicada.'
             );
@@ -474,6 +473,8 @@ async function processNotifications() {
                     await processBirthdayNotification(notif, runtimeContext);
                 } else if (notif.type === 'appointment') {
                     await processAppointmentNotification(notif, runtimeContext);
+                } else if (notif.type === 'budget-alert' || notif.type === 'budget') {
+                    await processBudgetAlertNotification(notif, runtimeContext);
                 } else {
                     await processCustomNotification(notif, runtimeContext);
                 }
@@ -485,11 +486,11 @@ async function processNotifications() {
                     await notif.update({ sent: true });
                 }
             } catch (notificationError) {
-                console.error(`Erro ao processar notificação ${notif.id}:`, notificationError);
+                logger.error(`Erro ao processar notificação ${notif.id}:`, notificationError);
             }
         }
     } catch (err) {
-        console.error('Erro ao processar notificações:', err);
+        logger.error('Erro ao processar notificações:', err);
     }
 }
 
@@ -660,6 +661,93 @@ async function processAppointmentNotification(notif, runtimeContext = {}) {
     }
 }
 
+async function processBudgetAlertNotification(notif, runtimeContext = {}) {
+    const now = runtimeContext.now instanceof Date ? runtimeContext.now : new Date();
+    const tracker = runtimeContext.tracker || await createDispatchTracker(notif, { now });
+    const filters = getNotificationFilters(notif);
+
+    let alerts = [];
+    try {
+        alerts = await budgetAlertService.collectBudgetAlerts({ now, filters });
+        logger.debug(
+            `Notificação ${notif.id}: ${alerts.length} alerta(s) de orçamento candidato(s) para o ciclo ${runtimeContext.cycleKey}.`
+        );
+    } catch (error) {
+        logger.error(`Erro ao coletar alertas de orçamento para notificação ${notif.id}:`, error);
+        return;
+    }
+
+    if (!Array.isArray(alerts) || !alerts.length) {
+        logger.debug(`Notificação ${notif.id}: nenhum alerta de orçamento elegível neste ciclo.`);
+        return;
+    }
+
+    for (const alert of alerts) {
+        const user = alert?.user;
+        if (!user?.email) {
+            logger.debug(`Notificação ${notif.id}: alerta de orçamento ignorado por destinatário inválido.`);
+            continue;
+        }
+
+        if (user.active === false) {
+            logger.debug(`Notificação ${notif.id}: usuário ${user.id} inativo, alerta de orçamento descartado.`);
+            continue;
+        }
+
+        if (!hasRequiredOptIn(user, { requireScheduledOptIn: true })) {
+            logger.debug(`Notificação ${notif.id}: preferências desabilitam envio de alerta para usuário ${user.id}.`);
+            continue;
+        }
+
+        const context = {
+            contextType: 'budget-alert',
+            recipientRole: user.role || null,
+            userId: user.id ?? null,
+            budgetId: alert?.summary?.budgetId ?? null,
+            categoryId: alert?.summary?.categoryId ?? null,
+            month: alert?.summary?.month ?? null,
+            status: alert?.summary?.status ?? null,
+            ...(alert?.context || {})
+        };
+
+        const extras = {
+            budgetCategoryName: alert?.summary?.categoryName,
+            budgetMonthLabel: alert?.summary?.monthLabel,
+            budgetLimit: alert?.summary?.monthlyLimit,
+            budgetConsumption: alert?.summary?.consumption,
+            budgetRemaining: alert?.summary?.remaining,
+            budgetPercentage: alert?.summary?.percentage,
+            budgetStatus: alert?.summary?.status,
+            budgetStatusLabel: alert?.summary?.statusLabel,
+            budgetStatusMeta: alert?.summary?.statusMeta,
+            ...(alert?.extras || {})
+        };
+
+        try {
+            const result = await tracker.dispatch(user.email, context, async () => {
+                const payload = buildEmailPayload(notif, user, null, extras);
+                await sendEmail(user.email, payload.subject, payload.options);
+                return { userId: user.id, budgetId: context.budgetId };
+            });
+
+            if (result?.skipped) {
+                logger.debug(
+                    `Notificação ${notif.id}: alerta de orçamento ignorado para usuário ${user.id} (motivo: ${result.reason}).`
+                );
+            } else {
+                logger.debug(
+                    `Notificação ${notif.id}: alerta de orçamento enviado para usuário ${user.id} no ciclo ${runtimeContext.cycleKey}.`
+                );
+            }
+        } catch (dispatchError) {
+            logger.error(
+                `Notificação ${notif.id}: falha ao enviar alerta de orçamento para usuário ${user.id}:`,
+                dispatchError
+            );
+        }
+    }
+}
+
 /**
  * Processa notificações customizadas.
  * Se sendToAll for verdadeiro, envia para todos os usuários ativos;
@@ -755,6 +843,7 @@ module.exports = {
         buildUserWhere,
         processAppointmentNotification,
         processBirthdayNotification,
+        processBudgetAlertNotification,
         processCustomNotification,
         hasRequiredOptIn
     }
