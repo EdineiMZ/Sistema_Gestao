@@ -48,6 +48,25 @@ router.delete(
     financeController.deleteFinanceEntry
 );
 
+router.post(
+    '/goals',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeGoal.save', (req) => {
+        const month = req.body?.month || req.body?.goalMonth || 'unknown';
+        return `FinanceGoal:save:${month}`;
+    }),
+    financeController.saveFinanceGoal
+);
+
+router.delete(
+    '/goals/:id',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeGoal.delete', (req) => `FinanceGoal:${req.params.id}`),
+    financeController.deleteFinanceGoal
+);
+
 router.get(
     '/export/pdf',
     authMiddleware,

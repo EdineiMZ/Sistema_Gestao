@@ -1,5 +1,4 @@
-const { Op } = require('sequelize');
-const { FinanceEntry } = require('../../database/models');
+const { FinanceEntry, FinanceGoal } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -21,6 +20,34 @@ const parseAmount = (value) => {
     }
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeAmountInput = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === 'string') {
+        let cleaned = value.trim();
+        if (!cleaned) {
+            return null;
+        }
+
+        if (cleaned.includes('.') && cleaned.includes(',')) {
+            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+        } else if (cleaned.includes(',')) {
+            cleaned = cleaned.replace(',', '.');
+        }
+
+        const parsed = Number.parseFloat(cleaned);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
 };
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -141,93 +168,87 @@ const createSummaryPromise = (entriesPromise, filters) => {
     );
 };
 
-const wantsJsonResponse = (req) => {
-    const acceptHeader = req.headers?.accept || '';
-    return acceptHeader.includes('application/json');
+const parseMonthInput = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    if (value instanceof Date) {
+        return Number.isFinite(value.getTime()) ? value : null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const byNumber = new Date(value);
+        return Number.isFinite(byNumber.getTime()) ? byNumber : null;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+
+        if (/^\d{4}-\d{2}$/.test(trimmed)) {
+            const date = new Date(`${trimmed}-01T00:00:00Z`);
+            return Number.isFinite(date.getTime()) ? date : null;
+        }
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            const date = new Date(`${trimmed}T00:00:00Z`);
+            return Number.isFinite(date.getTime()) ? date : null;
+        }
+
+        const parsed = new Date(trimmed);
+        return Number.isFinite(parsed.getTime()) ? parsed : null;
+    }
+
+    return null;
 };
 
-const markConflict = (entry, reason, extra = {}) => {
-    if (!entry) {
-        return;
+const normalizeGoalMonth = (value) => {
+    if (typeof FinanceGoal?.normalizeMonthValue === 'function') {
+        return FinanceGoal.normalizeMonthValue(value);
     }
-    entry.conflict = true;
-    if (!entry.conflictReasons.includes(reason)) {
-        entry.conflictReasons.push(reason);
+
+    const parsed = parseMonthInput(value);
+    if (!parsed) {
+        return null;
     }
-    if (extra.existingEntryId) {
-        entry.existingEntryId = extra.existingEntryId;
-    }
+
+    const normalized = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), 1));
+    return normalized.toISOString().slice(0, 10);
 };
 
-const buildImportPreview = async (parsedEntries = []) => {
-    const previewEntries = parsedEntries.map((entry, index) => ({
-        id: index,
-        description: entry.description,
-        type: entry.type,
-        value: entry.value,
-        dueDate: entry.dueDate,
-        paymentDate: entry.paymentDate || '',
-        status: entry.status || 'pending',
-        metadata: entry.metadata || {},
-        hash: financeImportService.createEntryHash(entry),
-        conflict: false,
-        conflictReasons: [],
-        existingEntryId: null,
-        include: true
-    }));
-
-    const internalHashMap = new Map();
-    previewEntries.forEach((entry) => {
-        const existing = internalHashMap.get(entry.hash);
-        if (existing) {
-            markConflict(existing, 'Duplicado no arquivo importado.');
-            markConflict(entry, 'Duplicado no arquivo importado.');
-        } else {
-            internalHashMap.set(entry.hash, entry);
-        }
-    });
-
-    const dueDates = [...new Set(previewEntries.map((item) => item.dueDate))];
-    if (dueDates.length) {
-        const existingEntries = await FinanceEntry.findAll({
-            where: { dueDate: { [Op.in]: dueDates } },
-            attributes: ['id', 'description', 'value', 'dueDate']
-        });
-
-        const existingHashMap = new Map();
-        existingEntries.forEach((dbEntry) => {
-            const plain = dbEntry.get({ plain: true });
-            const hash = financeImportService.createEntryHash(plain);
-            if (!existingHashMap.has(hash)) {
-                existingHashMap.set(hash, plain);
-            }
-        });
-
-        previewEntries.forEach((entry) => {
-            if (existingHashMap.has(entry.hash)) {
-                const matched = existingHashMap.get(entry.hash);
-                markConflict(entry, `Conflito com lançamento existente #${matched.id}.`, {
-                    existingEntryId: matched.id
-                });
-            }
-        });
+const formatGoalMonthKey = (value) => {
+    const parsed = parseMonthInput(value);
+    if (!parsed) {
+        return '';
     }
+    return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}`;
+};
 
-    let conflictCount = 0;
-    previewEntries.forEach((entry) => {
-        if (entry.conflict) {
-            conflictCount += 1;
-            entry.include = false;
-        }
-    });
+const formatGoalMonthLabel = (value) => {
+    const parsed = parseMonthInput(value);
+    if (!parsed) {
+        return '--';
+    }
+    return parsed.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
+const serializeGoalForView = (goal) => {
+    const plain = typeof goal?.get === 'function' ? goal.get({ plain: true }) : goal || {};
+    const amountNumber = parseAmount(plain.targetNetAmount);
+    const monthKey = formatGoalMonthKey(plain.month);
 
     return {
-        entries: previewEntries,
-        totals: {
-            total: previewEntries.length,
-            new: previewEntries.length - conflictCount,
-            conflicting: conflictCount
-        }
+        id: plain.id,
+        month: plain.month,
+        monthKey,
+        monthLabel: formatGoalMonthLabel(plain.month),
+        targetNetAmount: amountNumber,
+        targetNetAmountInput: Number.isFinite(amountNumber) ? amountNumber.toFixed(2) : '0.00',
+        formattedAmount: formatCurrency(amountNumber),
+        notes: plain.notes || ''
     };
 };
 
@@ -237,8 +258,18 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const goalsPromise = FinanceGoal.findAll({
+                order: [['month', 'ASC']]
+            });
 
-            const [entries, summary] = await Promise.all([entriesPromise, summaryPromise]);
+            const [entries, summary, goals] = await Promise.all([entriesPromise, summaryPromise, goalsPromise]);
+
+            const projections = Array.isArray(summary.projections) ? summary.projections : [];
+            const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
+                || projections.find((item) => item.isFuture)
+                || projections.find((item) => item.isCurrent)
+                || null;
+            const projectionAlerts = projections.filter((item) => item.needsAttention);
 
             const importPreview = req.session?.financeImportPreview || null;
             if (importPreview) {
@@ -253,8 +284,14 @@ module.exports = {
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
                 financeTotals: summary.totals,
-                importPreview
-
+                financeProjections: projections,
+                projectionHighlight,
+                projectionAlerts,
+                financeGoals: goals.map(serializeGoalForView),
+                goalSummary: {
+                    total: goals.length,
+                    alerts: projectionAlerts.length
+                }
             });
         } catch (err) {
             console.error(err);
@@ -567,6 +604,83 @@ module.exports = {
             console.error(err);
             req.flash('error_msg', 'Erro ao excluir lançamento.');
             res.redirect('/finance');
+        }
+    },
+
+    saveFinanceGoal: async (req, res) => {
+        try {
+            const { goalId, month, targetNetAmount, notes } = req.body;
+            const normalizedMonth = normalizeGoalMonth(month);
+
+            if (!normalizedMonth) {
+                req.flash('error_msg', 'Período da meta inválido.');
+                return res.redirect('/finance');
+            }
+
+            const parsedAmount = normalizeAmountInput(targetNetAmount);
+            if (!Number.isFinite(parsedAmount)) {
+                req.flash('error_msg', 'Valor da meta inválido.');
+                return res.redirect('/finance');
+            }
+
+            const cleanedNotes = sanitizeText(notes);
+            const finalNotes = cleanedNotes ? cleanedNotes : null;
+
+            if (goalId) {
+                const goal = await FinanceGoal.findByPk(goalId);
+                if (!goal) {
+                    req.flash('error_msg', 'Meta financeira não encontrada.');
+                    return res.redirect('/finance');
+                }
+
+                goal.month = normalizedMonth;
+                goal.targetNetAmount = parsedAmount;
+                goal.notes = finalNotes;
+                await goal.save();
+                req.flash('success_msg', 'Meta financeira atualizada com sucesso!');
+            } else {
+                const [goal, created] = await FinanceGoal.findOrCreate({
+                    where: { month: normalizedMonth },
+                    defaults: {
+                        targetNetAmount: parsedAmount,
+                        notes: finalNotes
+                    }
+                });
+
+                if (!created) {
+                    goal.targetNetAmount = parsedAmount;
+                    goal.notes = finalNotes;
+                    await goal.save();
+                    req.flash('success_msg', 'Meta financeira atualizada com sucesso!');
+                } else {
+                    req.flash('success_msg', 'Meta financeira cadastrada com sucesso!');
+                }
+            }
+
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error(error);
+            req.flash('error_msg', 'Erro ao salvar meta financeira.');
+            return res.redirect('/finance');
+        }
+    },
+
+    deleteFinanceGoal: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const goal = await FinanceGoal.findByPk(id);
+            if (!goal) {
+                req.flash('error_msg', 'Meta financeira não encontrada.');
+                return res.redirect('/finance');
+            }
+
+            await goal.destroy();
+            req.flash('success_msg', 'Meta financeira removida.');
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error(error);
+            req.flash('error_msg', 'Erro ao remover meta financeira.');
+            return res.redirect('/finance');
         }
     },
 
