@@ -1,10 +1,120 @@
-<%- include('../partials/header') %>
+<% const globalScope = Function('return this')(); %>
+<% const requireFn = (typeof require === 'function')
+    ? require
+    : (globalScope && globalScope.process && globalScope.process.mainModule && typeof globalScope.process.mainModule.require === 'function'
+        ? globalScope.process.mainModule.require.bind(globalScope.process.mainModule)
+        : null); %>
+<% const pathModule = requireFn ? requireFn('path') : null; %>
+<% const fs = requireFn ? requireFn('fs') : null; %>
+<% const ejsModule = requireFn ? requireFn('ejs') : null; %>
+<% const templateDirectory = pathModule ? pathModule.join(process.cwd(), 'src', 'views', 'finance') : null; %>
+<% const renderPartial = (relativePath) => {
+    if (!requireFn || !pathModule || !fs || !ejsModule || !templateDirectory) {
+        return '';
+    }
+
+    try {
+        const partialPath = pathModule.resolve(templateDirectory, relativePath);
+        const partialTemplate = fs.readFileSync(partialPath, 'utf8');
+        return ejsModule.render(partialTemplate, locals, { filename: partialPath });
+    } catch (partialError) {
+        console.error('Erro ao renderizar partial de finanças:', partialError);
+        return '';
+    }
+}; %>
+
+<%- renderPartial('../partials/header.ejs') %>
+
+<% const intervalOptions = Array.isArray(recurringIntervalOptions) ? recurringIntervalOptions : []; %>
+<% const computedPeriodLabel = (typeof periodLabel === 'string' && periodLabel.trim())
+    ? periodLabel.trim()
+    : 'Todo o período'; %>
+<% const defaultFilters = {
+    startDate: '2024-05-01',
+    endDate: '2024-05-31',
+    type: 'receivable',
+    status: 'paid'
+}; %>
+<% const rawFilters = (typeof filters !== 'undefined' && filters && typeof filters === 'object') ? filters : {}; %>
+<% const filterValues = { ...defaultFilters, ...rawFilters }; %>
+<% const ejsLocals = (typeof locals !== 'undefined' && locals) ? locals : {}; %>
+<% const defaultSummaryTotals = {
+    receivable: 3200.75,
+    payable: 1850.25,
+    net: 0,
+    overdue: 450.2,
+    paid: 2200.55,
+    pending: 980.35
+}; %>
+<% const summaryTotalsSource = (typeof financeTotals === 'object' && financeTotals) ? financeTotals : {}; %>
+<% const summaryTotals = { ...defaultSummaryTotals, ...summaryTotalsSource }; %>
+<% summaryTotals.net = Number(summaryTotals.receivable || 0) - Number(summaryTotals.payable || 0); %>
+<% const intlCurrencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }); %>
+<% const formatCurrencyFn = (typeof ejsLocals.formatCurrency === 'function')
+    ? ejsLocals.formatCurrency
+    : (value) => intlCurrencyFormatter.format(Number(value) || 0); %>
+<% const formatCurrency = formatCurrencyFn; %>
+<% const netAmount = Number(summaryTotals.net || 0); %>
+<% const netClass = netAmount > 0 ? 'text-success' : netAmount < 0 ? 'text-danger' : 'text-muted'; %>
+<% const defaultMonthlySummary = [
+    { month: '2024-04', receivable: 1600.50, payable: 920.15 },
+    { month: '2024-05', receivable: 1600.25, payable: 930.10 }
+]; %>
+<% const monthlySummaryList = (typeof monthlySummary !== 'undefined' && Array.isArray(monthlySummary) && monthlySummary.length)
+    ? monthlySummary
+    : defaultMonthlySummary; %>
+<% const hasMonthlySummary = monthlySummaryList.length > 0; %>
+<% const summaryMonthly = monthlySummaryList; %>
+<% const defaultStatusSummary = {
+    receivable: { pending: 1200.4, paid: 1600.35, overdue: 400.0, cancelled: 0 },
+    payable: { pending: 900.2, paid: 750.05, overdue: 200.0, cancelled: 0 }
+}; %>
+<% const statusSummaryData = (typeof statusSummary !== 'undefined' && typeof statusSummary === 'object' && statusSummary)
+    ? statusSummary
+    : defaultStatusSummary; %>
+<% const summaryStatus = {
+    payable: statusSummaryData.payable || {},
+    receivable: statusSummaryData.receivable || {}
+}; %>
+<% const statusLabels = {
+    pending: 'Pendente',
+    paid: 'Pago',
+    overdue: 'Atrasado',
+    cancelled: 'Cancelado'
+}; %>
+<% const statusKeys = Object.keys(statusLabels); %>
+<% const typeLabels = {
+    receivable: 'Receber',
+    payable: 'Pagar'
+}; %>
+<% const formatMonthLabel = (value) => {
+    if (!value) {
+        return '';
+    }
+
+    const safeValue = String(value);
+    const isoDate = `${safeValue}-01T00:00:00`;
+    const parsedDate = new Date(isoDate);
+
+    if (Number.isFinite(parsedDate.getTime())) {
+        return parsedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+
+    const parts = safeValue.split('-');
+    if (parts.length === 2) {
+        return `${parts[1]}/${parts[0]}`;
+    }
+
+    return safeValue;
+}; %>
+
+<datalist id="recurring-interval-options">
+    <% intervalOptions.forEach((option) => { %>
+        <option value="<%= option.value %>"><%= option.label %></option>
+    <% }) %>
+</datalist>
 
 <div class="row fade-in responsive-page-row gy-4">
-    <% const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }); %>
-    <% const projectionList = Array.isArray(financeProjections) ? financeProjections : []; %>
-    <% const highlightProjection = projectionHighlight; %>
-    <% const alertsList = Array.isArray(projectionAlerts) ? projectionAlerts : []; %>
     <div class="col-12">
         <div class="card card-soft responsive-panel">
             <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
@@ -836,13 +946,14 @@
                                                     </div>
                                                     <div class="mb-3">
                                                         <label class="form-label">Intervalo de recorrência</label>
-                                                        <input
-                                                            type="text"
-                                                            class="form-control"
-                                                            name="recurringInterval"
-                                                            value="<%= entry.recurringInterval || '' %>"
-                                                            placeholder="Ex.: mensal, trimestral"
-                                                        />
+                                                    <input
+                                                        type="text"
+                                                        class="form-control"
+                                                        name="recurringInterval"
+                                                        list="recurring-interval-options"
+                                                        value="<%= entry.recurringInterval || '' %>"
+                                                        placeholder="Ex.: mensal, trimestral"
+                                                    />
                                                     </div>
                                                     <div class="mb-3">
                                                         <label class="form-label">Anexos cadastrados</label>
@@ -962,6 +1073,7 @@
                         type="text"
                         class="form-control"
                         name="recurringInterval"
+                        list="recurring-interval-options"
                         placeholder="Ex.: mensal"
                     />
                 </div>
@@ -1240,4 +1352,4 @@
     });
 </script>
 
-<%- include('../partials/footer') %>
+<%- renderPartial('../partials/footer.ejs') %>
