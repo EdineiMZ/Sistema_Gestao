@@ -28,9 +28,9 @@
     };
 
     const charts = {
-        financeTrend: null,
-        appointmentStatus: null,
-        userGrowth: null
+        financeTrend: { canvas: financeCanvas, instance: null, observer: null },
+        appointmentStatus: { canvas: appointmentCanvas, instance: null, observer: null },
+        userGrowth: { canvas: userGrowthCanvas, instance: null, observer: null }
     };
 
     const numberFormatter = new Intl.NumberFormat('pt-BR');
@@ -115,10 +115,49 @@
         }
     };
 
-    const destroyChart = (chartInstance) => {
-        if (chartInstance && typeof chartInstance.destroy === 'function') {
-            chartInstance.destroy();
+    const destroyChart = (key) => {
+        const chartEntry = charts[key];
+        if (!chartEntry) {
+            return;
         }
+
+        if (chartEntry.observer) {
+            chartEntry.observer.disconnect();
+            chartEntry.observer = null;
+        }
+
+        if (chartEntry.instance && typeof chartEntry.instance.destroy === 'function') {
+            chartEntry.instance.destroy();
+        }
+
+        chartEntry.instance = null;
+    };
+
+    const observeChart = (key) => {
+        if (typeof window.ResizeObserver !== 'function') {
+            return;
+        }
+
+        const chartEntry = charts[key];
+        if (!chartEntry || !chartEntry.canvas || !chartEntry.instance) {
+            return;
+        }
+
+        const container = chartEntry.canvas.closest('[data-chart-container]') || chartEntry.canvas.parentElement;
+        if (!container) {
+            return;
+        }
+
+        const observer = new ResizeObserver(() => {
+            window.requestAnimationFrame(() => {
+                if (chartEntry.instance && typeof chartEntry.instance.resize === 'function') {
+                    chartEntry.instance.resize();
+                }
+            });
+        });
+
+        observer.observe(container);
+        chartEntry.observer = observer;
     };
 
     const buildLineChart = (canvas, data, config = {}) => {
@@ -218,18 +257,25 @@
 
     const updateCharts = (chartsData = {}) => {
         if (chartsData.financeTrend && financeCanvas) {
-            destroyChart(charts.financeTrend);
-            charts.financeTrend = buildLineChart(financeCanvas, chartsData.financeTrend, { valueType: 'currency' });
+            destroyChart('financeTrend');
+            charts.financeTrend.instance = buildLineChart(
+                financeCanvas,
+                chartsData.financeTrend,
+                { valueType: 'currency' }
+            );
+            observeChart('financeTrend');
         }
 
         if (chartsData.appointmentStatus && appointmentCanvas) {
-            destroyChart(charts.appointmentStatus);
-            charts.appointmentStatus = buildDoughnutChart(appointmentCanvas, chartsData.appointmentStatus);
+            destroyChart('appointmentStatus');
+            charts.appointmentStatus.instance = buildDoughnutChart(appointmentCanvas, chartsData.appointmentStatus);
+            observeChart('appointmentStatus');
         }
 
         if (chartsData.userGrowth && userGrowthCanvas) {
-            destroyChart(charts.userGrowth);
-            charts.userGrowth = buildLineChart(userGrowthCanvas, chartsData.userGrowth, { valueType: 'number' });
+            destroyChart('userGrowth');
+            charts.userGrowth.instance = buildLineChart(userGrowthCanvas, chartsData.userGrowth, { valueType: 'number' });
+            observeChart('userGrowth');
         }
     };
 

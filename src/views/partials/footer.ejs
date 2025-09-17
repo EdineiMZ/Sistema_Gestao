@@ -1,19 +1,23 @@
 </main>
 
-<footer class="app-footer text-white py-4 mt-auto">
-    <div class="container-lg text-center small">
-        <p class="mb-1">&copy; <%= new Date().getFullYear() %> <%= appName || 'ES Developers' %>. Todos os direitos reservados.</p>
-        <p class="mb-0 text-white-50">Protegemos seus dados com as melhores práticas de segurança.</p>
+<footer class="app-footer text-white py-5 mt-auto">
+    <div class="container-xl app-footer__content d-flex flex-column flex-lg-row align-items-center justify-content-between gap-4">
+        <div class="text-center text-lg-start">
+            <p class="mb-2 fw-semibold">&copy; <%= new Date().getFullYear() %> <%= appName || 'ES Developers' %></p>
+            <p class="mb-0 text-white-50 small">Monitoramento contínuo e proteção ativa dos seus dados sensíveis.</p>
+        </div>
         <% const hasUserContext = typeof user !== 'undefined' && user; %>
-        <% if (hasUserContext) { %>
-            <div class="d-flex flex-wrap gap-3 justify-content-center mt-3">
-                <a class="link-light text-decoration-none" href="/pages/contact">Fale conosco</a>
+        <div class="d-flex flex-wrap gap-3 justify-content-center">
+            <a class="link-light text-decoration-none small" href="/pages/contact">Fale conosco</a>
+            <span class="text-white-50">•</span>
+            <a class="link-light text-decoration-none small" href="/pages/sobre">Sobre a plataforma</a>
+            <span class="text-white-50">•</span>
+            <a class="link-light text-decoration-none small" href="/pages/terms">Termos de Uso &amp; Privacidade</a>
+            <% if (hasUserContext) { %>
                 <span class="text-white-50">•</span>
-                <a class="link-light text-decoration-none" href="/pages/sobre">Sobre a plataforma</a>
-                <span class="text-white-50">•</span>
-                <a class="link-light text-decoration-none" href="/pages/terms">Termos de Uso &amp; Privacidade</a>
-            </div>
-        <% } %>
+                <a class="link-light text-decoration-none small" href="/users/preferences">Privacidade da conta</a>
+            <% } %>
+        </div>
     </div>
 </footer>
 

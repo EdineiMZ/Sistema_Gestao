@@ -1,7 +1,7 @@
 <%- include('../partials/header') %>
 
 <section id="dashboardRoot" class="dashboard-root fade-in">
-    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div class="dashboard-heading d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
         <div>
             <span class="app-chip"><i class="bi bi-speedometer2 me-2"></i>Monitoramento avançado</span>
             <h1 class="dashboard-title mt-3 mb-2">Visão gerencial inteligente</h1>
@@ -133,7 +133,7 @@
 
     <div class="row g-4 mt-1">
         <div class="col-xxl-8">
-            <article class="card chart-card border-0 shadow-sm h-100">
+            <article class="card chart-card border-0 shadow-sm h-100" data-chart-surface>
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
@@ -142,7 +142,14 @@
                         </div>
                         <span class="badge rounded-pill bg-light text-muted"><i class="bi bi-clock-history me-1"></i>Atualização automática</span>
                     </div>
-                    <canvas id="financeTrendChart" height="260" aria-label="Gráfico de desempenho financeiro" role="img"></canvas>
+                    <div class="chart-area" data-chart-container data-chart-size="lg">
+                        <canvas
+                            id="financeTrendChart"
+                            class="chart-canvas"
+                            aria-label="Gráfico de desempenho financeiro"
+                            role="img"
+                        ></canvas>
+                    </div>
                 </div>
             </article>
         </div>
@@ -166,7 +173,7 @@
 
     <div class="row g-4 mt-1">
         <div class="col-xl-6">
-            <article class="card chart-card border-0 shadow-sm h-100">
+            <article class="card chart-card border-0 shadow-sm h-100" data-chart-surface>
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
@@ -174,12 +181,19 @@
                             <p class="chart-subtitle mb-0 text-muted">Distribuição do mês corrente por status operacional.</p>
                         </div>
                     </div>
-                    <canvas id="appointmentStatusChart" height="280" aria-label="Distribuição de status de agendamentos" role="img"></canvas>
+                    <div class="chart-area" data-chart-container>
+                        <canvas
+                            id="appointmentStatusChart"
+                            class="chart-canvas"
+                            aria-label="Distribuição de status de agendamentos"
+                            role="img"
+                        ></canvas>
+                    </div>
                 </div>
             </article>
         </div>
         <div class="col-xl-6">
-            <article class="card chart-card border-0 shadow-sm h-100">
+            <article class="card chart-card border-0 shadow-sm h-100" data-chart-surface>
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
@@ -187,7 +201,14 @@
                             <p class="chart-subtitle mb-0 text-muted">Novos colaboradores cadastrados por mês.</p>
                         </div>
                     </div>
-                    <canvas id="userGrowthChart" height="280" aria-label="Crescimento de usuários" role="img"></canvas>
+                    <div class="chart-area" data-chart-container>
+                        <canvas
+                            id="userGrowthChart"
+                            class="chart-canvas"
+                            aria-label="Crescimento de usuários"
+                            role="img"
+                        ></canvas>
+                    </div>
                 </div>
             </article>
         </div>

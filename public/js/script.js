@@ -99,13 +99,51 @@
         }
     }
 
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            if (loader) {
-                loader.classList.add('is-hidden');
+    const hideLoader = () => {
+        if (!loader || loader.classList.contains('is-hidden')) {
+            return;
+        }
+
+        loader.classList.add('is-hidden');
+        loader.setAttribute('aria-hidden', 'true');
+
+        const removeOnTransitionEnd = () => {
+            loader.removeEventListener('transitionend', removeOnTransitionEnd);
+            if (loader.parentElement) {
+                loader.parentElement.removeChild(loader);
             }
-        }, 280);
-    });
+        };
+
+        loader.addEventListener('transitionend', removeOnTransitionEnd);
+    };
+
+    if (loader) {
+        let loaderTimeoutId = window.setTimeout(hideLoader, 1500);
+
+        const requestHideLoader = () => {
+            if (loaderTimeoutId) {
+                window.clearTimeout(loaderTimeoutId);
+                loaderTimeoutId = null;
+            }
+            window.setTimeout(hideLoader, 60);
+        };
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            () => {
+                requestHideLoader();
+            },
+            { once: true }
+        );
+
+        window.addEventListener(
+            'load',
+            () => {
+                requestHideLoader();
+            },
+            { once: true }
+        );
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         const alertElements = document.querySelectorAll('[data-auto-dismiss]');
