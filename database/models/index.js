@@ -59,7 +59,18 @@ Object.keys(db).forEach(modelName => {
 });
 
 // --- Início das associações manuais ---
-const { User, Appointment, Room, Procedure, FinanceCategory, FinanceEntry, Budget, BudgetThresholdStatus } = db;
+const {
+    User,
+    Appointment,
+    Room,
+    Procedure,
+    FinanceCategory,
+    FinanceEntry,
+    Budget,
+    BudgetThresholdStatus,
+    SupportTicket,
+    SupportAttachment
+} = db;
 
 /**
  * Exemplo de associações:
@@ -118,6 +129,36 @@ if (Procedure && Appointment) {
 }
 
 // --- Fim das associações manuais ---
+
+if (User && SupportTicket && !(User.associations && User.associations.supportTickets)) {
+    User.hasMany(SupportTicket, {
+        as: 'supportTickets',
+        foreignKey: 'userId'
+    });
+}
+
+if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.requester)) {
+    SupportTicket.belongsTo(User, {
+        as: 'requester',
+        foreignKey: 'userId'
+    });
+}
+
+if (SupportTicket && SupportAttachment && !(SupportTicket.associations && SupportTicket.associations.attachments)) {
+    SupportTicket.hasMany(SupportAttachment, {
+        as: 'attachments',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE',
+        hooks: true
+    });
+}
+
+if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && SupportAttachment.associations.ticket)) {
+    SupportAttachment.belongsTo(SupportTicket, {
+        as: 'ticket',
+        foreignKey: 'ticketId'
+    });
+}
 
 if (Budget && User && !(Budget.associations && Budget.associations.user)) {
     Budget.belongsTo(User, {
