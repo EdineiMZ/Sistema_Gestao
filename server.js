@@ -1,6 +1,8 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
+const { Server } = require('socket.io');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const SequelizeStore = require('connect-session-sequelize')(session.Store);
@@ -8,6 +10,7 @@ const flash = require('connect-flash');
 const methodOverride = require('method-override');
 const path = require('path');
 const { sequelize, User } = require('./database/models');
+const { initializeSupportChat } = require('./src/services/supportChatService');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
 const { getNavigationShortcuts, getMenuItems, getQuickActions } = require('./src/utils/navigation');
 
@@ -50,6 +53,13 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: false,
+    connectionStateRecovery: {
+        maxDisconnectionDuration: 60_000
+    }
+});
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
@@ -93,7 +103,7 @@ app.use(
                     'data:'
                 ],
                 imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
-                connectSrc: ["'self'"],
+                connectSrc: ["'self'", 'ws:', 'wss:'],
                 frameAncestors: ["'self'"],
                 objectSrc: ["'none'"],
                 baseUri: ["'self'"],
@@ -115,7 +125,7 @@ app.use(express.json());
 app.use(methodOverride('_method'));
 
 // Sessão
-app.use(session({
+const sessionMiddleware = session({
     name: 'sgi.sid',
     secret: SESSION_SECRET,
     resave: false,
@@ -127,7 +137,9 @@ app.use(session({
         sameSite: 'lax',
         maxAge: 12 * 60 * 60 * 1000
     }
-}));
+});
+
+app.use(sessionMiddleware);
 app.use(flash());
 
 // Variáveis locais
@@ -260,12 +272,16 @@ app.use('/audit', auditRoutes);
 app.use('/admin', adminRoutes);
 app.use('/support', supportRoutes);
 
+
 // Conexão DB
+initializeSupportChat({ io, sessionMiddleware });
+
+
 Promise.all([sequelize.sync(), sessionStoreSyncPromise])
     .then(() => {
         console.log('Banco de dados sincronizado com sucesso!');
         // Sobe o servidor
-        app.listen(PORT, () => {
+        server.listen(PORT, () => {
             console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
         });
 

@@ -130,35 +130,6 @@ if (Procedure && Appointment) {
 }
 
 // --- Fim das associações manuais ---
-if (SupportTicket && User) {
-    if (!(User.associations && User.associations.createdSupportTickets)) {
-        User.hasMany(SupportTicket, {
-            as: 'createdSupportTickets',
-            foreignKey: 'creatorId'
-        });
-    }
-
-    if (!(User.associations && User.associations.assignedSupportTickets)) {
-        User.hasMany(SupportTicket, {
-            as: 'assignedSupportTickets',
-            foreignKey: 'assignedToId'
-        });
-    }
-}
-
-if (SupportMessage && User && !(User.associations && User.associations.supportMessages)) {
-    User.hasMany(SupportMessage, {
-        as: 'supportMessages',
-        foreignKey: 'senderId'
-    });
-}
-
-if (SupportAttachment && User && !(User.associations && User.associations.uploadedSupportAttachments)) {
-    User.hasMany(SupportAttachment, {
-        as: 'uploadedSupportAttachments',
-        foreignKey: 'uploadedById'
-    });
-}
 
 if (Budget && User && !(Budget.associations && Budget.associations.user)) {
     Budget.belongsTo(User, {
@@ -210,6 +181,68 @@ if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEnt
         foreignKey: 'financeCategoryId'
     });
 }
+
+if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.requester)) {
+    SupportTicket.belongsTo(User, {
+        as: 'requester',
+        foreignKey: 'userId'
+    });
+}
+
+if (SupportTicket && SupportMessage && !(SupportTicket.associations && SupportTicket.associations.messages)) {
+    SupportTicket.hasMany(SupportMessage, {
+        as: 'messages',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportTicket && SupportAttachment && !(SupportTicket.associations && SupportTicket.associations.attachments)) {
+    SupportTicket.hasMany(SupportAttachment, {
+        as: 'attachments',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportMessage && SupportTicket && !(SupportMessage.associations && SupportMessage.associations.ticket)) {
+    SupportMessage.belongsTo(SupportTicket, {
+        as: 'ticket',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportMessage && User && !(SupportMessage.associations && SupportMessage.associations.sender)) {
+    SupportMessage.belongsTo(User, {
+        as: 'sender',
+        foreignKey: 'senderId'
+    });
+}
+
+if (SupportMessage && SupportAttachment && !(SupportMessage.associations && SupportMessage.associations.attachment)) {
+    SupportMessage.belongsTo(SupportAttachment, {
+        as: 'attachment',
+        foreignKey: 'attachmentId'
+    });
+}
+
+if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && SupportAttachment.associations.ticket)) {
+    SupportAttachment.belongsTo(SupportTicket, {
+        as: 'ticket',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportAttachment && SupportMessage && !(SupportAttachment.associations && SupportAttachment.associations.message)) {
+    SupportAttachment.hasOne(SupportMessage, {
+        as: 'message',
+        foreignKey: 'attachmentId',
+        constraints: false
+    });
+}
+
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

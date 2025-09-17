@@ -10,44 +10,60 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER,
             allowNull: false
         },
-        body: {
-            type: DataTypes.TEXT,
+        senderRole: {
+            type: DataTypes.STRING(20),
+            allowNull: false
+        },
+        messageType: {
+            type: DataTypes.STRING(20),
             allowNull: false,
+            defaultValue: 'text',
             validate: {
-                notEmpty: {
-                    msg: 'Mensagem não pode estar vazia.'
-                }
+                isIn: [['text', 'file', 'system']]
             }
         },
-        isFromAgent: {
-            type: DataTypes.BOOLEAN,
-            allowNull: false,
-            defaultValue: false
+        content: {
+            type: DataTypes.TEXT,
+            allowNull: true
+        },
+        attachmentId: {
+            type: DataTypes.INTEGER,
+            allowNull: true
         }
     }, {
-        tableName: 'SupportMessages',
+        tableName: 'supportMessages',
         indexes: [
-            { name: 'support_messages_ticket_idx', fields: ['ticketId'] },
-            { name: 'support_messages_sender_idx', fields: ['senderId'] }
+            {
+                name: 'supportMessages_ticketId_createdAt',
+                fields: ['ticketId', 'createdAt']
+            }
         ]
     });
 
     SupportMessage.associate = (models) => {
-        SupportMessage.belongsTo(models.SupportTicket, {
-            as: 'ticket',
-            foreignKey: 'ticketId'
-        });
+        const { SupportTicket, User, SupportAttachment } = models;
 
-        SupportMessage.belongsTo(models.User, {
-            as: 'sender',
-            foreignKey: 'senderId'
-        });
+        if (SupportTicket) {
+            SupportMessage.belongsTo(SupportTicket, {
+                as: 'ticket',
+                foreignKey: 'ticketId',
+                onDelete: 'CASCADE'
+            });
+        }
 
-        SupportMessage.hasMany(models.SupportAttachment, {
-            as: 'attachments',
-            foreignKey: 'messageId',
-            onDelete: 'CASCADE'
-        });
+        if (User) {
+            SupportMessage.belongsTo(User, {
+                as: 'sender',
+                foreignKey: 'senderId'
+            });
+        }
+
+        if (SupportAttachment) {
+            SupportMessage.belongsTo(SupportAttachment, {
+                as: 'attachment',
+                foreignKey: 'attachmentId'
+            });
+        }
     };
 
     return SupportMessage;

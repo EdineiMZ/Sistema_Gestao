@@ -1,220 +1,167 @@
-'use strict';
 const {
-    SupportTicket,
-    SupportMessage,
-    SupportAttachment,
-    User
-} = require('../../database/models');
-const {
-    isSupportAgentRole,
-    TICKET_STATUSES
-} = require('../constants/support');
-const {
-    createTicket,
-    addMessage,
-    updateTicketStatus,
-    assignTicket,
-    normalizeAttachmentsInput
-} = require('../services/supportTicketService');
+    ensureTicketAccess,
+    ensureAdminRole,
+    createAttachment,
+    loadTicketHistory,
+    listTicketAttachments,
+    notifyAdminJoined,
+    getAttachmentById
+} = require('../services/supportChatService');
+const fileStorageService = require('../services/fileStorageService');
 
-const wantsJson = (req) => {
-    const accept = req.headers.accept || '';
-    return req.xhr || accept.includes('application/json') || accept.includes('text/json');
-};
-
-const parseAttachments = (raw) => {
-    if (!raw) {
-        return [];
+const getRequestUser = (req) => {
+    if (req.user && req.user.active) {
+        return req.user;
     }
 
-    if (typeof raw === 'string') {
+    if (req.session && req.session.user) {
+        return req.session.user;
+    }
+
+    return null;
+};
+
+const supportController = {
+    async renderChat(req, res) {
         try {
-            const parsed = JSON.parse(raw);
-            return normalizeAttachmentsInput(parsed);
-        } catch (error) {
-            return [];
-        }
-    }
-
-    return normalizeAttachmentsInput(raw);
-};
-
-const handleSuccess = (req, res, message, payload = {}) => {
-    if (wantsJson(req)) {
-        return res.json({ message, ...payload });
-    }
-
-    if (message) {
-        req.flash('success_msg', message);
-    }
-
-    return res.redirect('/support/tickets');
-};
-
-const handleError = (req, res, error) => {
-    const message = error && error.message ? error.message : 'Não foi possível concluir a operação.';
-
-    if (wantsJson(req)) {
-        return res.status(400).json({ message });
-    }
-
-    req.flash('error_msg', message);
-    return res.redirect('/support/tickets');
-};
-
-const listTickets = async (req, res) => {
-    try {
-        const user = req.user;
-        const agent = isSupportAgentRole(user?.role);
-
-        const where = agent
-            ? {}
-            : { creatorId: user.id };
-
-        const records = await SupportTicket.findAll({
-            where,
-            include: [
-                {
-                    model: User,
-                    as: 'creator',
-                    attributes: ['id', 'name', 'email', 'role']
-                },
-                {
-                    model: User,
-                    as: 'assignee',
-                    attributes: ['id', 'name', 'email', 'role']
-                },
-                {
-                    model: SupportMessage,
-                    as: 'messages',
-                    include: [
-                        {
-                            model: User,
-                            as: 'sender',
-                            attributes: ['id', 'name', 'role']
-                        },
-                        {
-                            model: SupportAttachment,
-                            as: 'attachments',
-                            attributes: ['id', 'fileName', 'storageKey', 'contentType', 'fileSize', 'createdAt']
-                        }
-                    ]
-                }
-            ],
-            order: [['updatedAt', 'DESC']]
-        });
-
-        const tickets = records.map((ticket) => {
-            const plain = ticket.get({ plain: true });
-            if (Array.isArray(plain.messages)) {
-                plain.messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.redirect('/login');
             }
-            return plain;
-        });
 
-        if (wantsJson(req)) {
-            return res.json({ tickets, isAgent: agent });
+            const ticketId = Number.parseInt(req.params.ticketId, 10);
+            const { ticket } = await ensureTicketAccess(ticketId, user);
+            const [history, attachments] = await Promise.all([
+                loadTicketHistory(ticket.id),
+                listTicketAttachments(ticket.id)
+            ]);
+
+            res.render('support/chat', {
+                ticket: ticket.get({ plain: true }),
+                history,
+                attachments
+            });
+        } catch (error) {
+            const status = error?.status || 500;
+            if (status >= 500) {
+                console.error('Erro ao renderizar chat de suporte:', error);
+            }
+
+            req.flash('error_msg', error?.message || 'Não foi possível carregar o chat.');
+            res.redirect('/');
         }
+    },
 
-        return res.render('support/tickets', {
-            tickets,
-            isAgent: agent,
-            statuses: TICKET_STATUSES
-        });
-    } catch (error) {
-        return handleError(req, res, error);
-    }
-};
+    async uploadAttachment(req, res) {
+        try {
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.status(401).json({ message: 'Autenticação necessária.' });
+            }
 
-const createTicketController = async (req, res) => {
-    try {
-        const assignedToId = req.body.assignedToId ? Number.parseInt(req.body.assignedToId, 10) : null;
+            const ticketId = Number.parseInt(req.params.ticketId, 10);
+            await ensureTicketAccess(ticketId, user);
 
-        await createTicket({
-            subject: req.body.subject,
-            description: req.body.description,
-            creator: req.user,
-            attachments: parseAttachments(req.body.attachments),
-            assignedToId: Number.isFinite(assignedToId) ? assignedToId : null,
-            ipAddress: req.ip
-        });
+            if (!req.file) {
+                return res.status(400).json({ message: 'Arquivo obrigatório.' });
+            }
 
-        return handleSuccess(req, res, 'Chamado criado com sucesso.');
-    } catch (error) {
-        return handleError(req, res, error);
-    }
-};
+            const attachment = await createAttachment({
+                ticketId,
+                file: req.file
+            });
 
-const addMessageController = async (req, res) => {
-    try {
-        const ticketId = Number.parseInt(req.params.ticketId, 10);
-
-        if (!Number.isFinite(ticketId)) {
-            throw new Error('Chamado inválido.');
+            return res.status(201).json({ attachment });
+        } catch (error) {
+            if (error.status) {
+                return res.status(error.status).json({ message: error.message });
+            }
+            console.error('Erro ao anexar arquivo ao ticket:', error);
+            return res.status(500).json({ message: 'Erro ao anexar arquivo.' });
         }
+    },
 
-        await addMessage({
-            ticketId,
-            sender: req.user,
-            body: req.body.body,
-            attachments: parseAttachments(req.body.attachments),
-            ipAddress: req.ip
-        });
+    async fetchHistory(req, res) {
+        try {
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.status(401).json({ message: 'Autenticação necessária.' });
+            }
 
-        return handleSuccess(req, res, 'Mensagem registrada com sucesso.');
-    } catch (error) {
-        return handleError(req, res, error);
-    }
-};
+            const ticketId = Number.parseInt(req.params.ticketId, 10);
+            await ensureTicketAccess(ticketId, user);
+            const [history, attachments] = await Promise.all([
+                loadTicketHistory(ticketId),
+                listTicketAttachments(ticketId)
+            ]);
 
-const updateStatusController = async (req, res) => {
-    try {
-        const ticketId = Number.parseInt(req.params.ticketId, 10);
-
-        if (!Number.isFinite(ticketId)) {
-            throw new Error('Chamado inválido.');
+            return res.json({ history, attachments });
+        } catch (error) {
+            if (error.status) {
+                return res.status(error.status).json({ message: error.message });
+            }
+            console.error('Erro ao recuperar histórico do chat:', error);
+            return res.status(500).json({ message: 'Erro ao carregar histórico.' });
         }
+    },
 
-        await updateTicketStatus({
-            ticketId,
-            status: req.body.status,
-            actor: req.user,
-            ipAddress: req.ip
-        });
+    async notifyAdminEntry(req, res) {
+        try {
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.status(401).json({ message: 'Autenticação necessária.' });
+            }
 
-        return handleSuccess(req, res, 'Status atualizado com sucesso.');
-    } catch (error) {
-        return handleError(req, res, error);
-    }
-};
+            ensureAdminRole(user);
+            const ticketId = Number.parseInt(req.params.ticketId, 10);
+            const { ticket } = await ensureTicketAccess(ticketId, user);
+            await notifyAdminJoined({ ticket, adminUser: user });
 
-const assignTicketController = async (req, res) => {
-    try {
-        const ticketId = Number.parseInt(req.params.ticketId, 10);
-
-        if (!Number.isFinite(ticketId)) {
-            throw new Error('Chamado inválido.');
+            return res.json({ ok: true });
+        } catch (error) {
+            if (error.status) {
+                return res.status(error.status).json({ message: error.message });
+            }
+            console.error('Erro ao notificar entrada do administrador:', error);
+            return res.status(500).json({ message: 'Erro ao notificar entrada.' });
         }
+    },
 
-        const assignedToId = req.body.assignedToId ? Number.parseInt(req.body.assignedToId, 10) : null;
+    async downloadAttachment(req, res) {
+        try {
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.redirect('/login');
+            }
 
-        await assignTicket({
-            ticketId,
-            assignedToId: Number.isFinite(assignedToId) ? assignedToId : null,
-            actor: req.user,
-            ipAddress: req.ip
-        });
+            const attachmentId = Number.parseInt(req.params.attachmentId, 10);
+            const attachment = await getAttachmentById(attachmentId);
 
-        return handleSuccess(req, res, 'Chamado atribuído com sucesso.');
-    } catch (error) {
-        return handleError(req, res, error);
+            if (!attachment) {
+                return res.status(404).send('Anexo não encontrado.');
+            }
+
+            await ensureTicketAccess(attachment.ticketId, user);
+
+            res.setHeader('Content-Type', attachment.mimeType);
+            res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+
+            const stream = fileStorageService.createReadStream(attachment.storageKey);
+            stream.on('error', (error) => {
+                console.error('Erro ao enviar anexo do suporte:', error);
+                if (!res.headersSent) {
+                    res.status(500).send('Erro ao enviar arquivo.');
+                }
+            });
+            stream.pipe(res);
+        } catch (error) {
+            console.error('Erro ao fazer download do anexo do suporte:', error);
+            if (!res.headersSent) {
+                res.status(500).send('Erro ao baixar anexo.');
+            }
+        }
     }
 };
 
-module.exports = {
-    listTickets,
-    createTicket: createTicketController,
-    addMessage: addMessageController,
-    updateStatus: updateStatusController,
-    assignTicket: assignTicketController
-};
+module.exports = supportController;
+

@@ -6,74 +6,55 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER,
             allowNull: false
         },
-        messageId: {
-            type: DataTypes.INTEGER,
-            allowNull: false
-        },
-        uploadedById: {
-            type: DataTypes.INTEGER,
-            allowNull: true
-        },
-        fileName: {
+        originalName: {
             type: DataTypes.STRING(255),
-            allowNull: false,
-            validate: {
-                notEmpty: {
-                    msg: 'Nome do arquivo é obrigatório.'
-                }
-            }
+            allowNull: false
         },
         storageKey: {
             type: DataTypes.STRING(255),
-            allowNull: false,
-            validate: {
-                notEmpty: {
-                    msg: 'Chave de armazenamento é obrigatória.'
-                }
-            }
+            allowNull: false
+        },
+        mimeType: {
+            type: DataTypes.STRING(120),
+            allowNull: false
+        },
+        size: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: false
         },
         checksum: {
-            type: DataTypes.STRING(128),
-            allowNull: true
-        },
-        contentType: {
-            type: DataTypes.STRING(120),
-            allowNull: true
-        },
-        fileSize: {
-            type: DataTypes.BIGINT,
-            allowNull: true,
-            validate: {
-                min: {
-                    args: [0],
-                    msg: 'Tamanho do arquivo inválido.'
-                }
-            }
+            type: DataTypes.STRING(64),
+            allowNull: false
         }
     }, {
-        tableName: 'SupportAttachments',
+        tableName: 'supportAttachments',
         indexes: [
-            { name: 'support_attachments_ticket_idx', fields: ['ticketId'] },
-            { name: 'support_attachments_message_idx', fields: ['messageId'] },
-            { name: 'support_attachments_uploader_idx', fields: ['uploadedById'] }
+            {
+                name: 'supportAttachments_ticketId',
+                fields: ['ticketId']
+            }
+
         ]
     });
 
     SupportAttachment.associate = (models) => {
-        SupportAttachment.belongsTo(models.SupportTicket, {
-            as: 'ticket',
-            foreignKey: 'ticketId'
-        });
+        const { SupportTicket, SupportMessage } = models;
 
-        SupportAttachment.belongsTo(models.SupportMessage, {
-            as: 'message',
-            foreignKey: 'messageId'
-        });
+        if (SupportTicket) {
+            SupportAttachment.belongsTo(SupportTicket, {
+                as: 'ticket',
+                foreignKey: 'ticketId',
+                onDelete: 'CASCADE'
+            });
+        }
 
-        SupportAttachment.belongsTo(models.User, {
-            as: 'uploader',
-            foreignKey: 'uploadedById'
-        });
+        if (SupportMessage) {
+            SupportAttachment.hasOne(SupportMessage, {
+                as: 'message',
+                foreignKey: 'attachmentId',
+                constraints: false
+            });
+        }
     };
 
     return SupportAttachment;
