@@ -6,6 +6,7 @@ const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
+const { buildImportPreview } = financeImportService;
 const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
@@ -15,6 +16,67 @@ const {
     FINANCE_RECURRING_INTERVALS
 } = financeConstants;
 const { normalizeRecurringInterval } = reportingUtils;
+
+const wantsJsonResponse = (req = {}) => {
+    if (!req || typeof req !== 'object') {
+        return false;
+    }
+
+    if (req.xhr) {
+        return true;
+    }
+
+    const getHeader = (name) => {
+        if (typeof req.get === 'function') {
+            const value = req.get(name);
+            if (value) {
+                return value;
+            }
+        }
+        const headers = req.headers || {};
+        const key = Object.keys(headers).find((header) => header.toLowerCase() === name.toLowerCase());
+        return key ? headers[key] : undefined;
+    };
+
+    const requestedWith = getHeader('X-Requested-With');
+    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
+        return true;
+    }
+
+    const acceptHeader = getHeader('Accept');
+    const checkAccept = (value) => {
+        if (typeof value === 'string') {
+            const normalized = value.toLowerCase();
+            return normalized.includes('application/json')
+                || normalized.includes('text/json')
+                || normalized.includes('+json');
+        }
+        if (Array.isArray(value)) {
+            return value.some((item) => typeof item === 'string' && checkAccept(item));
+        }
+        return false;
+    };
+
+    if (checkAccept(acceptHeader)) {
+        return true;
+    }
+
+    const contentType = getHeader('Content-Type');
+    if (typeof contentType === 'string' && contentType.toLowerCase().includes('application/json')) {
+        return true;
+    }
+
+    const query = req.query || {};
+    if (query.format === 'json' || query.format === 'JSON') {
+        return true;
+    }
+
+    if (query.ajax === '1' || query.ajax === 1 || query.ajax === true) {
+        return true;
+    }
+
+    return false;
+};
 
 const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
     value: interval.value,
@@ -305,9 +367,24 @@ const buildEntriesQueryOptions = (filters = {}) => {
 };
 
 const createSummaryPromise = (entriesPromise, filters) => {
-    return entriesPromise.then(entries =>
-        financeReportingService.getFinanceSummary(filters, { entries })
-    );
+    return entriesPromise.then(async (entries) => {
+        try {
+            return await financeReportingService.getFinanceSummary(filters, { entries });
+        } catch (error) {
+            if (process.env.NODE_ENV !== 'test') {
+                console.error('Erro ao calcular resumo financeiro:', error);
+            }
+            const statusSummary = reportingUtils.buildStatusSummaryFromEntries(entries);
+            const monthlySummary = reportingUtils.buildMonthlySummaryFromEntries(entries);
+            const totals = reportingUtils.buildTotalsFromStatus(statusSummary);
+            return {
+                projections: [],
+                statusSummary,
+                monthlySummary,
+                totals
+            };
+        }
+    });
 };
 
 const parseMonthInput = (value) => {
@@ -392,6 +469,23 @@ const serializeGoalForView = (goal) => {
         formattedAmount: formatCurrency(amountNumber),
         notes: plain.notes || ''
     };
+};
+
+const loadFinanceGoals = async () => {
+    if (!FinanceGoal || typeof FinanceGoal.findAll !== 'function') {
+        return [];
+    }
+
+    try {
+        return await FinanceGoal.findAll({
+            order: [['month', 'ASC']]
+        });
+    } catch (error) {
+        if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+            console.warn('Não foi possível carregar metas financeiras:', error);
+        }
+        return [];
+    }
 };
 
 const filterValidStorageKeys = (storageKeys = []) => {
@@ -544,6 +638,7 @@ module.exports = {
                 || projections.find((item) => item.isCurrent)
                 || null;
             const projectionAlerts = projections.filter((item) => item.needsAttention);
+            const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
 
             const importPreview = req.session?.financeImportPreview || null;
             if (importPreview) {

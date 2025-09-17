@@ -932,7 +932,6 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         }
         return key;
     });
-
     try {
         return await FinanceGoal.findAll({
             attributes: ['id', 'month', 'targetNetAmount', 'notes'],

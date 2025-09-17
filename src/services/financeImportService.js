@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const path = require('path');
+const { Op } = require('sequelize');
+
+const { FinanceEntry } = require('../../database/models');
 
 const stripDiacritics = (value) => {
     return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -402,6 +405,147 @@ const prepareEntryForPersistence = (input) => {
     };
 };
 
+const cloneMetadata = (rawMetadata) => {
+    if (!rawMetadata || typeof rawMetadata !== 'object') {
+        return {};
+    }
+
+    return { ...rawMetadata };
+};
+
+const buildInvalidPreviewEntry = (rawEntry, metadata, errorMessage) => {
+    let normalizedAmount = 0;
+    try {
+        normalizedAmount = Math.abs(normalizeAmount(rawEntry?.value ?? rawEntry?.amount ?? 0));
+    } catch (err) {
+        normalizedAmount = 0;
+    }
+
+    let normalizedDueDate = null;
+    const dueDateInput = rawEntry?.dueDate || rawEntry?.date || rawEntry?.paymentDate || rawEntry?.data;
+    if (dueDateInput) {
+        try {
+            normalizedDueDate = normalizeDate(dueDateInput, 'data');
+        } catch (err) {
+            normalizedDueDate = null;
+        }
+    }
+
+    let normalizedPaymentDate = null;
+    if (rawEntry?.paymentDate) {
+        try {
+            normalizedPaymentDate = normalizeDate(rawEntry.paymentDate, 'data de pagamento');
+        } catch (err) {
+            normalizedPaymentDate = null;
+        }
+    }
+
+    return {
+        description: sanitizeDescription(rawEntry?.description || ''),
+        type: (() => {
+            try {
+                return inferType(rawEntry?.type, normalizedAmount || rawEntry?.value || rawEntry?.amount);
+            } catch (err) {
+                return 'payable';
+            }
+        })(),
+        value: normalizedAmount,
+        dueDate: normalizedDueDate,
+        paymentDate: normalizedPaymentDate,
+        status: normalizeStatus(rawEntry?.status),
+        metadata,
+        hash: null,
+        conflict: true,
+        include: false,
+        conflictReasons: errorMessage ? [errorMessage] : ['Entrada inválida.']
+    };
+};
+
+const buildImportPreview = async (rawEntries = []) => {
+    const entriesArray = Array.isArray(rawEntries) ? rawEntries : [];
+
+    const previewEntries = entriesArray.map((rawEntry) => {
+        const metadata = cloneMetadata(rawEntry?.metadata);
+
+        try {
+            const prepared = prepareEntryForPersistence(rawEntry);
+            return {
+                ...prepared,
+                metadata,
+                conflict: false,
+                include: true,
+                conflictReasons: []
+            };
+        } catch (error) {
+            return buildInvalidPreviewEntry(rawEntry, metadata, error.message);
+        }
+    });
+
+    const validEntries = previewEntries.filter((entry) => entry.hash);
+    const dueDates = [...new Set(validEntries.map((entry) => entry.dueDate).filter(Boolean))];
+
+    let existingEntries = [];
+    if (dueDates.length) {
+        existingEntries = await FinanceEntry.findAll({
+            where: { dueDate: { [Op.in]: dueDates } },
+            attributes: ['id', 'description', 'value', 'dueDate']
+        });
+    }
+
+    const existingHashes = new Map();
+    existingEntries.forEach((record) => {
+        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+        const hash = createEntryHash(plain);
+        if (!existingHashes.has(hash)) {
+            existingHashes.set(hash, plain);
+        }
+    });
+
+    const seenHashes = new Set();
+    validEntries.forEach((entry) => {
+        if (seenHashes.has(entry.hash)) {
+            entry.conflict = true;
+            entry.conflictReasons.push('Duplicado no arquivo importado.');
+        } else {
+            seenHashes.add(entry.hash);
+        }
+
+        if (existingHashes.has(entry.hash)) {
+            const existing = existingHashes.get(entry.hash);
+            const reason = existing && existing.id
+                ? `Já existe lançamento #${existing.id} com os mesmos dados.`
+                : 'Já existe lançamento com os mesmos dados.';
+            entry.conflict = true;
+            entry.conflictReasons.push(reason);
+        }
+
+        entry.include = !entry.conflict;
+    });
+
+    previewEntries.forEach((entry) => {
+        if (!Array.isArray(entry.conflictReasons)) {
+            entry.conflictReasons = [];
+        } else {
+            entry.conflictReasons = [...new Set(entry.conflictReasons.filter(Boolean))];
+        }
+
+        if (entry.conflict && entry.include) {
+            entry.include = false;
+        }
+    });
+
+    const totals = {
+        total: previewEntries.length,
+        conflicting: previewEntries.filter((entry) => entry.conflict).length
+    };
+    totals.new = Math.max(0, totals.total - totals.conflicting);
+
+    return {
+        entries: previewEntries,
+        totals
+    };
+};
+
 module.exports = {
     parseFinanceFile,
     parseCsvContent,
@@ -412,5 +556,6 @@ module.exports = {
     inferType,
     normalizeStatus,
     createEntryHash,
-    prepareEntryForPersistence
+    prepareEntryForPersistence,
+    buildImportPreview
 };
