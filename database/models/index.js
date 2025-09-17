@@ -59,7 +59,19 @@ Object.keys(db).forEach(modelName => {
 });
 
 // --- Início das associações manuais ---
-const { User, Appointment, Room, Procedure, FinanceCategory, FinanceEntry, Budget, BudgetThresholdStatus } = db;
+const {
+    User,
+    Appointment,
+    Room,
+    Procedure,
+    FinanceCategory,
+    FinanceEntry,
+    Budget,
+    BudgetThresholdStatus,
+    SupportTicket,
+    SupportMessage,
+    SupportAttachment
+} = db;
 
 /**
  * Exemplo de associações:
@@ -167,6 +179,67 @@ if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEnt
     FinanceEntry.belongsTo(FinanceCategory, {
         as: 'category',
         foreignKey: 'financeCategoryId'
+    });
+}
+
+if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.requester)) {
+    SupportTicket.belongsTo(User, {
+        as: 'requester',
+        foreignKey: 'userId'
+    });
+}
+
+if (SupportTicket && SupportMessage && !(SupportTicket.associations && SupportTicket.associations.messages)) {
+    SupportTicket.hasMany(SupportMessage, {
+        as: 'messages',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportTicket && SupportAttachment && !(SupportTicket.associations && SupportTicket.associations.attachments)) {
+    SupportTicket.hasMany(SupportAttachment, {
+        as: 'attachments',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportMessage && SupportTicket && !(SupportMessage.associations && SupportMessage.associations.ticket)) {
+    SupportMessage.belongsTo(SupportTicket, {
+        as: 'ticket',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportMessage && User && !(SupportMessage.associations && SupportMessage.associations.sender)) {
+    SupportMessage.belongsTo(User, {
+        as: 'sender',
+        foreignKey: 'senderId'
+    });
+}
+
+if (SupportMessage && SupportAttachment && !(SupportMessage.associations && SupportMessage.associations.attachment)) {
+    SupportMessage.belongsTo(SupportAttachment, {
+        as: 'attachment',
+        foreignKey: 'attachmentId'
+    });
+}
+
+if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && SupportAttachment.associations.ticket)) {
+    SupportAttachment.belongsTo(SupportTicket, {
+        as: 'ticket',
+        foreignKey: 'ticketId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (SupportAttachment && SupportMessage && !(SupportAttachment.associations && SupportAttachment.associations.message)) {
+    SupportAttachment.hasOne(SupportMessage, {
+        as: 'message',
+        foreignKey: 'attachmentId',
+        constraints: false
     });
 }
 
