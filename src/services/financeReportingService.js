@@ -370,14 +370,25 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return key;
     });
 
-    return FinanceGoal.findAll({
-        attributes: ['id', 'month', 'targetNetAmount', 'notes'],
-        where: {
-            month: { [Op.in]: monthValues }
-        },
-        order: [['month', 'ASC']],
-        raw: true
-    });
+    if (!FinanceGoal || typeof FinanceGoal.findAll !== 'function') {
+        return [];
+    }
+
+    try {
+        return await FinanceGoal.findAll({
+            attributes: ['id', 'month', 'targetNetAmount', 'notes'],
+            where: {
+                month: { [Op.in]: monthValues }
+            },
+            order: [['month', 'ASC']],
+            raw: true
+        });
+    } catch (error) {
+        if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+            console.warn('Não foi possível buscar metas financeiras para projeções:', error);
+        }
+        return [];
+    }
 };
 
 const buildGoalsMap = (goals) => {
