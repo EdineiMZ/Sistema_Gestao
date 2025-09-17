@@ -1,13 +1,8 @@
 process.env.NODE_ENV = 'test';
-process.env.DB_DIALECT = 'sqlite';
-process.env.DB_STORAGE = ':memory:';
 
-const path = require('path');
 const express = require('express');
-const session = require('express-session');
-const flash = require('connect-flash');
 const request = require('supertest');
-const { USER_ROLES, getRoleLevel } = require('../../../src/constants/roles');
+const { Readable } = require('stream');
 
 let mockCurrentUser = {
     id: 1,
@@ -18,161 +13,158 @@ let mockCurrentUser = {
 };
 
 jest.mock('../../../src/middlewares/authMiddleware', () => jest.fn((req, res, next) => {
-    req.session = req.session || {};
     req.user = { ...mockCurrentUser };
-    req.session.user = req.user;
     next();
 }));
 
-jest.mock('../../../src/middlewares/authorize', () => jest.fn(() => (req, res, next) => next()));
+jest.mock('../../../src/services/supportChatService', () => ({
+    ensureTicketAccess: jest.fn(),
+    ensureAdminRole: jest.fn(),
+    createAttachment: jest.fn(),
+    loadTicketHistory: jest.fn(),
+    listTicketAttachments: jest.fn(),
+    notifyAdminJoined: jest.fn(),
+    getAttachmentById: jest.fn(),
+    constants: {
+        MAX_FILE_SIZE: 1024
+    }
+}));
+
+jest.mock('../../../src/services/fileStorageService', () => ({
+    createReadStream: jest.fn()
+}));
 
 const supportRoutes = require('../../../src/routes/supportRoutes');
-const { SupportTicket, SupportAttachment, User, sequelize } = require('../../../database/models');
+const supportChatService = require('../../../src/services/supportChatService');
+const fileStorageService = require('../../../src/services/fileStorageService');
 
 const buildApp = () => {
     const app = express();
     app.use(express.urlencoded({ extended: true }));
     app.use(express.json());
-    app.use(session({
-        secret: 'support-test-secret',
-        resave: false,
-        saveUninitialized: false
-    }));
-    app.use(flash());
-    app.use((req, res, next) => {
-        const sessionUser = req.session.user || null;
-        res.locals.appName = 'Sistema de Gestão Inteligente';
-        res.locals.pageTitle = 'Sistema de Gestão Inteligente';
-        res.locals.user = sessionUser;
-        res.locals.userRoleLevel = sessionUser ? getRoleLevel(sessionUser.role) : -1;
-        res.locals.roles = USER_ROLES;
-        res.locals.roleLabels = {};
-        res.locals.roleOptions = [];
-        res.locals.success_msg = null;
-        res.locals.error_msg = null;
-        res.locals.error = null;
-        res.locals.notifications = [];
-        res.locals.notificationError = null;
-        res.locals.userMenuItems = [];
-        res.locals.quickActions = [];
-        next();
-    });
-    app.set('view engine', 'ejs');
-    app.set('views', path.join(__dirname, '..', '..', '..', 'src', 'views'));
     app.use('/support', supportRoutes);
     return app;
 };
 
-describe('Fluxo de suporte - integração', () => {
+describe('Rotas de suporte - chat e anexos', () => {
     let app;
-    let requester;
 
-    beforeEach(async () => {
+    beforeEach(() => {
         jest.clearAllMocks();
-        await sequelize.sync({ force: true });
-        requester = await User.create({
-            name: 'Cliente Teste',
-            email: 'cliente@example.com',
-            password: 'senhaSegura123',
-            role: 'client'
-        });
         mockCurrentUser = {
-            id: requester.id,
+            id: 1,
             role: 'client',
             active: true,
-            name: requester.name,
-            email: requester.email
+            name: 'Cliente Teste',
+            email: 'cliente@example.com'
         };
         app = buildApp();
+        supportChatService.ensureTicketAccess.mockResolvedValue({ ticket: { id: 1 } });
+        supportChatService.createAttachment.mockResolvedValue({
+            id: 10,
+            ticketId: 1,
+            originalName: 'log.txt',
+            mimeType: 'text/plain',
+            size: 42
+        });
+        supportChatService.loadTicketHistory.mockResolvedValue([
+            { id: 1, content: 'Mensagem', createdAt: new Date().toISOString() }
+        ]);
+        supportChatService.listTicketAttachments.mockResolvedValue([
+            { id: 9, originalName: 'erro.pdf', mimeType: 'application/pdf' }
+        ]);
+        supportChatService.getAttachmentById.mockResolvedValue({
+            id: 9,
+            ticketId: 1,
+            mimeType: 'text/plain',
+            originalName: 'log.txt',
+            storageKey: 'support/log.txt'
+        });
+        fileStorageService.createReadStream.mockReturnValue(Readable.from('conteudo'));
     });
 
-    afterAll(async () => {
-        await sequelize.close();
+    it('permite enviar anexos para um ticket existente', async () => {
+        const response = await request(app)
+            .post('/support/tickets/1/attachments')
+            .attach('file', Buffer.from('log de teste'), 'log.txt');
+
+        expect(response.status).toBe(201);
+        expect(response.body.attachment).toMatchObject({ originalName: 'log.txt' });
+        expect(supportChatService.createAttachment).toHaveBeenCalledWith({
+            ticketId: 1,
+            file: expect.objectContaining({ originalname: 'log.txt' })
+        });
     });
 
-    it('permite criar tickets com anexos antes do atendimento iniciar', async () => {
-        const pdfBuffer = Buffer.from('%PDF suporte teste');
+    it('retorna erro quando nenhum arquivo é enviado', async () => {
+        const response = await request(app)
+            .post('/support/tickets/1/attachments');
+
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Arquivo obrigatório.');
+        expect(supportChatService.createAttachment).not.toHaveBeenCalled();
+    });
+
+    it('recupera histórico e anexos do ticket autenticado', async () => {
+        const response = await request(app).get('/support/tickets/1/history');
+
+        expect(response.status).toBe(200);
+        expect(response.body.history).toHaveLength(1);
+        expect(response.body.attachments).toHaveLength(1);
+        expect(supportChatService.loadTicketHistory).toHaveBeenCalledWith(1);
+        expect(supportChatService.listTicketAttachments).toHaveBeenCalledWith(1);
+    });
+
+    it('permite que um administrador notifique a entrada no chat', async () => {
+        mockCurrentUser = {
+            id: 2,
+            role: 'admin',
+            active: true,
+            name: 'Admin',
+            email: 'admin@example.com'
+        };
 
         const response = await request(app)
-            .post('/support/tickets')
-            .field('subject', 'Erro ao gerar relatório gerencial')
-            .field('description', 'O relatório de performance fica carregando indefinidamente.')
-            .field('priority', 'high')
-            .attach('attachments', pdfBuffer, {
-                filename: 'relatorio.pdf',
-                contentType: 'application/pdf'
-            });
-
-        expect(response.status).toBe(302);
-        expect(response.headers.location).toBe('/support/tickets');
-
-        const tickets = await SupportTicket.findAll({
-            include: [{ model: SupportAttachment, as: 'attachments' }]
-        });
-
-        expect(tickets).toHaveLength(1);
-        const [ticket] = tickets;
-        expect(ticket.subject).toBe('Erro ao gerar relatório gerencial');
-        expect(ticket.priority).toBe('high');
-        expect(ticket.attachments).toHaveLength(1);
-        const [attachment] = ticket.attachments;
-        expect(attachment.fileName).toBe('relatorio.pdf');
-        expect(attachment.mimeType).toBe('application/pdf');
-        expect(Number(attachment.size)).toBe(pdfBuffer.length);
-        expect(Buffer.isBuffer(attachment.data)).toBe(true);
-    });
-
-    it('lista apenas os chamados do usuário autenticado', async () => {
-        const otherUser = await User.create({
-            name: 'Gestor',
-            email: 'gestor@example.com',
-            password: 'senhaGestor123',
-            role: 'manager'
-        });
-
-        await SupportTicket.create({
-            userId: requester.id,
-            subject: 'Painel não atualiza',
-            description: 'As métricas ficam congeladas.',
-            priority: 'medium'
-        });
-
-        await SupportTicket.create({
-            userId: otherUser.id,
-            subject: 'Configuração de alertas',
-            description: 'Dúvida sobre alertas automáticos.',
-            priority: 'low'
-        });
-
-        const response = await request(app).get('/support/tickets');
+            .post('/support/tickets/1/notify-admin-entry')
+            .send();
 
         expect(response.status).toBe(200);
-        expect(response.text).toContain('Painel não atualiza');
-        expect(response.text).not.toContain('Configuração de alertas');
+        expect(response.body.ok).toBe(true);
+        expect(supportChatService.notifyAdminJoined).toHaveBeenCalledWith({
+            ticket: expect.objectContaining({ id: 1 }),
+            adminUser: expect.objectContaining({ id: 2 })
+        });
     });
 
-    it('exibe detalhes do chamado com anexos cadastrados', async () => {
-        const ticket = await SupportTicket.create({
-            userId: requester.id,
-            subject: 'Integração ERP',
-            description: 'Integração está retornando erro 500.',
-            priority: 'medium'
-        });
+    it('bloqueia usuários sem perfil admin ao notificar entrada no chat', async () => {
+        const error = new Error('ADMIN_REQUIRED');
+        error.status = 403;
+        supportChatService.ensureAdminRole.mockImplementation(() => { throw error; });
 
-        await SupportAttachment.create({
-            ticketId: ticket.id,
-            fileName: 'log-erro.txt',
-            mimeType: 'text/plain',
-            size: 42,
-            checksum: '123456',
-            data: Buffer.from('Stacktrace simulada')
-        });
+        const response = await request(app)
+            .post('/support/tickets/1/notify-admin-entry')
+            .send();
 
-        const response = await request(app).get(`/support/tickets/${ticket.id}`);
+        expect(response.status).toBe(403);
+        expect(response.body.message).toBe('ADMIN_REQUIRED');
+        expect(supportChatService.notifyAdminJoined).not.toHaveBeenCalled();
+    });
+
+    it('permite download de anexo quando o usuário tem acesso', async () => {
+        const response = await request(app).get('/support/attachments/9/download');
 
         expect(response.status).toBe(200);
-        expect(response.text).toContain('Integração ERP');
-        expect(response.text).toContain('log-erro.txt');
-        expect(response.text).toContain('text/plain');
+        expect(response.headers['content-type']).toBe('text/plain');
+        expect(response.headers['content-disposition']).toContain('filename="log.txt"');
+        expect(fileStorageService.createReadStream).toHaveBeenCalledWith('support/log.txt');
+    });
+
+    it('retorna 404 quando o anexo não existe', async () => {
+        supportChatService.getAttachmentById.mockResolvedValue(null);
+
+        const response = await request(app).get('/support/attachments/99/download');
+
+        expect(response.status).toBe(404);
+        expect(fileStorageService.createReadStream).not.toHaveBeenCalled();
     });
 });
