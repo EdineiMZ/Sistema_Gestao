@@ -26,7 +26,14 @@ const buildViewContext = () => ({
             paymentDate: '2024-05-02',
             status: 'paid',
             recurring: true,
-            recurringInterval: 'Mensal'
+            recurringInterval: 'Mensal',
+            attachments: [
+                {
+                    id: 701,
+                    fileName: 'comprovante.pdf',
+                    size: 20480
+                }
+            ]
         }
     ],
     success_msg: null,
@@ -48,6 +55,17 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('data-export-target="/finance/export/excel"');
         expect(html).toContain('Exportar Excel');
         expect(html).toContain('aria-label="Exportar lançamentos filtrados em Excel"');
+    });
+
+    it('exibe controles de upload e anexos vinculados aos lançamentos', async () => {
+        const context = buildViewContext();
+        const html = await ejs.renderFile(viewPath, context, { async: true });
+
+        expect(html).toContain('enctype="multipart/form-data"');
+        expect(html).toContain('name="attachments"');
+        expect(html).toContain('href="/finance/attachments/701/download"');
+        expect(html).toContain('comprovante.pdf');
+        expect(html).toContain('bi bi-paperclip');
     });
 });
 
