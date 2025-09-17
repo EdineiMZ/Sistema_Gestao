@@ -357,21 +357,6 @@ body {
     font-weight: 600;
 }
 
-.app-loader {
-    position: fixed;
-    inset: 0;
-    background: rgba(16, 24, 40, 0.85);
-    z-index: 1080;
-    backdrop-filter: blur(4px);
-    transition: opacity 0.4s ease, visibility 0.4s ease;
-}
-
-.app-loader.is-hidden {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-}
-
 .app-footer {
     background: linear-gradient(135deg, var(--brand-primary-dark) 0%, #1a1c2d 100%);
     margin-top: auto;
