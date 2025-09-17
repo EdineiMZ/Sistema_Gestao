@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceGoal, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
