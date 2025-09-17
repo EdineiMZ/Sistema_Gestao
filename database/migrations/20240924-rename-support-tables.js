@@ -27,6 +27,20 @@ module.exports = {
             }
         };
 
+        const columnExists = async (tableName, columnName) => {
+            try {
+                const definition = await queryInterface.describeTable(tableName, { transaction });
+                return Boolean(definition?.[columnName]);
+            } catch (error) {
+                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
+                    error?.original?.code === 'SQLITE_ERROR' ||
+                    /does not exist/i.test(error?.message ?? '')) {
+                    return false;
+                }
+                throw error;
+            }
+        };
+
         try {
             const dialect = queryInterface.sequelize.getDialect();
 
@@ -83,21 +97,23 @@ module.exports = {
                     { transaction }
                 );
 
-                await queryInterface.changeColumn(
-                    CAMEL_ATTACHMENT_TABLE,
-                    'messageId',
-                    {
-                        type: Sequelize.INTEGER,
-                        allowNull: false,
-                        references: {
-                            model: CAMEL_MESSAGE_TABLE,
-                            key: 'id'
+                if (await columnExists(CAMEL_ATTACHMENT_TABLE, 'messageId')) {
+                    await queryInterface.changeColumn(
+                        CAMEL_ATTACHMENT_TABLE,
+                        'messageId',
+                        {
+                            type: Sequelize.INTEGER,
+                            allowNull: true,
+                            references: {
+                                model: CAMEL_MESSAGE_TABLE,
+                                key: 'id'
+                            },
+                            onUpdate: 'CASCADE',
+                            onDelete: 'CASCADE'
                         },
-                        onUpdate: 'CASCADE',
-                        onDelete: 'CASCADE'
-                    },
-                    { transaction }
-                );
+                        { transaction }
+                    );
+                }
             }
 
             await transaction.commit();
@@ -114,6 +130,20 @@ module.exports = {
             try {
                 await queryInterface.describeTable(tableName, { transaction });
                 return true;
+            } catch (error) {
+                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
+                    error?.original?.code === 'SQLITE_ERROR' ||
+                    /does not exist/i.test(error?.message ?? '')) {
+                    return false;
+                }
+                throw error;
+            }
+        };
+
+        const columnExists = async (tableName, columnName) => {
+            try {
+                const definition = await queryInterface.describeTable(tableName, { transaction });
+                return Boolean(definition?.[columnName]);
             } catch (error) {
                 if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
                     error?.original?.code === 'SQLITE_ERROR' ||
@@ -180,21 +210,23 @@ module.exports = {
                     { transaction }
                 );
 
-                await queryInterface.changeColumn(
-                    PASCAL_ATTACHMENT_TABLE,
-                    'messageId',
-                    {
-                        type: Sequelize.INTEGER,
-                        allowNull: false,
-                        references: {
-                            model: PASCAL_MESSAGE_TABLE,
-                            key: 'id'
+                if (await columnExists(PASCAL_ATTACHMENT_TABLE, 'messageId')) {
+                    await queryInterface.changeColumn(
+                        PASCAL_ATTACHMENT_TABLE,
+                        'messageId',
+                        {
+                            type: Sequelize.INTEGER,
+                            allowNull: true,
+                            references: {
+                                model: PASCAL_MESSAGE_TABLE,
+                                key: 'id'
+                            },
+                            onUpdate: 'CASCADE',
+                            onDelete: 'CASCADE'
                         },
-                        onUpdate: 'CASCADE',
-                        onDelete: 'CASCADE'
-                    },
-                    { transaction }
-                );
+                        { transaction }
+                    );
+                }
             }
 
             await transaction.commit();

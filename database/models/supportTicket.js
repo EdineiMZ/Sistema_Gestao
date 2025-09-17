@@ -9,28 +9,50 @@ module.exports = (sequelize, DataTypes) => {
                 len: [3, 150]
             }
         },
-        description: {
-            type: DataTypes.TEXT,
-            allowNull: false
-        },
         status: {
             type: DataTypes.STRING(20),
             allowNull: false,
-            defaultValue: 'open',
+            defaultValue: 'pending',
             validate: {
-                isIn: [['open', 'waiting', 'resolved', 'closed']]
+                isIn: [['pending', 'in_progress', 'resolved']]
             }
         },
-        userId: {
+        creatorId: {
             type: DataTypes.INTEGER,
-            allowNull: false
+            allowNull: false,
+            validate: {
+                isInt: true
+            }
+        },
+        assignedToId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            validate: {
+                isInt: true
+            }
+        },
+        lastMessageAt: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        firstResponseAt: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        resolvedAt: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
     }, {
         tableName: 'supportTickets',
         indexes: [
             {
-                name: 'supportTickets_userId_status',
-                fields: ['userId', 'status']
+                name: 'supportTickets_creatorId_status',
+                fields: ['creatorId', 'status']
+            },
+            {
+                name: 'supportTickets_assignedTo_status',
+                fields: ['assignedToId', 'status']
             }
         ]
     });
@@ -40,8 +62,17 @@ module.exports = (sequelize, DataTypes) => {
 
         if (User) {
             SupportTicket.belongsTo(User, {
-                as: 'requester',
-                foreignKey: 'userId'
+                as: 'creator',
+                foreignKey: 'creatorId',
+                onDelete: 'CASCADE',
+                onUpdate: 'CASCADE'
+            });
+
+            SupportTicket.belongsTo(User, {
+                as: 'assignee',
+                foreignKey: 'assignedToId',
+                onDelete: 'SET NULL',
+                onUpdate: 'CASCADE'
             });
         }
 

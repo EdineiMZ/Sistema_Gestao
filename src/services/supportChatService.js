@@ -85,7 +85,7 @@ const ensureTicketAccess = async (ticketId, user) => {
         throw error;
     }
 
-    const isOwner = ticket.userId === user.id;
+    const isOwner = ticket.creatorId === user.id;
     const isAdmin = getRoleLevel(user.role) >= getRoleLevel(USER_ROLES.ADMIN);
 
     if (!isOwner && !isAdmin) {
@@ -312,7 +312,7 @@ const notifyAdminJoined = async ({ ticket, adminUser }) => {
             active: true,
             repeatFrequency: 'none',
             status: 'scheduled',
-            userId: ticket.userId,
+            userId: ticket.creatorId,
             sendToAll: false,
             sent: false
         });

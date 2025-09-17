@@ -6,11 +6,15 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER,
             allowNull: false
         },
+        messageId: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         uploadedById: {
             type: DataTypes.INTEGER,
             allowNull: true
         },
-        originalName: {
+        fileName: {
             type: DataTypes.STRING(255),
             allowNull: false
         },
@@ -18,12 +22,12 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255),
             allowNull: false
         },
-        mimeType: {
+        contentType: {
             type: DataTypes.STRING(120),
             allowNull: false
         },
-        size: {
-            type: DataTypes.INTEGER.UNSIGNED,
+        fileSize: {
+            type: DataTypes.BIGINT,
             allowNull: false
         },
         checksum: {
@@ -36,6 +40,10 @@ module.exports = (sequelize, DataTypes) => {
             {
                 name: 'supportAttachments_ticketId_idx',
                 fields: ['ticketId']
+            },
+            {
+                name: 'supportAttachments_messageId_idx',
+                fields: ['messageId']
             }
         ]
     });
@@ -59,10 +67,10 @@ module.exports = (sequelize, DataTypes) => {
         }
 
         if (SupportMessage) {
-            SupportAttachment.hasOne(SupportMessage, {
+            SupportAttachment.belongsTo(SupportMessage, {
                 as: 'message',
-                foreignKey: 'attachmentId',
-                constraints: false
+                foreignKey: 'messageId',
+                onDelete: 'CASCADE'
             });
         }
     };

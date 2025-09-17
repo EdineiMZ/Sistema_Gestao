@@ -78,9 +78,10 @@
                                     </td>
                                     <% if (isAdmin) { %>
                                         <td>
-                                            <% if (ticket.requester) { %>
-                                                <div class="fw-semibold"><%= ticket.requester.name || 'Usuário' %></div>
-                                                <small class="text-muted"><%= ticket.requester.email %></small>
+                                            <% const ticketOwner = ticket.creator || ticket.requester; %>
+                                            <% if (ticketOwner) { %>
+                                                <div class="fw-semibold"><%= ticketOwner.name || 'Usuário' %></div>
+                                                <small class="text-muted"><%= ticketOwner.email %></small>
                                             <% } else { %>
                                                 <span class="text-muted">Não informado</span>
                                             <% } %>
