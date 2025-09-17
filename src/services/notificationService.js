@@ -14,7 +14,8 @@ const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
 const { Op } = require('sequelize');
-const { processBudgetAlerts } = require('./budgetAlertService');
+const budgetAlertService = require('./budgetAlertService');
+const { processBudgetAlerts } = budgetAlertService;
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
 
