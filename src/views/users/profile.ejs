@@ -1,0 +1,144 @@
+<%- include('../partials/header') %>
+
+<% const profileData = profile || (typeof profileUser !== 'undefined' ? profileUser : {}); %>
+<% const nameValue = profileData && profileData.name ? profileData.name : ''; %>
+<% const emailValue = profileData && profileData.email ? profileData.email : ''; %>
+<% const phoneValue = profileData && profileData.phone ? profileData.phone : ''; %>
+<% const addressValue = profileData && profileData.address ? profileData.address : ''; %>
+<% const birthValue = profileData && profileData.dateOfBirth ? profileData.dateOfBirth : ''; %>
+
+<div class="row justify-content-center py-4 fade-in">
+    <div class="col-xl-7 col-lg-8">
+        <div class="card card-soft p-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                <div>
+                    <h2 class="fw-semibold mb-1">Meu perfil</h2>
+                    <p class="text-muted mb-0">Mantenha seus dados pessoais atualizados para uma experiência mais segura e personalizada.</p>
+                </div>
+                <span class="badge-soft badge-soft-primary d-inline-flex align-items-center px-3 py-2">
+                    <i class="bi bi-shield-lock me-2"></i>
+                    Segurança reforçada
+                </span>
+            </div>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } else if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="7000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <form action="/users/profile" method="POST" class="row g-4 needs-validation" novalidate>
+                <div class="col-md-6">
+                    <label for="profileName" class="form-label fw-semibold">Nome completo</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="profileName"
+                        name="name"
+                        value="<%= nameValue %>"
+                        placeholder="Informe seu nome"
+                        required
+                        minlength="3"
+                    />
+                    <div class="invalid-feedback">Informe um nome com pelo menos 3 caracteres.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="profileEmail" class="form-label fw-semibold">E-mail</label>
+                    <input
+                        type="email"
+                        class="form-control"
+                        id="profileEmail"
+                        value="<%= emailValue %>"
+                        disabled
+                        readonly
+                    />
+                    <div class="form-text">Para alterar o e-mail entre em contato com a equipe responsável.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="profilePhone" class="form-label fw-semibold">Telefone</label>
+                    <input
+                        type="tel"
+                        class="form-control"
+                        id="profilePhone"
+                        name="phone"
+                        value="<%= phoneValue %>"
+                        placeholder="(00) 00000-0000"
+                    />
+                    <div class="form-text">Utilize apenas números. Este campo é opcional.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="profileBirth" class="form-label fw-semibold">Data de nascimento</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        id="profileBirth"
+                        name="dateOfBirth"
+                        value="<%= birthValue %>"
+                        max="<%= new Date().toISOString().split('T')[0] %>"
+                    />
+                    <div class="form-text">A data de nascimento ajuda na personalização dos lembretes.</div>
+                </div>
+
+                <div class="col-12">
+                    <label for="profileAddress" class="form-label fw-semibold">Endereço</label>
+                    <textarea
+                        id="profileAddress"
+                        name="address"
+                        class="form-control"
+                        rows="3"
+                        placeholder="Rua, número, complemento, cidade"
+                    ><%= addressValue %></textarea>
+                    <div class="form-text">Preencher o endereço permite um atendimento mais ágil.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label for="profilePassword" class="form-label fw-semibold">Nova senha</label>
+                    <input
+                        type="password"
+                        class="form-control"
+                        id="profilePassword"
+                        name="password"
+                        placeholder="Mínimo de 6 caracteres"
+                        minlength="6"
+                        autocomplete="new-password"
+                    />
+                    <div class="form-text">Deixe em branco para manter a senha atual.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="h-100 d-flex align-items-center rounded border border-dashed px-3 py-3 bg-body-tertiary">
+                        <div class="d-flex align-items-start">
+                            <div class="icon icon-md rounded-circle bg-primary-subtle text-primary me-3">
+                                <i class="bi bi-info-circle"></i>
+                            </div>
+                            <p class="mb-0 small text-muted">
+                                Senhas fortes devem combinar letras maiúsculas, minúsculas, números e símbolos.
+                                Atualize seus dados sempre que houver alguma mudança importante.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                        <a class="btn btn-outline-secondary" href="/dashboard">
+                            <i class="bi bi-arrow-left me-2"></i>Voltar para o painel
+                        </a>
+                        <button type="submit" class="btn btn-gradient">
+                            <i class="bi bi-check2-circle me-2"></i>Salvar alterações
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>
