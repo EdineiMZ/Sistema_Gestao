@@ -59,7 +59,7 @@ Object.keys(db).forEach(modelName => {
 });
 
 // --- Início das associações manuais ---
-const { User, Appointment, Room, Procedure, FinanceCategory, FinanceEntry, Budget } = db;
+const { User, Appointment, Room, Procedure, FinanceCategory, FinanceEntry, Budget, BudgetThresholdStatus } = db;
 
 /**
  * Exemplo de associações:
@@ -130,6 +130,22 @@ if (Budget && FinanceCategory && !(Budget.associations && Budget.associations.ca
     Budget.belongsTo(FinanceCategory, {
         as: 'category',
         foreignKey: 'financeCategoryId'
+    });
+}
+
+if (Budget && BudgetThresholdStatus && !(Budget.associations && Budget.associations.thresholdStatuses)) {
+    Budget.hasMany(BudgetThresholdStatus, {
+        as: 'thresholdStatuses',
+        foreignKey: 'budgetId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (BudgetThresholdStatus && Budget && !(BudgetThresholdStatus.associations && BudgetThresholdStatus.associations.budget)) {
+    BudgetThresholdStatus.belongsTo(Budget, {
+        as: 'budget',
+        foreignKey: 'budgetId',
+        onDelete: 'CASCADE'
     });
 }
 

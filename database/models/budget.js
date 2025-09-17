@@ -32,31 +32,37 @@ const normalizeMonthValue = (value) => {
     return normalized.toISOString().slice(0, 10);
 };
 
+const THRESHOLD_RANGE_ERROR = 'Limiares devem ser números entre 0 e 1, com até duas casas decimais.';
+
 const normalizeThresholds = (value) => {
     if (value === undefined || value === null) {
         return [];
     }
 
     const rawList = Array.isArray(value) ? value : [value];
-    const normalized = rawList
-        .map((item) => {
-            if (item === undefined || item === null || item === '') {
-                return null;
-            }
+    if (rawList.length === 0) {
+        return [];
+    }
 
-            const numeric = Number(item);
-            if (!Number.isFinite(numeric)) {
-                return null;
-            }
+    return rawList.map((item) => {
+        if (item === undefined || item === null || item === '') {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
 
-            return Number(numeric.toFixed(2));
-        })
-        .filter((item) => item !== null && item > 0);
+        const numeric = Number(item);
+        if (!Number.isFinite(numeric)) {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
 
-    const uniqueValues = Array.from(new Set(normalized));
-    uniqueValues.sort((a, b) => a - b);
+        const rounded = Math.round(numeric * 100) / 100;
+        const normalized = Number(rounded.toFixed(2));
 
-    return uniqueValues;
+        if (normalized <= 0 || normalized > 1) {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
+
+        return normalized;
+    });
 };
 
 module.exports = (sequelize, DataTypes) => {
@@ -87,8 +93,14 @@ module.exports = (sequelize, DataTypes) => {
             validate: {
                 isArrayOfPositiveNumbers(value) {
                     const list = normalizeThresholds(value);
-                    if (list.some((item) => item <= 0)) {
-                        throw new Error('Limiares devem ser maiores que zero.');
+                    if (list.some((item) => item <= 0 || item > 1)) {
+                        throw new Error(THRESHOLD_RANGE_ERROR);
+                    }
+
+                    for (let index = 1; index < list.length; index += 1) {
+                        if (list[index] <= list[index - 1]) {
+                            throw new Error('Limiares devem estar em ordem crescente e sem duplicidades.');
+                        }
                     }
                 }
             }
@@ -154,6 +166,14 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
+
+        if (models.BudgetThresholdStatus) {
+            Budget.hasMany(models.BudgetThresholdStatus, {
+                as: 'thresholdStatuses',
+                foreignKey: 'budgetId',
+                onDelete: 'CASCADE'
+            });
+        }
     };
 
     return Budget;
