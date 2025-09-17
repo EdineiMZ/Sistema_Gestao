@@ -9,14 +9,20 @@ const ATTACHMENT_UPLOADER_INDEX = 'supportAttachments_uploaderId_idx';
 const MESSAGE_ATTACHMENT_CONSTRAINT = 'supportMessages_attachmentId_fkey';
 
 const isTableMissingError = (error) => {
-    const driverCode = error?.original?.code;
-    const message = error?.message ?? '';
+    const driverCode = error?.original?.code || error?.parent?.code;
+    const message = [
+        error?.message,
+        error?.original?.message,
+        error?.parent?.message
+    ].filter(Boolean).join(' ') || '';
 
     return driverCode === 'ER_NO_SUCH_TABLE' ||
         driverCode === 'SQLITE_ERROR' ||
+        driverCode === '42P01' ||
         /does not exist/i.test(message) ||
         /no such table/i.test(message) ||
-        /unknown table/i.test(message);
+        /unknown table/i.test(message) ||
+        /não existe/i.test(message);
 };
 
 const tableExists = async (queryInterface, tableName) => {

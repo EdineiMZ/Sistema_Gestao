@@ -9,6 +9,23 @@ const CAMEL_ATTACHMENT_TABLE = 'supportAttachments';
 const PASCAL_STATUS_ENUM = 'enum_SupportTickets_status';
 const CAMEL_STATUS_ENUM = 'enum_supportTickets_status';
 
+const isTableMissingError = (error) => {
+    const driverCode = error?.original?.code || error?.parent?.code;
+    const message = [
+        error?.message,
+        error?.original?.message,
+        error?.parent?.message
+    ].filter(Boolean).join(' ') || '';
+
+    return driverCode === 'ER_NO_SUCH_TABLE' ||
+        driverCode === 'SQLITE_ERROR' ||
+        driverCode === '42P01' ||
+        /does not exist/i.test(message) ||
+        /no such table/i.test(message) ||
+        /unknown table/i.test(message) ||
+        /não existe/i.test(message);
+};
+
 module.exports = {
     up: async (queryInterface, Sequelize) => {
         const transaction = await queryInterface.sequelize.transaction();
@@ -18,9 +35,7 @@ module.exports = {
                 await queryInterface.describeTable(tableName, { transaction });
                 return true;
             } catch (error) {
-                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
-                    error?.original?.code === 'SQLITE_ERROR' ||
-                    /does not exist/i.test(error?.message ?? '')) {
+                if (isTableMissingError(error)) {
                     return false;
                 }
                 throw error;
@@ -32,9 +47,7 @@ module.exports = {
                 const definition = await queryInterface.describeTable(tableName, { transaction });
                 return Boolean(definition?.[columnName]);
             } catch (error) {
-                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
-                    error?.original?.code === 'SQLITE_ERROR' ||
-                    /does not exist/i.test(error?.message ?? '')) {
+                if (isTableMissingError(error)) {
                     return false;
                 }
                 throw error;
@@ -131,9 +144,7 @@ module.exports = {
                 await queryInterface.describeTable(tableName, { transaction });
                 return true;
             } catch (error) {
-                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
-                    error?.original?.code === 'SQLITE_ERROR' ||
-                    /does not exist/i.test(error?.message ?? '')) {
+                if (isTableMissingError(error)) {
                     return false;
                 }
                 throw error;
@@ -145,9 +156,7 @@ module.exports = {
                 const definition = await queryInterface.describeTable(tableName, { transaction });
                 return Boolean(definition?.[columnName]);
             } catch (error) {
-                if (error?.original?.code === 'ER_NO_SUCH_TABLE' ||
-                    error?.original?.code === 'SQLITE_ERROR' ||
-                    /does not exist/i.test(error?.message ?? '')) {
+                if (isTableMissingError(error)) {
                     return false;
                 }
                 throw error;

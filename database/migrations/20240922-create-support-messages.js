@@ -8,14 +8,20 @@ const MESSAGE_SENDER_INDEX = 'supportMessages_senderId_idx';
 const MESSAGE_ATTACHMENT_INDEX = 'supportMessages_attachmentId_idx';
 
 const isTableMissingError = (error) => {
-    const driverCode = error?.original?.code;
-    const message = error?.message ?? '';
+    const driverCode = error?.original?.code || error?.parent?.code;
+    const message = [
+        error?.message,
+        error?.original?.message,
+        error?.parent?.message
+    ].filter(Boolean).join(' ') || '';
 
     return driverCode === 'ER_NO_SUCH_TABLE' ||
         driverCode === 'SQLITE_ERROR' ||
+        driverCode === '42P01' ||
         /does not exist/i.test(message) ||
         /no such table/i.test(message) ||
-        /unknown table/i.test(message);
+        /unknown table/i.test(message) ||
+        /não existe/i.test(message);
 };
 
 const tableExists = async (queryInterface, tableName) => {
