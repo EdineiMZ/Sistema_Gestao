@@ -1,10 +1,18 @@
 const { FinanceEntry, FinanceGoal } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
+const financeImportService = require('../services/financeImportService');
 
-const { utils: reportingUtils } = financeReportingService;
+const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
+const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
+
+const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
+    value: interval.value,
+    label: interval.label
+}));
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -83,6 +91,15 @@ const formatPeriodLabel = (filters = {}) => {
     return 'Todo o período';
 };
 
+const normalizeFilterValue = (value) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed ? trimmed.toLowerCase() : null;
+};
+
 const buildFiltersFromQuery = (query = {}) => {
     const filters = {};
 
@@ -94,20 +111,52 @@ const buildFiltersFromQuery = (query = {}) => {
         filters.endDate = query.endDate;
     }
 
+    const typeFilter = normalizeFilterValue(query.type);
+    if (typeFilter && FINANCE_TYPES.includes(typeFilter)) {
+        filters.type = typeFilter;
+    }
+
+    const statusFilter = normalizeFilterValue(query.status);
+    if (statusFilter && FINANCE_STATUSES.includes(statusFilter)) {
+        filters.status = statusFilter;
+    }
+
     return filters;
 };
 
 const buildEntriesQueryOptions = (filters = {}) => {
     const options = {
+        include: [
+            {
+                model: FinanceAttachment,
+                as: 'attachments',
+                attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+            }
+        ],
         order: [
             ['dueDate', 'ASC'],
-            ['id', 'ASC']
+            ['id', 'ASC'],
+            [{ model: FinanceAttachment, as: 'attachments' }, 'createdAt', 'DESC']
         ]
     };
 
+    const where = {};
+
     const dateFilter = reportingUtils.buildDateFilter(filters);
     if (dateFilter) {
-        options.where = { dueDate: dateFilter };
+        where.dueDate = dateFilter;
+    }
+
+    if (filters.type && FINANCE_TYPES.includes(filters.type)) {
+        where.type = filters.type;
+    }
+
+    if (filters.status && FINANCE_STATUSES.includes(filters.status)) {
+        where.status = filters.status;
+    }
+
+    if (Object.keys(where).length > 0) {
+        options.where = where;
     }
 
     return options;
@@ -222,6 +271,12 @@ module.exports = {
                 || null;
             const projectionAlerts = projections.filter((item) => item.needsAttention);
 
+            const importPreview = req.session?.financeImportPreview || null;
+            if (importPreview) {
+                res.locals.importPreview = importPreview;
+                req.session.financeImportPreview = null;
+            }
+
             res.render('finance/manageFinance', {
                 entries,
                 filters,
@@ -245,20 +300,224 @@ module.exports = {
         }
     },
 
+    previewFinanceImport: async (req, res) => {
+        try {
+            if (!req.file) {
+                throw new Error('Selecione um arquivo CSV ou OFX para importar.');
+            }
+
+            const parseResult = financeImportService.parseFinanceFile(req.file.buffer, {
+                filename: req.file.originalname,
+                mimetype: req.file.mimetype
+            });
+
+            if (!parseResult.entries.length) {
+                throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
+            }
+
+            const preview = await buildImportPreview(parseResult.entries);
+            const payload = {
+                fileName: req.file.originalname,
+                uploadedAt: new Date().toISOString(),
+                warnings: parseResult.warnings || [],
+                ...preview
+            };
+
+            if (wantsJsonResponse(req)) {
+                return res.json({ ok: true, preview: payload });
+            }
+
+            req.session.financeImportPreview = payload;
+            req.flash('success_msg', 'Importação analisada. Revise os lançamentos antes de concluir.');
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao pré-processar importação financeira:', error);
+            const message = error.message || 'Não foi possível processar o arquivo.';
+            if (wantsJsonResponse(req)) {
+                return res.status(400).json({ ok: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
+        }
+    },
+
+    commitFinanceImport: async (req, res) => {
+        try {
+            const rawEntries = req.body.entries;
+            if (!rawEntries) {
+                throw new Error('Nenhum lançamento recebido para importação.');
+            }
+
+            const entriesArray = Array.isArray(rawEntries)
+                ? rawEntries
+                : Object.values(rawEntries);
+
+            if (!entriesArray.length) {
+                throw new Error('Nenhum lançamento selecionado para importação.');
+            }
+
+            const preparedEntries = [];
+            const skippedEntries = [];
+            const invalidEntries = [];
+
+            entriesArray.forEach((entry) => {
+                const includeFlag = entry.include ?? entry.selected ?? entry.import ?? entry.shouldImport;
+                const shouldImport = includeFlag === true
+                    || includeFlag === 'true'
+                    || includeFlag === '1'
+                    || includeFlag === 'on';
+
+                if (!shouldImport) {
+                    skippedEntries.push(entry);
+                    return;
+                }
+
+                try {
+                    const prepared = financeImportService.prepareEntryForPersistence(entry);
+                    preparedEntries.push(prepared);
+                } catch (error) {
+                    invalidEntries.push({ entry, message: error.message });
+                }
+            });
+
+            if (!preparedEntries.length) {
+                const baseMessage = invalidEntries.length
+                    ? 'Nenhum lançamento válido para importar. Verifique os dados informados.'
+                    : 'Selecione ao menos um lançamento para importar.';
+                throw new Error(baseMessage);
+            }
+
+            const dueDates = [...new Set(preparedEntries.map((entry) => entry.dueDate))];
+            let existingEntries = [];
+            if (dueDates.length) {
+                existingEntries = await FinanceEntry.findAll({
+                    where: { dueDate: { [Op.in]: dueDates } },
+                    attributes: ['id', 'description', 'value', 'dueDate']
+                });
+            }
+
+            const existingHashes = new Map();
+            existingEntries.forEach((entry) => {
+                const plain = entry.get({ plain: true });
+                const hash = financeImportService.createEntryHash(plain);
+                if (!existingHashes.has(hash)) {
+                    existingHashes.set(hash, plain);
+                }
+            });
+
+            const uniqueHashes = new Set();
+            const finalEntries = [];
+            const duplicateEntries = [];
+
+            preparedEntries.forEach((entry) => {
+                if (uniqueHashes.has(entry.hash)) {
+                    duplicateEntries.push({ entry, reason: 'Duplicado no lote importado.' });
+                    return;
+                }
+                if (existingHashes.has(entry.hash)) {
+                    const existing = existingHashes.get(entry.hash);
+                    duplicateEntries.push({ entry, reason: `Já existe lançamento #${existing.id} com os mesmos dados.` });
+                    return;
+                }
+                uniqueHashes.add(entry.hash);
+                finalEntries.push(entry);
+            });
+
+            let createdRecords = [];
+            if (finalEntries.length) {
+                const payload = finalEntries.map(({ hash, ...fields }) => fields);
+                const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
+                createdRecords = Array.isArray(result) ? result : [];
+            }
+
+            const summary = {
+                created: createdRecords.length,
+                duplicates: duplicateEntries.length,
+                invalid: invalidEntries.length,
+                skipped: skippedEntries.length,
+                totalReceived: entriesArray.length
+            };
+
+            req.importAuditResource = `FinanceImport:created=${summary.created}:duplicates=${summary.duplicates}`;
+
+            const parts = [];
+            parts.push(`${summary.created} lançamento(s) importado(s).`);
+            if (summary.duplicates) {
+                parts.push(`${summary.duplicates} duplicado(s) ignorado(s).`);
+            }
+            if (summary.invalid) {
+                parts.push(`${summary.invalid} registro(s) inválido(s).`);
+            }
+            if (summary.skipped) {
+                parts.push(`${summary.skipped} registro(s) não selecionado(s).`);
+            }
+
+            const message = parts.join(' ').trim();
+
+            req.session.financeImportPreview = null;
+
+            if (wantsJsonResponse(req)) {
+                const statusCode = summary.created ? 201 : 400;
+                return res.status(statusCode).json({
+                    ok: Boolean(summary.created),
+                    message,
+                    summary,
+                    createdIds: createdRecords.map((record) => record.id).filter((id) => id !== undefined && id !== null)
+                });
+            }
+
+            if (summary.created) {
+                req.flash('success_msg', `Importação concluída. ${message}`);
+            } else {
+                req.flash('error_msg', message || 'Nenhum lançamento foi importado.');
+            }
+
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao concluir importação financeira:', error);
+            const message = error.message || 'Erro ao concluir importação.';
+            if (wantsJsonResponse(req)) {
+                return res.status(400).json({ ok: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance');
+        }
+    },
+
     createFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
-            await FinanceEntry.create({
+
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.create({
                 description,
                 type,
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
                 recurringInterval: recurringInterval || null
-            });
+            }, { transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de criação:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao criar lançamento.');
             res.redirect('/finance');
@@ -266,12 +525,19 @@ module.exports = {
     },
 
     updateFinanceEntry: async (req, res) => {
+        let transaction;
+        let storedKeys = [];
+
         try {
             const { id } = req.params;
             const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
 
-            const entry = await FinanceEntry.findByPk(id);
+            transaction = await sequelize.transaction();
+
+            const entry = await FinanceEntry.findByPk(id, { transaction });
+
             if (!entry) {
+                await transaction.rollback();
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
@@ -283,12 +549,27 @@ module.exports = {
             entry.paymentDate = paymentDate || null;
             entry.status = status;
             entry.recurring = (recurring === 'true');
-            entry.recurringInterval = recurringInterval || null;
+            entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
-            await entry.save();
+            await entry.save({ transaction });
+
+            storedKeys = await persistAttachments(entry.id, req.files, transaction);
+
+            await transaction.commit();
+
             req.flash('success_msg', 'Lançamento atualizado!');
             res.redirect('/finance');
         } catch (err) {
+            if (transaction) {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    console.error('Erro ao desfazer transação de atualização:', rollbackError);
+                }
+            }
+
+            await removeStoredFiles(storedKeys);
+
             console.error(err);
             req.flash('error_msg', 'Erro ao atualizar lançamento.');
             res.redirect('/finance');
@@ -303,7 +584,20 @@ module.exports = {
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
             }
+
+            const attachments = await FinanceAttachment.findAll({
+                where: { financeEntryId: entry.id },
+                attributes: ['storageKey'],
+                raw: true
+            });
+
             await entry.destroy();
+
+            const storageKeys = attachments.map((item) => item.storageKey).filter(Boolean);
+            if (storageKeys.length) {
+                await removeStoredFiles(storageKeys);
+            }
+
             req.flash('success_msg', 'Lançamento removido com sucesso.');
             res.redirect('/finance');
         } catch (err) {
@@ -578,6 +872,42 @@ module.exports = {
                 res.status(500).json({ error: 'Erro ao exportar Excel.' });
             } else {
                 res.end();
+            }
+        }
+    },
+
+    downloadAttachment: async (req, res) => {
+        try {
+            const { attachmentId } = req.params;
+
+            const attachment = await FinanceAttachment.findByPk(attachmentId);
+            if (!attachment) {
+                req.flash('error_msg', 'Anexo não encontrado.');
+                return res.redirect('/finance');
+            }
+
+            let stream;
+            try {
+                stream = fileStorageService.createReadStream(attachment.storageKey);
+            } catch (error) {
+                console.error('Erro ao acessar anexo de finanças:', error);
+                req.flash('error_msg', 'Arquivo de anexo indisponível.');
+                return res.redirect('/finance');
+            }
+
+            res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+            if (Number.isFinite(Number(attachment.size))) {
+                res.setHeader('Content-Length', String(attachment.size));
+            }
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.fileName)}"`);
+            res.setHeader('Cache-Control', 'no-store');
+
+            await pipeline(stream, res);
+        } catch (err) {
+            console.error('Erro ao baixar anexo financeiro:', err);
+            if (!res.headersSent) {
+                req.flash('error_msg', 'Erro ao baixar anexo.');
+                res.redirect('/finance');
             }
         }
     }

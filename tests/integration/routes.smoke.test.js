@@ -78,7 +78,7 @@ describe('Smoke tests das rotas principais', () => {
                 paymentDate: '2024-05-11',
                 status: 'paid',
                 recurring: true,
-                recurringInterval: 'mensal'
+                recurringInterval: 'monthly'
             }
         ]);
 

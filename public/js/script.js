@@ -172,6 +172,9 @@
         }
 
         const userMenuToggle = document.getElementById('userMenu');
+        if (userMenuToggle) {
+            window.bootstrap?.Dropdown?.getOrCreateInstance(userMenuToggle);
+        }
         const userMenuDropdown = document.getElementById('userMenuDropdown');
         if (userMenuToggle && userMenuDropdown) {
             const getDropdownInstance = () => {

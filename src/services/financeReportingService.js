@@ -572,7 +572,10 @@ module.exports = {
     getFinanceSummary,
     constants: {
         FINANCE_TYPES: [...FINANCE_TYPES],
-        FINANCE_STATUSES: [...FINANCE_STATUSES]
+        FINANCE_STATUSES: [...FINANCE_STATUSES],
+        FINANCE_RECURRING_INTERVALS: FINANCE_RECURRING_INTERVALS.map((interval) => ({ ...interval })),
+        FINANCE_RECURRING_INTERVAL_VALUES: [...FINANCE_RECURRING_INTERVAL_VALUES],
+        FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE: { ...FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE }
     },
     utils: {
         buildTotalsFromStatus,
@@ -583,5 +586,6 @@ module.exports = {
         buildDateFilter,
         isValidISODate,
         resolveProjectionSettings
+
     }
 };
