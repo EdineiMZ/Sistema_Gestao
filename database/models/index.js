@@ -69,6 +69,7 @@ const {
     Budget,
     BudgetThresholdStatus,
     SupportTicket,
+    SupportMessage,
     SupportAttachment
 } = db;
 
@@ -129,34 +130,33 @@ if (Procedure && Appointment) {
 }
 
 // --- Fim das associações manuais ---
+if (SupportTicket && User) {
+    if (!(User.associations && User.associations.createdSupportTickets)) {
+        User.hasMany(SupportTicket, {
+            as: 'createdSupportTickets',
+            foreignKey: 'creatorId'
+        });
+    }
 
-if (User && SupportTicket && !(User.associations && User.associations.supportTickets)) {
-    User.hasMany(SupportTicket, {
-        as: 'supportTickets',
-        foreignKey: 'userId'
+    if (!(User.associations && User.associations.assignedSupportTickets)) {
+        User.hasMany(SupportTicket, {
+            as: 'assignedSupportTickets',
+            foreignKey: 'assignedToId'
+        });
+    }
+}
+
+if (SupportMessage && User && !(User.associations && User.associations.supportMessages)) {
+    User.hasMany(SupportMessage, {
+        as: 'supportMessages',
+        foreignKey: 'senderId'
     });
 }
 
-if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.requester)) {
-    SupportTicket.belongsTo(User, {
-        as: 'requester',
-        foreignKey: 'userId'
-    });
-}
-
-if (SupportTicket && SupportAttachment && !(SupportTicket.associations && SupportTicket.associations.attachments)) {
-    SupportTicket.hasMany(SupportAttachment, {
-        as: 'attachments',
-        foreignKey: 'ticketId',
-        onDelete: 'CASCADE',
-        hooks: true
-    });
-}
-
-if (SupportAttachment && SupportTicket && !(SupportAttachment.associations && SupportAttachment.associations.ticket)) {
-    SupportAttachment.belongsTo(SupportTicket, {
-        as: 'ticket',
-        foreignKey: 'ticketId'
+if (SupportAttachment && User && !(User.associations && User.associations.uploadedSupportAttachments)) {
+    User.hasMany(SupportAttachment, {
+        as: 'uploadedSupportAttachments',
+        foreignKey: 'uploadedById'
     });
 }
 
