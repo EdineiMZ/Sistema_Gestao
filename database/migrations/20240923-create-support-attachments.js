@@ -1,6 +1,6 @@
 'use strict';
 
-const TABLE_NAME = 'SupportAttachments';
+const TABLE_NAME = 'supportAttachments';
 
 module.exports = {
     up: async (queryInterface, Sequelize) => {
@@ -14,7 +14,7 @@ module.exports = {
                 type: Sequelize.INTEGER,
                 allowNull: false,
                 references: {
-                    model: 'SupportTickets',
+                    model: 'supportTickets',
                     key: 'id'
                 },
                 onUpdate: 'CASCADE',
@@ -24,7 +24,7 @@ module.exports = {
                 type: Sequelize.INTEGER,
                 allowNull: false,
                 references: {
-                    model: 'SupportMessages',
+                    model: 'supportMessages',
                     key: 'id'
                 },
                 onUpdate: 'CASCADE',
