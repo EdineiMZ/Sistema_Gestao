@@ -812,21 +812,28 @@ module.exports = {
                 }
             })();
 
-            const [entries, summary, goals, categories] = await Promise.all([
+            const [entries, summary, goals, categories, budgetOverview] = await Promise.all([
                 entriesPromise,
                 summaryPromise,
                 goalsPromise,
-                categoriesPromise
+                categoriesPromise,
+                budgetOverviewPromise
             ]);
 
-            const rawBudgetSummaries = Array.isArray(budgetOverview?.summaries)
-                ? budgetOverview.summaries
+            const normalizedBudgetOverview = (
+                budgetOverview && typeof budgetOverview === 'object'
+                    ? budgetOverview
+                    : {}
+            );
+
+            const rawBudgetSummaries = Array.isArray(normalizedBudgetOverview?.summaries)
+                ? normalizedBudgetOverview.summaries
                 : [];
-            const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
-                ? budgetOverview.categoryConsumption
+            const categoryConsumption = Array.isArray(normalizedBudgetOverview?.categoryConsumption)
+                ? normalizedBudgetOverview.categoryConsumption
                 : [];
-            const budgetMonths = Array.isArray(budgetOverview?.months)
-                ? budgetOverview.months
+            const budgetMonths = Array.isArray(normalizedBudgetOverview?.months)
+                ? normalizedBudgetOverview.months
                 : [];
 
             const statusPalette = buildStatusPalette();
