@@ -47,6 +47,7 @@ const notificationRoutes = require('./src/routes/notificationRoutes');
 const auditRoutes = require('./src/routes/auditRoutes');
 const campaignRoutes = require('./src/routes/campaignRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
+const supportRoutes = require('./src/routes/supportRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -257,6 +258,7 @@ app.use('/notifications', notificationRoutes);
 app.use('/campaigns', campaignRoutes);
 app.use('/audit', auditRoutes);
 app.use('/admin', adminRoutes);
+app.use('/support', supportRoutes);
 
 // Conexão DB
 Promise.all([sequelize.sync(), sessionStoreSyncPromise])
