@@ -35,6 +35,18 @@
     --table-min-width-xs: 560px;
     --form-control-gap: 1.25rem;
     --form-control-gap-sm: 1rem;
+
+    /* Budget tokens */
+    --budget-surface: #ffffff;
+    --budget-surface-subtle: #f8f9ff;
+    --budget-border: rgba(31, 41, 55, 0.08);
+    --budget-border-strong: rgba(31, 41, 55, 0.16);
+    --budget-badge-safe: rgba(46, 196, 182, 0.18);
+    --budget-badge-warning: rgba(245, 158, 11, 0.2);
+    --budget-badge-critical: rgba(239, 68, 68, 0.22);
+    --budget-badge-neutral: rgba(67, 97, 238, 0.18);
+    --budget-progress-track: rgba(67, 97, 238, 0.12);
+    --budget-progress-shadow: rgba(67, 97, 238, 0.35);
 }
 
 * {
@@ -438,6 +450,247 @@ body {
     background: rgba(67, 97, 238, 0.15);
     color: var(--brand-primary-dark);
     font-size: 0.85rem;
+}
+
+/* ---------------------------------------------
+   Budget management components
+   --------------------------------------------- */
+
+.budget-section {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--section-gap-sm), 3vw, var(--section-gap-lg));
+}
+
+.budget-card,
+:where([data-budget-card]) > div {
+    background: var(--budget-surface);
+    border: 1px solid var(--budget-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-soft);
+    padding: clamp(var(--card-padding-sm), 2.5vw, var(--card-padding-md));
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1rem, 2vw, 1.75rem);
+    position: relative;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    color: var(--text-color);
+}
+
+.budget-card:hover,
+:where([data-budget-card]) > div:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 45px var(--budget-progress-shadow);
+}
+
+.budget-card__header,
+:where([data-budget-card]) > div > .d-flex:first-child {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    flex-wrap: wrap;
+}
+
+.budget-card__category,
+:where([data-budget-card]) > div > .d-flex:first-child > .d-flex {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+.budget-card__color-dot,
+:where([data-budget-card]) .rounded-circle.flex-shrink-0 {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 999px;
+    box-shadow: 0 0 0 4px var(--budget-surface);
+}
+
+.budget-card__title,
+:where([data-budget-card]) h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text-color);
+}
+
+.budget-badge,
+:where([data-budget-card]) .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: var(--budget-badge-neutral);
+    color: var(--brand-primary-dark);
+    border: 1px solid var(--budget-border);
+}
+
+.budget-badge--safe,
+:where([data-budget-card]) .badge.bg-success-subtle {
+    background: var(--budget-badge-safe);
+    color: var(--brand-success);
+    border-color: color-mix(in srgb, var(--brand-success) 25%, transparent);
+}
+
+.budget-badge--warning,
+:where([data-budget-card]) .badge.bg-warning-subtle {
+    background: var(--budget-badge-warning);
+    color: #b45309;
+    border-color: color-mix(in srgb, #b45309 25%, transparent);
+}
+
+.budget-badge--critical,
+:where([data-budget-card]) .badge.bg-danger-subtle {
+    background: var(--budget-badge-critical);
+    color: #b91c1c;
+    border-color: color-mix(in srgb, #b91c1c 25%, transparent);
+}
+
+.budget-progress,
+:where([data-budget-card]) .progress {
+    background: var(--budget-progress-track);
+    border-radius: 999px;
+    height: 0.6rem;
+    overflow: hidden;
+}
+
+.budget-progress__bar,
+:where([data-budget-card]) .progress-bar {
+    border-radius: inherit;
+    transition: width 0.4s ease, background 0.3s ease;
+}
+
+.budget-metrics,
+:where([data-budget-card]) .d-flex.flex-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.budget-metric,
+:where([data-budget-card]) .d-flex.flex-wrap > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.budget-metric__label,
+:where([data-budget-card]) .d-flex.flex-wrap > div .text-muted {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.budget-summary-grid,
+:where([data-budget-overview]) > .col-12:first-child > .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+.budget-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.budget-summary__item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.budget-filter,
+:where([data-budget-month-selector]) {
+    min-width: min(16.5rem, 100%);
+    background: var(--budget-surface);
+    border-color: var(--budget-border-strong);
+    font-weight: 500;
+    color: var(--text-color);
+    box-shadow: none;
+}
+
+.budget-filter:focus,
+:where([data-budget-month-selector]):focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.2);
+}
+
+.budget-filter option,
+:where([data-budget-month-selector]) option {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.budget-distribution,
+:where([data-category-consumption-list]) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.budget-distribution .list-group-item,
+:where([data-category-consumption-list]) .list-group-item {
+    border: none;
+    background: transparent;
+    padding-left: 0;
+    padding-right: 0;
+    transition: background 0.2s ease;
+}
+
+.budget-distribution .list-group-item:hover,
+:where([data-category-consumption-list]) .list-group-item:hover {
+    background: rgba(67, 97, 238, 0.08);
+    border-radius: 12px;
+}
+
+@media (max-width: 992px) {
+    .budget-summary-grid,
+    :where([data-budget-overview]) > .col-12:first-child > .row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .budget-card,
+    :where([data-budget-card]) > div {
+        padding: var(--card-padding-sm);
+    }
+
+    .budget-card__header,
+    :where([data-budget-card]) > div > .d-flex:first-child {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .budget-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .budget-card,
+    :where([data-budget-card]) > div {
+        transition: none;
+    }
+
+    .budget-card:hover,
+    :where([data-budget-card]) > div:hover {
+        transform: none;
+        box-shadow: var(--shadow-soft);
+    }
+
+    .budget-progress__bar,
+    :where([data-budget-card]) .progress-bar {
+        transition: none;
+    }
 }
 
 fieldset.scheduler-border {
@@ -1090,6 +1343,15 @@ body.theme-dark {
     --text-color: #e2e8f0;
     --muted-color: #94a3b8;
     --shadow-soft: 0 18px 48px rgba(2, 6, 23, 0.55);
+    --budget-surface: rgba(15, 23, 42, 0.92);
+    --budget-surface-subtle: rgba(30, 41, 59, 0.75);
+    --budget-border: rgba(148, 163, 184, 0.28);
+    --budget-border-strong: rgba(148, 163, 184, 0.38);
+    --budget-badge-neutral: rgba(96, 165, 250, 0.25);
+    --budget-badge-warning: rgba(251, 191, 36, 0.38);
+    --budget-badge-critical: rgba(248, 113, 113, 0.4);
+    --budget-progress-track: rgba(96, 165, 250, 0.3);
+    --budget-progress-shadow: rgba(15, 23, 42, 0.65);
     background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.18), transparent 45%),
         radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.12), transparent 40%),
         #0b1120;
@@ -1190,6 +1452,34 @@ body.theme-dark {
     border: 1px solid rgba(148, 163, 184, 0.12);
     color: var(--text-color);
     box-shadow: var(--shadow-soft);
+}
+
+.app-shell.theme-dark :where([data-budget-card]) > div {
+    background: var(--budget-surface);
+    border: 1px solid var(--budget-border);
+    box-shadow: 0 24px 52px rgba(2, 6, 23, 0.6);
+    color: var(--text-color);
+}
+
+.app-shell.theme-dark :where([data-budget-card]) .badge {
+    color: #e0e7ff;
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.app-shell.theme-dark :where([data-budget-card]) .badge.bg-warning-subtle {
+    color: #fbbf24;
+}
+
+.app-shell.theme-dark :where([data-budget-card]) .badge.bg-danger-subtle {
+    color: #f87171;
+}
+
+.app-shell.theme-dark :where([data-budget-card]) .progress {
+    background: var(--budget-progress-track);
+}
+
+.app-shell.theme-dark :where([data-category-consumption-list]) .list-group-item:hover {
+    background: rgba(96, 165, 250, 0.18);
 }
 
 .app-shell.theme-dark .card-soft:hover,
