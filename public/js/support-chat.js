@@ -55,15 +55,39 @@ const renderMessage = (message) => {
         return;
     }
 
+    const isCurrentUser = Boolean(config.user && message.senderId === config.user.id);
+    const isAgent = Boolean(message.isFromAgent);
+    const isSystem = Boolean(message.isSystem);
+
+    const resolveAuthorLabel = () => {
+        if (isSystem) {
+            return 'Sistema';
+        }
+
+        if (message.sender && message.sender.name) {
+            return message.sender.name;
+        }
+
+        if (isCurrentUser) {
+            return 'Você';
+        }
+
+        if (isAgent) {
+            return 'Equipe de suporte';
+        }
+
+        return 'Usuário';
+    };
+
     const li = document.createElement('li');
     li.className = 'support-chat__message-wrapper d-flex flex-column';
 
     const bubble = document.createElement('div');
     bubble.classList.add('support-chat__message');
 
-    if (message.messageType === 'system') {
+    if (isSystem) {
         bubble.classList.add('support-chat__message--system', 'bg-dark', 'bg-opacity-75', 'text-white');
-    } else if (config.user && message.senderId === config.user.id) {
+    } else if (isCurrentUser) {
         bubble.classList.add('support-chat__message--self');
     } else {
         bubble.classList.add('support-chat__message--other');
@@ -74,7 +98,7 @@ const renderMessage = (message) => {
 
     const author = document.createElement('span');
     author.className = 'fw-semibold small text-uppercase';
-    author.textContent = message.senderRole || 'suporte';
+    author.textContent = resolveAuthorLabel();
 
     const timestamp = document.createElement('small');
     timestamp.textContent = formatTime(message.createdAt);
@@ -82,10 +106,14 @@ const renderMessage = (message) => {
     header.append(author, timestamp);
     bubble.append(header);
 
-    if (message.content) {
-        const body = document.createElement('p');
+    if (message.body) {
+        const body = document.createElement('div');
         body.className = 'mb-2';
-        body.textContent = message.content;
+        if (/<[a-z][\s\S]*>/i.test(message.body)) {
+            body.innerHTML = message.body;
+        } else {
+            body.textContent = message.body;
+        }
         bubble.append(body);
     }
 
@@ -219,9 +247,8 @@ const sendMessage = async (content, attachmentFile) => {
             'support:message',
             {
                 ticketId: state.ticketId,
-                content,
-                attachmentId,
-                messageType: attachmentId ? 'file' : 'text'
+                body: content,
+                attachmentId
             },
             (ack) => {
                 if (!ack?.ok) {

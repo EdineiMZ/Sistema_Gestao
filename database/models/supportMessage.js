@@ -10,21 +10,27 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER,
             allowNull: false
         },
-        senderRole: {
-            type: DataTypes.STRING(20),
-            allowNull: false
-        },
-        messageType: {
-            type: DataTypes.STRING(20),
+        body: {
+            type: DataTypes.TEXT,
             allowNull: false,
-            defaultValue: 'text',
             validate: {
-                isIn: [['text', 'file', 'system']]
+                hasContent(value) {
+                    const normalized = typeof value === 'string' ? value.trim() : '';
+                    if (!normalized && !this.isSystem && !this.attachmentId) {
+                        throw new Error('Mensagem não pode estar vazia.');
+                    }
+                }
             }
         },
-        content: {
-            type: DataTypes.TEXT,
-            allowNull: true
+        isFromAgent: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        isSystem: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
         },
         attachmentId: {
             type: DataTypes.INTEGER,
