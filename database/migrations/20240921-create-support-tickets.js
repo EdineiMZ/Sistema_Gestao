@@ -191,14 +191,34 @@ module.exports = {
         }
 
         const existingIndexes = await getIndexes(queryInterface, targetTableName);
-        if (hasIndex(existingIndexes, {
-            name: SUPPORT_TICKETS_USER_STATUS_INDEX,
-            fields: ['userId', 'status']
-        })) {
-            await queryInterface.removeIndex(
-                targetTableName,
-                SUPPORT_TICKETS_USER_STATUS_INDEX
-            );
+        const supportTicketsUserStatusIndex = existingIndexes.find((index) => {
+            const normalizedName = normalizeIdentifier(index?.name);
+            if (normalizedName && normalizedName === normalizeIdentifier(SUPPORT_TICKETS_USER_STATUS_INDEX)) {
+                return true;
+            }
+
+            const indexFields = extractIndexFields(index);
+            return indexFields.length === 2 &&
+                indexFields[0] === 'userid' &&
+                indexFields[1] === 'status';
+        });
+
+        if (supportTicketsUserStatusIndex) {
+            const indexName = supportTicketsUserStatusIndex.name;
+            const indexFieldNames = Array.isArray(supportTicketsUserStatusIndex.fields)
+                ? supportTicketsUserStatusIndex.fields
+                    .map((field) => field.attribute || field.name || field.field || field.columnName)
+                    .filter(Boolean)
+                : [];
+
+            const indexIdentifier = indexName || indexFieldNames;
+
+            if (indexIdentifier && (!Array.isArray(indexIdentifier) || indexIdentifier.length > 0)) {
+                await queryInterface.removeIndex(
+                    targetTableName,
+                    indexIdentifier
+                );
+            }
         }
 
         if (await tableExists(queryInterface, targetTableName)) {
