@@ -91,6 +91,34 @@ describe('budgetController', () => {
             });
         });
 
+        it('normaliza thresholds fracionários e absolutos antes de salvar', async () => {
+            const budget = { id: 15, monthlyLimit: '1800.00' };
+            budgetService.saveBudget.mockResolvedValue(budget);
+
+            const req = {
+                user: { id: 25 },
+                body: {
+                    financeCategoryId: '6',
+                    monthlyLimit: '1800.00',
+                    thresholds: ['0.5', '200', ' 0.755 ', '200'],
+                    referenceMonth: '2024-11'
+                }
+            };
+            const res = buildResponse();
+
+            await budgetController.save(req, res);
+
+            expect(budgetService.saveBudget).toHaveBeenCalledWith({
+                id: null,
+                financeCategoryId: 6,
+                monthlyLimit: 1800,
+                thresholds: [0.5, 0.76, 200],
+                referenceMonth: '2024-11-01',
+                userId: 25
+            });
+            expect(res.status).toHaveBeenCalledWith(201);
+        });
+
         it('retorna 400 quando limite mensal inválido', async () => {
             const req = {
                 user: { id: 7 },

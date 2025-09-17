@@ -51,12 +51,12 @@ const validateThresholdList = (value) => {
     const normalized = normalizer(coalesced);
 
     if (!Array.isArray(normalized) || normalized.length === 0) {
-        throw buildValidationError('Informe ao menos um limite de alerta entre 0 e 1.');
+        throw buildValidationError('Informe ao menos um limite de alerta maior que zero.');
     }
 
-    const outOfRange = normalized.find((item) => item <= 0 || item >= 1);
+    const outOfRange = normalized.find((item) => item <= 0);
     if (outOfRange !== undefined) {
-        throw buildValidationError('Cada limite de alerta deve estar entre 0 e 1.');
+        throw buildValidationError('Cada limite de alerta deve ser um número maior que zero.');
     }
 
     return normalized;

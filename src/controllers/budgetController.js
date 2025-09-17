@@ -28,8 +28,8 @@ const parsePositiveNumber = (value, errorMessage) => {
 };
 
 const parseThresholds = (value) => {
-    const emptyThresholdsMessage = 'Informe ao menos um limite de alerta entre 0 e 1.';
-    const invalidThresholdMessage = 'Cada limite de alerta deve estar entre 0 e 1.';
+    const emptyThresholdsMessage = 'Informe ao menos um limite de alerta maior que zero.';
+    const invalidThresholdMessage = 'Cada limite de alerta deve ser um número maior que zero.';
 
     if (value === undefined || value === null || value === '') {
         throw new ValidationError(emptyThresholdsMessage);
@@ -47,12 +47,7 @@ const parseThresholds = (value) => {
                 return null;
             }
 
-            const numeric = Number(stringItem);
-            if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
-                throw new ValidationError(invalidThresholdMessage);
-            }
-
-            return Number(numeric.toFixed(2));
+            return parsePositiveNumber(stringItem, invalidThresholdMessage);
         })
         .filter((item) => item !== null);
 

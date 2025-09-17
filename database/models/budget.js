@@ -51,7 +51,7 @@ const normalizeMonthValue = (value) => {
     return normalized.toISOString().slice(0, 10);
 };
 
-const THRESHOLD_RANGE_ERROR = 'Limiares devem ser números entre 0 e 1, com até duas casas decimais.';
+const THRESHOLD_RANGE_ERROR = 'Limiares devem ser números maiores que zero, com até duas casas decimais.';
 
 /**
  * Normaliza a lista de limiares (thresholds).
@@ -71,10 +71,10 @@ const normalizeThresholds = (value) => {
             const numeric = Number.parseFloat(
                 typeof item === 'string' ? item.replace(',', '.') : item
             );
-            if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
+            if (!Number.isFinite(numeric) || numeric <= 0) {
                 return null;
             }
-            return Number(numeric.toFixed(4));
+            return Number(numeric.toFixed(2));
         })
         .filter((item) => item !== null);
 
@@ -82,7 +82,7 @@ const normalizeThresholds = (value) => {
         return getConfiguredThresholdDefaults();
     }
 
-    if (normalized.some((n) => n <= 0 || n > 1)) {
+    if (normalized.some((n) => n <= 0)) {
         throw new Error(THRESHOLD_RANGE_ERROR);
     }
 
@@ -130,9 +130,9 @@ module.exports = (sequelize, DataTypes) => {
                 validate: {
                     isArrayOfPositiveNumbers(value) {
                         const list = normalizeThresholds(value);
-                        if (list.some((item) => item <= 0 || item > 1)) {
+                        if (list.some((item) => item <= 0)) {
                             throw new Error(
-                                'Percentuais de alerta devem estar entre 0 e 1 (ex.: 0.75).'
+                                'Limites de alerta devem ser números maiores que zero.'
                             );
                         }
                     },

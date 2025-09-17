@@ -116,13 +116,13 @@ const ensureValidBudgetThresholds = (req, { required } = {}) => {
     const numeric = list
         .map((item) => {
             const value = Number.parseFloat(item);
-            return Number.isFinite(value) ? Number(value.toFixed(4)) : null;
+            return Number.isFinite(value) ? Number(value.toFixed(2)) : null;
         })
         .filter((item) => item !== null);
 
     if (!numeric.length) {
         if (required || (req.body && Object.prototype.hasOwnProperty.call(req.body, 'thresholds'))) {
-            const error = new Error('Informe ao menos um limite de alerta entre 0 e 1.');
+            const error = new Error('Informe ao menos um limite de alerta maior que zero.');
             error.__budgetValidation = true;
             error.statusCode = 400;
             throw error;
@@ -130,9 +130,9 @@ const ensureValidBudgetThresholds = (req, { required } = {}) => {
         return;
     }
 
-    const invalid = numeric.find((value) => value <= 0 || value >= 1);
+    const invalid = numeric.find((value) => value <= 0);
     if (invalid !== undefined) {
-        const error = new Error('Cada limite de alerta deve estar entre 0 e 1.');
+        const error = new Error('Cada limite de alerta deve ser um número maior que zero.');
         error.__budgetValidation = true;
         error.statusCode = 400;
         throw error;
