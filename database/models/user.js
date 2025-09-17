@@ -135,6 +135,24 @@ module.exports = (sequelize, DataTypes) => {
                     msg: 'Crédito não pode ser negativo.'
                 }
             }
+        },
+        emailVerifiedAt: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        emailVerificationTokenHash: {
+            type: DataTypes.STRING(128),
+            allowNull: true,
+            validate: {
+                len: {
+                    args: [10, 128],
+                    msg: 'Hash de verificação de e-mail inválido.'
+                }
+            }
+        },
+        emailVerificationTokenExpiresAt: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
     }, {
         tableName: 'Users',
