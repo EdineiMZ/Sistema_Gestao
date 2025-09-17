@@ -1,5 +1,6 @@
 'use strict';
 
+const { Op: SequelizeModuleOp } = require('sequelize');
 const crypto = require('node:crypto');
 const {
     Budget,
@@ -21,7 +22,7 @@ const {
     DEFAULT_BUDGET_ALERT_ACCENT
 } = require('../config/budgets');
 
-const { Op } = Sequelize;
+const Op = (Sequelize && Sequelize.Op) || SequelizeModuleOp;
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 
