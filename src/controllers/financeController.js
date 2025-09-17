@@ -120,6 +120,12 @@ const normalizeAmountInput = (value) => {
     return null;
 };
 
+const resolveCurrentUserId = (req) => req?.user?.id ?? req?.session?.user?.id ?? null;
+
+const createCategoryResolver = async (userId) => {
+    return financeImportService.createFinanceCategoryResolver({ ownerId: userId });
+};
+
 const FALLBACK_STATUS_META = {
     healthy: { key: 'healthy', label: 'Consumo saudável', badgeClass: 'bg-success-subtle text-success', icon: 'bi-emoji-smile', barColor: '#10b981' },
     caution: { key: 'caution', label: 'Consumo moderado', badgeClass: 'bg-primary-subtle text-primary', icon: 'bi-activity', barColor: '#2563eb' },
@@ -928,7 +934,7 @@ module.exports = {
             }
 
             const currentUserId = resolveCurrentUserId(req);
-            const resolveCategory = createCategoryResolver(currentUserId);
+            const categoryResolver = await createCategoryResolver(currentUserId);
             const preparedEntries = [];
             const skippedEntries = [];
             const invalidEntries = [];
@@ -946,7 +952,7 @@ module.exports = {
                 }
 
                 try {
-                    const prepared = financeImportService.prepareEntryForPersistence(entry);
+                    const prepared = await financeImportService.prepareEntryForPersistence(entry, { categoryResolver });
                     preparedEntries.push({
                         ...prepared,
                         categoryId: normalizeCategoryId(prepared.financeCategoryId)
