@@ -1,6 +1,7 @@
 'use strict';
 
 const { FinanceEntry, FinanceGoal, Budget, FinanceCategory, Sequelize } = require('../../database/models');
+const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
 const {
     FINANCE_RECURRING_INTERVALS,
     FINANCE_RECURRING_INTERVAL_VALUES,
@@ -26,6 +27,35 @@ const DEFAULT_STATUS_META = {
 };
 const DEFAULT_PROJECTION_MONTHS = 6;
 const MAX_PROJECTION_MONTHS = 24;
+
+const BUDGET_ALERT_ENABLED = isBudgetAlertEnabled();
+const BUDGET_THRESHOLD_DEFAULTS = (() => {
+    const defaults = getBudgetThresholdDefaults();
+    const normalized = Array.isArray(defaults)
+        ? defaults
+            .map((value) => {
+                const numeric = Number.parseFloat(value);
+                if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
+                    return null;
+                }
+                return Number(numeric.toFixed(4));
+            })
+            .filter((value) => value !== null)
+        : [];
+
+    if (normalized.length) {
+        normalized.sort((a, b) => a - b);
+        return Object.freeze(normalized);
+    }
+
+    if (!BUDGET_ALERT_ENABLED) {
+        return Object.freeze([]);
+    }
+
+    return Object.freeze([0.5, 0.75, 0.9]);
+})();
+
+const getDefaultThresholdList = () => (BUDGET_THRESHOLD_DEFAULTS.length ? [...BUDGET_THRESHOLD_DEFAULTS] : []);
 
 const toNullableNumber = (value) => {
     if (value === null || value === undefined || value === '') {
@@ -176,18 +206,33 @@ const normalizeNumber = (value, precision = 2) => {
 
 const normalizeThresholdList = (value) => {
     if (value === null || value === undefined) {
-        return [];
+        return getDefaultThresholdList();
     }
+
     const rawList = Array.isArray(value) ? value : [value];
     const normalized = rawList
         .map((item) => {
-            const parsed = Number.parseFloat(item);
-            if (!Number.isFinite(parsed) || parsed <= 0) {
+            if (item === null || item === undefined || item === '') {
                 return null;
             }
-            return Number(parsed.toFixed(2));
+
+            const raw = typeof item === 'string' ? item.trim() : String(item).trim();
+            if (!raw) {
+                return null;
+            }
+
+            const sanitized = raw.replace(',', '.');
+            const parsed = Number.parseFloat(sanitized);
+            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
+                return null;
+            }
+            return Number(parsed.toFixed(4));
         })
         .filter((item) => item !== null);
+
+    if (!normalized.length) {
+        return getDefaultThresholdList();
+    }
 
     const unique = Array.from(new Set(normalized));
     unique.sort((a, b) => a - b);
@@ -197,25 +242,31 @@ const normalizeThresholdList = (value) => {
 const resolveBudgetStatus = (consumption, limit, thresholds = []) => {
     const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 0;
     const safeConsumption = Number.isFinite(Number(consumption)) ? Number(consumption) : 0;
-    const ratio = safeLimit > 0 ? (safeConsumption / safeLimit) * 100 : null;
+    const ratio = safeLimit > 0 ? safeConsumption / safeLimit : null;
     const sortedThresholds = normalizeThresholdList(thresholds);
 
-    if (ratio !== null && ratio >= 100) {
+    if (ratio !== null && ratio >= 1) {
         return { ...DEFAULT_STATUS_META.critical };
     }
 
     if (sortedThresholds.length) {
-        const highestThreshold = sortedThresholds[sortedThresholds.length - 1];
-        if (safeConsumption >= highestThreshold) {
+        const warningThreshold = sortedThresholds[sortedThresholds.length - 1];
+        const cautionThreshold = sortedThresholds.find((value) => value < warningThreshold) ?? sortedThresholds[0];
+
+        if (Number.isFinite(warningThreshold) && ratio !== null && ratio >= warningThreshold) {
             return { ...DEFAULT_STATUS_META.warning };
+        }
+
+        if (Number.isFinite(cautionThreshold) && ratio !== null && ratio >= cautionThreshold) {
+            return { ...DEFAULT_STATUS_META.caution };
         }
     }
 
-    if (ratio !== null && ratio >= 85) {
+    if (ratio !== null && ratio >= 0.85) {
         return { ...DEFAULT_STATUS_META.warning };
     }
 
-    if (ratio !== null && ratio >= 60) {
+    if (ratio !== null && ratio >= 0.6) {
         return { ...DEFAULT_STATUS_META.caution };
     }
 
@@ -1093,6 +1144,17 @@ const fetchEntries = async (filters = {}) => {
         where.status = filters.status;
     }
 
+    if (Number.isInteger(filters.financeCategoryId)) {
+        where.financeCategoryId = filters.financeCategoryId;
+    } else if (Array.isArray(filters.financeCategoryIds) && filters.financeCategoryIds.length) {
+        const ids = filters.financeCategoryIds
+            .map((value) => Number.parseInt(value, 10))
+            .filter((id) => Number.isInteger(id));
+        if (ids.length) {
+            where.financeCategoryId = { [Op.in]: Array.from(new Set(ids)) };
+        }
+    }
+
     return FinanceEntry.findAll({
         attributes: ['id', 'type', 'status', 'value', 'dueDate'],
         where,
@@ -1172,7 +1234,9 @@ module.exports = {
         FINANCE_STATUSES: [...FINANCE_STATUSES],
         FINANCE_RECURRING_INTERVALS: FINANCE_RECURRING_INTERVALS.map((interval) => ({ ...interval })),
         FINANCE_RECURRING_INTERVAL_VALUES: [...FINANCE_RECURRING_INTERVAL_VALUES],
-        FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE: { ...FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE }
+        FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE: { ...FINANCE_RECURRING_INTERVAL_LABEL_TO_VALUE },
+        BUDGET_ALERT_ENABLED,
+        BUDGET_THRESHOLD_DEFAULTS: getDefaultThresholdList()
     },
     utils: {
         buildTotalsFromStatus,
@@ -1187,7 +1251,9 @@ module.exports = {
         buildBudgetOverview,
         normalizeThresholdList,
         resolveBudgetStatus,
-        DEFAULT_STATUS_META
+        DEFAULT_STATUS_META,
+        getConfiguredBudgetThresholds: () => getDefaultThresholdList(),
+        budgetAlertEnabled: BUDGET_ALERT_ENABLED
 
     }
 };
