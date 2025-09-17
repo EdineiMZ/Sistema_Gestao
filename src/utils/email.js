@@ -301,12 +301,19 @@ const formatMonthLabel = (value) => {
     }
 
     if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value.trim())) {
-        const normalized = `${value.trim()}-01T00:00:00Z`;
-        const date = new Date(normalized);
-        if (!Number.isNaN(date.getTime())) {
-            return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        const trimmed = value.trim();
+        const [yearPart, monthPart] = trimmed.split('-');
+        const year = Number.parseInt(yearPart, 10);
+        const month = Number.parseInt(monthPart, 10);
+
+        if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+            const date = new Date(year, month - 1, 1);
+            if (!Number.isNaN(date.getTime())) {
+                return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            }
         }
-        return value.trim();
+
+        return trimmed;
     }
 
     const date = value instanceof Date ? value : new Date(value);
@@ -504,7 +511,24 @@ const buildBudgetAlertContext = (budgetInput = {}, options = {}) => {
     const monthlyLimit = toNumber(budgetInput?.monthlyLimit ?? budgetInput?.limit);
     const consumption = toNumber(budgetInput?.consumption ?? budgetInput?.spent);
     const remaining = Number.parseFloat((monthlyLimit - consumption).toFixed(2));
-    const thresholds = normalizeThresholdList(budgetInput?.thresholds || []);
+    const thresholdInput = budgetInput?.thresholds ?? [];
+    const thresholdCandidates = Array.isArray(thresholdInput) ? thresholdInput : [thresholdInput];
+    const absoluteThresholds = thresholdCandidates
+        .map((item) => {
+            const parsed = Number.parseFloat(item);
+            if (!Number.isFinite(parsed) || parsed <= 1) {
+                return null;
+            }
+            return Number(parsed.toFixed(2));
+        })
+        .filter((item) => item !== null);
+
+    let thresholds = normalizeThresholdList(thresholdCandidates);
+    if (absoluteThresholds.length) {
+        const uniqueAbsoluteThresholds = Array.from(new Set(absoluteThresholds));
+        uniqueAbsoluteThresholds.sort((a, b) => a - b);
+        thresholds = uniqueAbsoluteThresholds;
+    }
     const statusMeta = resolveBudgetStatus(consumption, monthlyLimit, thresholds) || DEFAULT_STATUS_META.healthy;
     const usagePercent = monthlyLimit > 0
         ? Number.parseFloat(((consumption / monthlyLimit) * 100).toFixed(1))
