@@ -2,6 +2,7 @@ const path = require('path');
 const ejs = require('ejs');
 
 const { USER_ROLES, ROLE_LABELS, getRoleLevel } = require('../../../src/constants/roles');
+const { FINANCE_RECURRING_INTERVALS } = require('../../../src/constants/financeRecurringIntervals');
 
 const viewPath = path.join(__dirname, '../../../src/views/finance/manageFinance.ejs');
 
@@ -26,53 +27,10 @@ const buildViewContext = () => ({
             paymentDate: '2024-05-02',
             status: 'paid',
             recurring: true,
-            recurringInterval: 'Mensal'
-        },
-        {
-            id: 102,
-            description: 'Serviço de consultoria',
-            type: 'payable',
-            value: '450.00',
-            dueDate: '2024-05-10',
-            paymentDate: null,
-            status: 'pending',
-            recurring: false,
-            recurringInterval: null
+            recurringInterval: 'monthly'
         }
     ],
-    filters: {
-        startDate: '2024-05-01',
-        endDate: '2024-05-31',
-        type: 'receivable',
-        status: 'paid'
-    },
-    periodLabel: '01/05/2024 a 31/05/2024',
-    financeTotals: {
-        receivable: 3200.75,
-        payable: 1850.25,
-        net: 1350.5,
-        overdue: 420.0,
-        paid: 2800.5,
-        pending: 250.25
-    },
-    statusSummary: {
-        receivable: {
-            pending: 250.25,
-            paid: 2800.5,
-            overdue: 150,
-            cancelled: 0
-        },
-        payable: {
-            pending: 0,
-            paid: 1400,
-            overdue: 270,
-            cancelled: 180.25
-        }
-    },
-    monthlySummary: [
-        { month: '2024-04', receivable: 1800.25, payable: 950.5 },
-        { month: '2024-05', receivable: 1400.5, payable: 899.75 }
-    ],
+    recurringIntervalOptions: FINANCE_RECURRING_INTERVALS,
     success_msg: null,
     error_msg: null,
     error: null,
@@ -92,6 +50,9 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('data-export-target="/finance/export/excel"');
         expect(html).toContain('Exportar Excel');
         expect(html).toContain('aria-label="Exportar lançamentos filtrados em Excel"');
+
+        expect(html).toContain('option value="monthly"');
+        expect(html).toContain('>Mensal<');
     });
 
     it('renders filter form with active parameters and auto-submit controls', async () => {

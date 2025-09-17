@@ -1,43 +1,6 @@
 <%- include('../partials/header') %>
 
-<%
-    const filterValues = filters || {};
-    const computedPeriodLabel = periodLabel || 'Todo o período';
-    const summaryTotals = financeTotals || {};
-    const summaryStatus = statusSummary || {};
-    const summaryMonthly = Array.isArray(monthlySummary) ? monthlySummary : [];
-    const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-    const formatCurrency = (value) => {
-        const numeric = Number(value);
-        return currencyFormatter.format(Number.isFinite(numeric) ? numeric : 0);
-    };
-    const typeLabels = { payable: 'A pagar', receivable: 'A receber' };
-    const statusLabels = { pending: 'Pendente', paid: 'Pago', overdue: 'Atrasado', cancelled: 'Cancelado' };
-    const statusKeys = Object.keys(statusLabels);
-    const netNumericValue = Number(summaryTotals.net);
-    const netClass = Number.isFinite(netNumericValue) && netNumericValue < 0 ? 'text-danger' : 'text-success';
-    const hasMonthlySummary = summaryMonthly.length > 0;
-    const formatMonthLabel = (monthValue) => {
-        if (!monthValue) {
-            return '—';
-        }
-
-        const safeValue = String(monthValue);
-        const isoDate = `${safeValue}-01T00:00:00Z`;
-        const parsedDate = new Date(isoDate);
-
-        if (Number.isFinite(parsedDate.getTime())) {
-            return parsedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        }
-
-        const [year, month] = safeValue.split('-');
-        if (year && month) {
-            return `${month}/${year}`;
-        }
-
-        return safeValue;
-    };
-%>
+<% const intervalOptions = Array.isArray(recurringIntervalOptions) ? recurringIntervalOptions : []; %>
 
 <div class="row fade-in responsive-page-row gy-4">
     <div class="col-12">
@@ -492,13 +455,15 @@
                                                     </div>
                                                     <div class="mb-3">
                                                         <label class="form-label">Intervalo de recorrência</label>
-                                                        <input
-                                                            type="text"
-                                                            class="form-control"
-                                                            name="recurringInterval"
-                                                            value="<%= entry.recurringInterval || '' %>"
-                                                            placeholder="Ex.: mensal, trimestral"
-                                                        />
+                                                        <select class="form-select" name="recurringInterval">
+                                                            <option value="" <%= entry.recurringInterval ? '' : 'selected' %>>Selecione um intervalo</option>
+                                                            <% intervalOptions.forEach((option) => { %>
+                                                                <% if (!option || !option.value) { return; } %>
+                                                                <option value="<%= option.value %>" <%= entry.recurringInterval === option.value ? 'selected' : '' %>>
+                                                                    <%= option.label %>
+                                                                </option>
+                                                            <% }); %>
+                                                        </select>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
@@ -572,12 +537,13 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Intervalo (opcional)</label>
-                    <input
-                        type="text"
-                        class="form-control"
-                        name="recurringInterval"
-                        placeholder="Ex.: mensal"
-                    />
+                    <select class="form-select" name="recurringInterval">
+                        <option value="" selected>Selecione um intervalo</option>
+                        <% intervalOptions.forEach((option) => { %>
+                            <% if (!option || !option.value) { return; } %>
+                            <option value="<%= option.value %>"><%= option.label %></option>
+                        <% }); %>
+                    </select>
                 </div>
                 <div class="col-md-12">
                     <div class="responsive-form-actions">
