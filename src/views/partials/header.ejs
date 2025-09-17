@@ -124,44 +124,45 @@
 </div>
 
 <div id="appShell" class="app-shell app-body theme-light" data-theme="light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm sticky-top">
-    <div class="container-lg">
-        <a class="navbar-brand fw-semibold d-flex align-items-center" href="/">
-            <i class="bi bi-speedometer2 me-2"></i>
-            <span><%= appName || 'Sistema de Gestão' %></span>
-        </a>
-        <button
-            class="navbar-toggler"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#navbarNav"
-            aria-controls="navbarNav"
-            aria-expanded="false"
-            aria-label="Alternar navegação"
-        >
-            <span class="navbar-toggler-icon"></span>
-        </button>
+    <header class="app-header">
+        <nav class="navbar navbar-expand-lg navbar-glass shadow-sm sticky-top">
+            <div class="container-xl">
+                <a class="navbar-brand fw-semibold d-flex align-items-center" href="/">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    <span><%= appName || 'Sistema de Gestão' %></span>
+                </a>
+                <button
+                    class="navbar-toggler"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#navbarNav"
+                    aria-controls="navbarNav"
+                    aria-expanded="false"
+                    aria-label="Alternar navegação"
+                >
+                    <span class="navbar-toggler-icon"></span>
+                </button>
 
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
                 <% if (!currentUser) { %>
                     <li class="nav-item">
-                        <a class="nav-link" href="/#solucoes">Soluções</a>
+                        <a class="nav-link" href="/#solucoes" data-nav-close="true">Soluções</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/#seguranca">Segurança</a>
+                        <a class="nav-link" href="/#seguranca" data-nav-close="true">Segurança</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/#recursos">Recursos</a>
+                        <a class="nav-link" href="/#recursos" data-nav-close="true">Recursos</a>
                     </li>
                     <li class="nav-item ms-lg-3">
-                        <a class="btn btn-outline-light nav-cta" href="/login">
+                        <a class="btn btn-outline-light nav-cta" href="/login" data-nav-close="true">
                             <i class="bi bi-box-arrow-in-right me-2"></i>
                             Entrar
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="btn btn-light nav-cta" href="/register">
+                        <a class="btn btn-light nav-cta" href="/register" data-nav-close="true">
                             <i class="bi bi-person-plus me-2"></i>
                             Criar conta
                         </a>
@@ -302,9 +303,10 @@
                         <span class="theme-toggle-label d-none d-lg-inline" data-theme-label>Modo escuro</span>
                     </button>
                 </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
 
-<main class="container-xl page-container py-5">
+    <main class="app-main container-xxl page-container py-5">
