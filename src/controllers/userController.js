@@ -339,8 +339,16 @@ module.exports = {
 
             const { name, phone, address, password, dateOfBirth } = req.body;
 
-            if (typeof name === 'string') {
-                user.name = name.trim();
+            const hasNameInPayload = Object.prototype.hasOwnProperty.call(req.body, 'name');
+            const trimmedName = typeof name === 'string' ? name.trim() : undefined;
+
+            if (hasNameInPayload) {
+                if (!trimmedName) {
+                    req.flash('error_msg', 'Nome é obrigatório.');
+                    return res.redirect('/users/profile');
+                }
+
+                user.name = trimmedName;
             }
 
             if (typeof phone === 'string') {

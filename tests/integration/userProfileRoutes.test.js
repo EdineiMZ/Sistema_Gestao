@@ -162,6 +162,7 @@ describe('Rotas autenticadas de perfil de usuário', () => {
 
         expect(response.status).toBe(302);
         expect(response.headers.location).toBe('/users/profile');
+        expect(failingInstance.save).not.toHaveBeenCalled();
         await new Promise((resolve) => setImmediate(resolve));
         expect(AuditLog.create).not.toHaveBeenCalled();
 
