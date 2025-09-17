@@ -155,112 +155,6 @@
                                 >
                                     <i class="bi bi-pencil"></i>
                                 </button>
-
-                                <div class="modal fade" id="editModal<%= userItem.id %>" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-lg">
-                                        <form
-                                            action="/users/update/<%= userItem.id %>?_method=PUT"
-                                            method="POST"
-                                            class="modal-content needs-validation"
-                                            enctype="multipart/form-data"
-                                            novalidate
-                                        >
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Editar usuário #<%= userItem.id %></h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <div class="row g-3">
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Nome</label>
-                                                        <input type="text" class="form-control" name="name" value="<%= userItem.name %>" required />
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">E-mail</label>
-                                                        <input type="email" class="form-control" name="email" value="<%= userItem.email %>" required />
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Nova senha (opcional)</label>
-                                                        <input type="password" class="form-control" name="password" minlength="6" />
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Telefone</label>
-                                                        <input type="text" class="form-control" name="phone" value="<%= userItem.phone || '' %>" />
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Endereço</label>
-                                                        <input type="text" class="form-control" name="address" value="<%= userItem.address || '' %>" />
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Data de nascimento</label>
-                                                        <input type="date" class="form-control" name="dateOfBirth" value="<%= userItem.dateOfBirth || '' %>" />
-                                                    </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-label">Nível</label>
-                                                        <select class="form-select" name="role">
-                                                            <% availableRoles.forEach((option) => { %>
-                                                                <option value="<%= option.value %>" <%= option.value === userItem.role ? 'selected' : '' %>>
-                                                                    <%= option.label %>
-                                                                </option>
-                                                            <% }) %>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-label">Crédito</label>
-                                                        <input type="number" step="0.01" class="form-control" name="creditBalance" value="<%= userItem.creditBalance || 0 %>" />
-                                                    </div>
-                                                    <div class="col-md-4">
-                                                        <label class="form-label">Status</label>
-                                                        <select class="form-select" name="active">
-                                                            <option value="true" <%= userItem.active ? 'selected' : '' %>>Ativo</option>
-                                                            <option value="false" <%= !userItem.active ? 'selected' : '' %>>Inativo</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label d-block">Notificações por e-mail</label>
-                                                        <div class="form-check form-switch">
-                                                            <input
-                                                                class="form-check-input"
-                                                                type="checkbox"
-                                                                id="editEmailPreference-<%= userItem.id %>"
-                                                                name="notificationEmailEnabled"
-                                                                value="true"
-                                                                <%= emailOptIn ? 'checked' : '' %>
-                                                            />
-                                                            <label class="form-check-label" for="editEmailPreference-<%= userItem.id %>">
-                                                                Receber comunicados e novidades
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label d-block">Alertas de agendamento</label>
-                                                        <div class="form-check form-switch">
-                                                            <input
-                                                                class="form-check-input"
-                                                                type="checkbox"
-                                                                id="editScheduledPreference-<%= userItem.id %>"
-                                                                name="notificationScheduledEnabled"
-                                                                value="true"
-                                                                <%= scheduledOptIn ? 'checked' : '' %>
-                                                            />
-                                                            <label class="form-check-label" for="editScheduledPreference-<%= userItem.id %>">
-                                                                Receber lembretes de agenda e confirmações
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12">
-                                                        <label class="form-label">Atualizar foto de perfil</label>
-                                                        <input type="file" class="form-control" name="profileImage" accept="image/*" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-gradient">Salvar alterações</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
                             </td>
                         </tr>
                     <% }) %>
@@ -268,6 +162,119 @@
                 </table>
             </div>
         </div>
+
+        <% users.forEach(userItem => { %>
+            <% const prefInstance = userItem.notificationPreference; %>
+            <% const prefData = prefInstance && typeof prefInstance.get === 'function' ? prefInstance.get({ plain: true }) : (prefInstance || {}); %>
+            <% const emailOptIn = prefData.emailEnabled !== false; %>
+            <% const scheduledOptIn = prefData.scheduledEnabled !== false; %>
+
+            <div class="modal fade" id="editModal<%= userItem.id %>" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <form
+                        action="/users/update/<%= userItem.id %>?_method=PUT"
+                        method="POST"
+                        class="modal-content needs-validation"
+                        enctype="multipart/form-data"
+                        novalidate
+                    >
+                        <div class="modal-header">
+                            <h5 class="modal-title">Editar usuário #<%= userItem.id %></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Nome</label>
+                                    <input type="text" class="form-control" name="name" value="<%= userItem.name %>" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">E-mail</label>
+                                    <input type="email" class="form-control" name="email" value="<%= userItem.email %>" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Nova senha (opcional)</label>
+                                    <input type="password" class="form-control" name="password" minlength="6" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Telefone</label>
+                                    <input type="text" class="form-control" name="phone" value="<%= userItem.phone || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Endereço</label>
+                                    <input type="text" class="form-control" name="address" value="<%= userItem.address || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Data de nascimento</label>
+                                    <input type="date" class="form-control" name="dateOfBirth" value="<%= userItem.dateOfBirth || '' %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Nível</label>
+                                    <select class="form-select" name="role">
+                                        <% availableRoles.forEach((option) => { %>
+                                            <option value="<%= option.value %>" <%= option.value === userItem.role ? 'selected' : '' %>>
+                                                <%= option.label %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Crédito</label>
+                                    <input type="number" step="0.01" class="form-control" name="creditBalance" value="<%= userItem.creditBalance || 0 %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="active">
+                                        <option value="true" <%= userItem.active ? 'selected' : '' %>>Ativo</option>
+                                        <option value="false" <%= !userItem.active ? 'selected' : '' %>>Inativo</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label d-block">Notificações por e-mail</label>
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            id="editEmailPreference-<%= userItem.id %>"
+                                            name="notificationEmailEnabled"
+                                            value="true"
+                                            <%= emailOptIn ? 'checked' : '' %>
+                                        />
+                                        <label class="form-check-label" for="editEmailPreference-<%= userItem.id %>">
+                                            Receber comunicados e novidades
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label d-block">Alertas de agendamento</label>
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            id="editScheduledPreference-<%= userItem.id %>"
+                                            name="notificationScheduledEnabled"
+                                            value="true"
+                                            <%= scheduledOptIn ? 'checked' : '' %>
+                                        />
+                                        <label class="form-check-label" for="editScheduledPreference-<%= userItem.id %>">
+                                            Receber lembretes de agenda e confirmações
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Atualizar foto de perfil</label>
+                                    <input type="file" class="form-control" name="profileImage" accept="image/*" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-gradient">Salvar alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <% }) %>
     </div>
 
     <div class="col-12 fade-in">
