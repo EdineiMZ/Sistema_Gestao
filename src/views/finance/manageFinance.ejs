@@ -1,31 +1,19 @@
-<% const globalScope = Function('return this')(); %>
-<% const requireFn = (typeof require === 'function')
-    ? require
-    : (globalScope && globalScope.process && globalScope.process.mainModule && typeof globalScope.process.mainModule.require === 'function'
-        ? globalScope.process.mainModule.require.bind(globalScope.process.mainModule)
-        : null); %>
-<% const pathModule = requireFn ? requireFn('path') : null; %>
-<% const fs = requireFn ? requireFn('fs') : null; %>
-<% const ejsModule = requireFn ? requireFn('ejs') : null; %>
-<% const templateDirectory = pathModule ? pathModule.join(process.cwd(), 'src', 'views', 'finance') : null; %>
-<% const renderPartial = (relativePath) => {
-    if (!requireFn || !pathModule || !fs || !ejsModule || !templateDirectory) {
-        return '';
-    }
+<%- include('../partials/header') %>
 
-    try {
-        const partialPath = pathModule.resolve(templateDirectory, relativePath);
-        const partialTemplate = fs.readFileSync(partialPath, 'utf8');
-        return ejsModule.render(partialTemplate, locals, { filename: partialPath });
-    } catch (partialError) {
-        console.error('Erro ao renderizar partial de finanças:', partialError);
-        return '';
-    }
-}; %>
-
-<%- renderPartial('../partials/header.ejs') %>
-
-<% const intervalOptions = Array.isArray(recurringIntervalOptions) ? recurringIntervalOptions : []; %>
+<% const intervalOptionsFallback = [
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'biweekly', label: 'Quinzenal' },
+    { value: 'monthly', label: 'Mensal' },
+    { value: 'quarterly', label: 'Trimestral' },
+    { value: 'yearly', label: 'Anual' }
+]; %>
+<% const intervalOptionsSource = (typeof recurringIntervalOptions !== 'undefined' && Array.isArray(recurringIntervalOptions))
+    ? recurringIntervalOptions
+    : ((typeof locals !== 'undefined' && locals && Array.isArray(locals.recurringIntervalOptions))
+        ? locals.recurringIntervalOptions
+        : intervalOptionsFallback);
+%>
+<% const intervalOptions = intervalOptionsSource; %>
 <% const computedPeriodLabel = (typeof periodLabel === 'string' && periodLabel.trim())
     ? periodLabel.trim()
     : 'Todo o período'; %>
@@ -87,6 +75,34 @@
     receivable: 'Receber',
     payable: 'Pagar'
 }; %>
+<% const safeProjectionList =
+    (typeof projectionList !== 'undefined' && Array.isArray(projectionList))
+        ? projectionList
+        : (Array.isArray(financeProjections) ? financeProjections : []);
+%>
+<% const safeAlertsList =
+    (typeof alertsList !== 'undefined' && Array.isArray(alertsList))
+        ? alertsList
+        : (Array.isArray(projectionAlerts) ? projectionAlerts : []);
+%>
+<% const currentHighlightProjection =
+    (typeof highlightProjection !== 'undefined' && highlightProjection)
+        || (typeof projectionHighlight !== 'undefined' ? projectionHighlight : null);
+%>
+<% const rawImportPreview =
+    (typeof financeImportPreview !== 'undefined' && financeImportPreview)
+        || (typeof pendingImportPreview !== 'undefined' && pendingImportPreview)
+        || (typeof locals !== 'undefined' && locals && locals.importPreview)
+        || null; %>
+<% const importPreviewTotalsDefaults = { new: 0, conflicting: 0, total: 0 }; %>
+<% const importPreview = (rawImportPreview && typeof rawImportPreview === 'object') ? rawImportPreview : {}; %>
+<% const previewEntries = Array.isArray(importPreview.entries) ? importPreview.entries : []; %>
+<% const previewTotals = importPreview.totals && typeof importPreview.totals === 'object'
+    ? { ...importPreviewTotalsDefaults, ...importPreview.totals }
+    : importPreviewTotalsDefaults; %>
+<% const previewWarnings = Array.isArray(importPreview.warnings) ? importPreview.warnings : []; %>
+<% const previewUploadedAt = importPreview.uploadedAt || new Date().toISOString(); %>
+<% const hasImportPreview = previewEntries.length > 0; %>
 <% const formatMonthLabel = (value) => {
     if (!value) {
         return '';
@@ -154,7 +170,7 @@
                     <div class="text-lg-end">
                         <span class="badge rounded-pill bg-light text-muted me-2">
                             <i class="bi bi-calendar-week me-1"></i>
-                            <%= projectionList.length %> períodos monitorados
+                            <%= safeProjectionList.length %> períodos monitorados
                         </span>
                         <span class="badge rounded-pill <%= goalSummary && goalSummary.alerts ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success' %>">
                             <i class="bi bi-bullseye me-1"></i>
@@ -163,19 +179,19 @@
                     </div>
                 </div>
 
-                <% if (alertsList.length) { %>
+                <% if (safeAlertsList.length) { %>
                     <div class="alert alert-warning border-0 d-flex align-items-center gap-2" role="alert">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <span>
-                            <strong><%= alertsList.length %></strong>
-                            <%= alertsList.length === 1 ? 'meta' : 'metas' %> com projeção abaixo do objetivo.
+                            <strong><%= safeAlertsList.length %></strong>
+                            <%= safeAlertsList.length === 1 ? 'meta' : 'metas' %> com projeção abaixo do objetivo.
                         </span>
                     </div>
                 <% } %>
 
                 <div class="projection-highlight border rounded-3 p-3 bg-light-subtle mb-3">
-                    <% if (highlightProjection) { %>
-                        <% const highlightGoal = highlightProjection.goal || {}; %>
+                    <% if (currentHighlightProjection) { %>
+                        <% const highlightGoal = currentHighlightProjection.goal || {}; %>
                         <% const highlightGap = (typeof highlightGoal.gapToGoal === 'number') ? highlightGoal.gapToGoal : null; %>
                         <% const gapLabel = highlightGap !== null ? `${highlightGap >= 0 ? '+' : '-'}${currencyFormatter.format(Math.abs(highlightGap))}` : '—'; %>
                         <% const gapClass = highlightGap !== null ? (highlightGap >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
@@ -183,10 +199,10 @@
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                             <div>
                                 <p class="text-muted small mb-1">Próxima meta monitorada</p>
-                                <h4 class="fw-semibold mb-0"><%= highlightProjection.label || highlightProjection.month %></h4>
+                                <h4 class="fw-semibold mb-0"><%= currentHighlightProjection.label || currentHighlightProjection.month %></h4>
                             </div>
                             <div class="text-end">
-                                <div class="fw-semibold"><%= currencyFormatter.format(Number(highlightProjection.projected?.net || 0)) %></div>
+                                <div class="fw-semibold"><%= currencyFormatter.format(Number(currentHighlightProjection.projected?.net || 0)) %></div>
                                 <div class="text-muted small">
                                     Meta: <span class="fw-semibold"><%= highlightGoal.targetNetAmount !== null && highlightGoal.targetNetAmount !== undefined ? currencyFormatter.format(Number(highlightGoal.targetNetAmount)) : '—' %></span>
                                 </div>
@@ -215,13 +231,13 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <% if (!projectionList.length) { %>
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted small">Nenhuma projeção disponível.</td>
-                                </tr>
-                            <% } else { %>
-                                <% projectionList.forEach((item) => { %>
-                                    <% const goal = item.goal || {}; %>
+                <% if (!safeProjectionList.length) { %>
+                    <tr>
+                        <td colspan="5" class="text-center text-muted small">Nenhuma projeção disponível.</td>
+                    </tr>
+                <% } else { %>
+                    <% safeProjectionList.forEach((item) => { %>
+                        <% const goal = item.goal || {}; %>
                                     <% const gapValue = (typeof goal.gapToGoal === 'number') ? goal.gapToGoal : null; %>
                                     <% const gapLabel = gapValue !== null ? `${gapValue >= 0 ? '+' : '-'}${currencyFormatter.format(Math.abs(gapValue))}` : '—'; %>
                                     <% const gapClass = gapValue !== null ? (gapValue >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
@@ -251,7 +267,7 @@
                 <form action="/finance/goals" method="POST" class="row g-3">
                     <div class="col-12">
                         <label class="form-label">Mês da meta</label>
-                        <input type="month" class="form-control" name="month" value="<%= highlightProjection ? highlightProjection.month : '' %>" required />
+                        <input type="month" class="form-control" name="month" value="<%= currentHighlightProjection ? currentHighlightProjection.month : '' %>" required />
                     </div>
                     <div class="col-12">
                         <label class="form-label">Saldo líquido desejado (R$)</label>
@@ -326,6 +342,7 @@
         </div>
     </div>
 
+    <% if (hasImportPreview) { %>
     <div class="col-12">
         <div class="card card-soft responsive-panel">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
@@ -338,15 +355,15 @@
                         <div class="d-flex flex-wrap gap-2">
                             <span class="badge rounded-pill bg-success-subtle text-success-emphasis">
                                 <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
-                                <strong><%= importPreview.totals.new %></strong> novo(s)
+                                <strong><%= previewTotals.new %></strong> novo(s)
                             </span>
                             <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis">
                                 <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>
-                                <strong><%= importPreview.totals.conflicting %></strong> conflito(s)
+                                <strong><%= previewTotals.conflicting %></strong> conflito(s)
                             </span>
                             <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
                                 <i class="bi bi-list-check me-1" aria-hidden="true"></i>
-                                <strong><%= importPreview.totals.total %></strong> registro(s)
+                                <strong><%= previewTotals.total %></strong> registro(s)
                             </span>
                         </div>
                         <div class="text-muted small">
@@ -354,14 +371,14 @@
                         </div>
                     </div>
 
-                    <% if (importPreview.warnings && importPreview.warnings.length) { %>
+                    <% if (previewWarnings.length) { %>
                         <div class="alert alert-warning shadow-sm" role="alert">
                             <div class="d-flex align-items-start gap-3">
                                 <i class="bi bi-info-circle fs-4" aria-hidden="true"></i>
                                 <div>
                                     <h6 class="fw-semibold mb-2">Avisos de leitura</h6>
                                     <ul class="list-unstyled mb-0 small">
-                                        <% importPreview.warnings.forEach(function(warning) { %>
+                                        <% previewWarnings.forEach(function(warning) { %>
                                             <li><i class="bi bi-dot me-1"></i><%= warning %></li>
                                         <% }); %>
                                     </ul>
@@ -387,7 +404,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <% importPreview.entries.forEach(function(entry, index) { %>
+                                    <% previewEntries.forEach(function(entry, index) { %>
+                                        <% const conflictReasons = Array.isArray(entry.conflictReasons) ? entry.conflictReasons : []; %>
                                         <tr class="<%= entry.conflict ? 'table-warning' : '' %>">
                                             <td class="text-center">
                                                 <div class="form-check form-switch d-inline-flex align-items-center justify-content-center">
@@ -467,13 +485,13 @@
                                                 <% } %>
                                             </td>
                                             <td class="text-center">
-                                                <% if (entry.conflictReasons.length) { %>
+                                                <% if (conflictReasons.length) { %>
                                                     <span class="badge bg-warning-subtle text-warning-emphasis d-inline-flex align-items-center gap-2 mb-2">
                                                         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
                                                         Conflito
                                                     </span>
                                                     <div class="small text-muted text-start">
-                                                        <% entry.conflictReasons.forEach(function(reason) { %>
+                                                        <% conflictReasons.forEach(function(reason) { %>
                                                             <div><i class="bi bi-dot"></i><%= reason %></div>
                                                         <% }); %>
                                                     </div>
@@ -491,8 +509,8 @@
                         </div>
                         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4">
                             <div class="text-muted small">
-                                Importação preparada em <%= new Date(importPreview.uploadedAt).toLocaleString('pt-BR') %>.<br />
-                                <span class="fw-semibold"><%= importPreview.totals.new %></span> lançamento(s) pronto(s) para importação.
+                                Importação preparada em <%= new Date(previewUploadedAt).toLocaleString('pt-BR') %>.<br />
+                                <span class="fw-semibold"><%= previewTotals.new %></span> lançamento(s) pronto(s) para importação.
                             </div>
                             <div class="d-flex flex-wrap gap-2">
                                 <a href="/finance" class="btn btn-outline-secondary btn-sm">
@@ -1352,4 +1370,4 @@
     });
 </script>
 
-<%- renderPartial('../partials/footer.ejs') %>
+<%- include('../partials/footer') %>
