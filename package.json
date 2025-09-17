@@ -19,6 +19,7 @@
     "chart.js": "^4.5.0",
     "chartjs-node-canvas": "^5.0.0",
     "connect-flash": "^0.1.1",
+    "connect-session-sequelize": "^7.1.7",
     "dotenv": "^16.0.0",
     "ejs": "^3.1.10",
     "exceljs": "^4.4.0",
