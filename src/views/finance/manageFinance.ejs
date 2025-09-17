@@ -78,13 +78,19 @@
 <% const safeProjectionList =
     (typeof projectionList !== 'undefined' && Array.isArray(projectionList))
         ? projectionList
-        : (Array.isArray(financeProjections) ? financeProjections : []);
+        : ((typeof financeProjections !== 'undefined' && Array.isArray(financeProjections)) ? financeProjections : []);
 %>
 <% const safeAlertsList =
     (typeof alertsList !== 'undefined' && Array.isArray(alertsList))
         ? alertsList
-        : (Array.isArray(projectionAlerts) ? projectionAlerts : []);
+        : ((typeof projectionAlerts !== 'undefined' && Array.isArray(projectionAlerts)) ? projectionAlerts : []);
 %>
+<% const goalSummaryData = (typeof goalSummary !== 'undefined' && goalSummary)
+    ? goalSummary
+    : ((typeof financeGoalSummary !== 'undefined' && financeGoalSummary) ? financeGoalSummary : null); %>
+<% const financeGoalsList = (typeof financeGoals !== 'undefined' && Array.isArray(financeGoals))
+    ? financeGoals
+    : ((typeof goals !== 'undefined' && Array.isArray(goals)) ? goals : []); %>
 <% const currentHighlightProjection =
     (typeof highlightProjection !== 'undefined' && highlightProjection)
         || (typeof projectionHighlight !== 'undefined' ? projectionHighlight : null);
@@ -123,6 +129,66 @@
 
     return safeValue;
 }; %>
+<% const budgetSummariesSource = (typeof budgetSummaries !== 'undefined')
+    ? budgetSummaries
+    : ((typeof locals !== 'undefined' && locals && locals.budgetSummaries) ? locals.budgetSummaries : []); %>
+<% const rawBudgetData = Array.isArray(budgetSummariesSource)
+    ? budgetSummariesSource
+    : (budgetSummariesSource && Array.isArray(budgetSummariesSource.summaries) ? budgetSummariesSource.summaries : []); %>
+<% const budgetMonthsSource = (typeof budgetMonths !== 'undefined')
+    ? budgetMonths
+    : ((typeof locals !== 'undefined' && locals && locals.budgetMonths) ? locals.budgetMonths : []); %>
+<% const budgetMonthList = Array.isArray(budgetMonthsSource)
+    ? budgetMonthsSource
+    : Array.from(new Set(rawBudgetData.map((item) => item.month))).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)); %>
+<% const categoryConsumptionSource = (typeof categoryConsumption !== 'undefined')
+    ? categoryConsumption
+    : ((typeof locals !== 'undefined' && locals && locals.categoryConsumption) ? locals.categoryConsumption : []); %>
+<% const categoryConsumptionList = Array.isArray(categoryConsumptionSource)
+    ? categoryConsumptionSource
+    : (budgetSummariesSource && Array.isArray(budgetSummariesSource.categoryConsumption) ? budgetSummariesSource.categoryConsumption : []); %>
+<% const budgetStatusSource = (typeof budgetStatusMeta !== 'undefined' && budgetStatusMeta && typeof budgetStatusMeta === 'object')
+    ? budgetStatusMeta
+    : ((typeof locals !== 'undefined' && locals && typeof locals.budgetStatusMeta === 'object') ? locals.budgetStatusMeta : {}); %>
+<% const defaultBudgetStatus = {
+    healthy: { key: 'healthy', label: 'Consumo saudável', badgeClass: 'bg-success-subtle text-success', icon: 'bi-emoji-smile', barColor: '#10b981' },
+    caution: { key: 'caution', label: 'Consumo moderado', badgeClass: 'bg-primary-subtle text-primary', icon: 'bi-activity', barColor: '#2563eb' },
+    warning: { key: 'warning', label: 'Atenção ao consumo', badgeClass: 'bg-warning-subtle text-warning', icon: 'bi-exclamation-triangle-fill', barColor: '#f59e0b' },
+    critical: { key: 'critical', label: 'Limite excedido', badgeClass: 'bg-danger-subtle text-danger', icon: 'bi-fire', barColor: '#ef4444' }
+}; %>
+<% const resolveBudgetStatusStyle = (statusKey) => {
+    const fallback = defaultBudgetStatus[statusKey] || defaultBudgetStatus.healthy;
+    const source = budgetStatusSource && budgetStatusSource[statusKey] ? budgetStatusSource[statusKey] : {};
+    return {
+        ...fallback,
+        ...source,
+        badgeClass: source.badgeClass || fallback.badgeClass,
+        barColor: source.barColor || fallback.barColor,
+        label: source.label || fallback.label,
+        icon: source.icon || fallback.icon
+    };
+}; %>
+<% const normalizedBudgetData = rawBudgetData.map((item) => {
+    const statusStyle = resolveBudgetStatusStyle(item.status || item.statusMeta?.key || 'healthy');
+    const usage = Number(item.percentage || 0);
+    const consumption = Number(item.consumption || 0);
+    const limit = Number(item.monthlyLimit || 0);
+    const remaining = Number(item.remaining || 0);
+    return {
+        ...item,
+        usage,
+        consumption,
+        monthlyLimit: limit,
+        remaining,
+        statusStyle
+    };
+}); %>
+<% const computedBudgetMonths = budgetMonthList.length ? budgetMonthList : Array.from(new Set(normalizedBudgetData.map((item) => item.month))).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)); %>
+<% const activeBudgetMonth = computedBudgetMonths.length ? computedBudgetMonths[computedBudgetMonths.length - 1] : null; %>
+<% const activeBudgetData = normalizedBudgetData.filter((item) => !activeBudgetMonth || item.month === activeBudgetMonth); %>
+<% const activeBudgetConsumption = activeBudgetData.reduce((acc, item) => acc + (Number(item.consumption) || 0), 0); %>
+<% const activeBudgetLimit = activeBudgetData.reduce((acc, item) => acc + (Number(item.monthlyLimit) || 0), 0); %>
+<% const activeBudgetUsage = activeBudgetLimit > 0 ? ((activeBudgetConsumption / activeBudgetLimit) * 100) : 0; %>
 
 <datalist id="recurring-interval-options">
     <% intervalOptions.forEach((option) => { %>
@@ -159,6 +225,150 @@
         </div>
     </div>
 
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center gap-4 mb-4">
+                <div class="flex-grow-1">
+                    <h3 class="fw-semibold mb-1">Orçamentos por categoria</h3>
+                    <p class="text-muted mb-0">Acompanhe limites mensais e identifique rapidamente categorias em risco.</p>
+                </div>
+                <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-4 w-100 w-xl-auto">
+                    <div class="d-flex flex-sm-column gap-3 gap-sm-2 flex-grow-1 flex-sm-grow-0">
+                        <div>
+                            <span class="text-muted small d-block">Consumo no período</span>
+                            <span class="fs-5 fw-semibold" data-budget-summary="consumption"><%= formatCurrency(activeBudgetConsumption) %></span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Limite disponível</span>
+                            <span class="fs-5 fw-semibold" data-budget-summary="limit"><%= formatCurrency(activeBudgetLimit) %></span>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Utilização média</span>
+                            <span class="fs-5 fw-semibold" data-budget-summary="usage"><%= activeBudgetUsage.toFixed(1) %>%</span>
+                        </div>
+                    </div>
+                    <div class="w-100 w-sm-auto">
+                        <label class="form-label text-muted small mb-1" for="budget-month-filter">Mês de referência</label>
+                        <select class="form-select form-select-sm" id="budget-month-filter" data-budget-month-selector>
+                            <option value="all">Todos os meses</option>
+                            <% computedBudgetMonths.forEach((month) => { %>
+                                <option value="<%= month %>" <%= month === activeBudgetMonth ? 'selected' : '' %>>
+                                    <%= formatMonthLabel(month) %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 align-items-stretch" data-budget-overview>
+                <div class="col-12 col-xl-8">
+                    <div class="row g-4" data-budget-grid>
+                        <% if (!normalizedBudgetData.length) { %>
+                            <div class="col-12">
+                                <div class="alert alert-info border-0 shadow-sm mb-0" role="alert">
+                                    <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+                                    Cadastre orçamentos para visualizar indicadores por categoria.
+                                </div>
+                            </div>
+                        <% } else { %>
+                            <% normalizedBudgetData.forEach((item) => { %>
+                                <div class="col-12 col-md-6" data-budget-card data-budget-month="<%= item.month %>">
+                                    <div class="h-100 border rounded-4 p-4 shadow-sm position-relative">
+                                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                                            <div class="d-flex align-items-start gap-3">
+                                                <span
+                                                    class="rounded-circle flex-shrink-0"
+                                                    style="width: 12px; height: 12px; background:<%= item.categoryColor || '#6b7280' %>;"
+                                                    aria-hidden="true"
+                                                ></span>
+                                                <div>
+                                                    <h4 class="h6 fw-semibold mb-1 text-truncate"><%= item.categoryName %></h4>
+                                                    <span class="badge bg-light text-muted fw-normal text-uppercase small px-2 py-1">
+                                                        <%= formatMonthLabel(item.month) %>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span class="badge <%= item.statusStyle.badgeClass %> d-inline-flex align-items-center gap-1">
+                                                <i class="bi <%= item.statusStyle.icon %>" aria-hidden="true"></i>
+                                                <span><%= item.statusStyle.label %></span>
+                                            </span>
+                                        </div>
+                                        <div class="mb-4">
+                                            <div class="progress bg-light rounded-pill" style="height: 8px;">
+                                                <div
+                                                    class="progress-bar"
+                                                    role="progressbar"
+                                                    style="width: <%= Math.min(item.usage, 130).toFixed(1) %>%; background:<%= item.statusStyle.barColor %>;"
+                                                    aria-valuenow="<%= item.usage.toFixed(1) %>"
+                                                    aria-valuemin="0"
+                                                    aria-valuemax="150"
+                                                ></div>
+                                            </div>
+                                            <div class="d-flex justify-content-between text-muted small mt-2">
+                                                <span>Consumido</span>
+                                                <span><%= formatCurrency(item.consumption) %></span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-3 text-sm">
+                                            <div>
+                                                <span class="text-muted small d-block">Limite</span>
+                                                <span class="fw-semibold"><%= formatCurrency(item.monthlyLimit) %></span>
+                                            </div>
+                                            <div>
+                                                <span class="text-muted small d-block">Disponível</span>
+                                                <span class="fw-semibold <%= item.remaining < 0 ? 'text-danger' : 'text-success' %>">
+                                                    <%= formatCurrency(item.remaining) %>
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span class="text-muted small d-block">Utilização</span>
+                                                <span class="fw-semibold"><%= item.usage.toFixed(1) %>%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        <% } %>
+                    </div>
+                </div>
+                <div class="col-12 col-xl-4">
+                    <div class="h-100 border rounded-4 p-4 shadow-sm bg-light-subtle">
+                        <h4 class="h6 fw-semibold mb-3">Distribuição por categoria</h4>
+                        <canvas id="budget-consumption-chart" height="220" class="w-100 mb-4"></canvas>
+                        <div class="list-group list-group-flush small" data-category-consumption-list>
+                            <% if (!categoryConsumptionList.length) { %>
+                                <div class="text-muted">Nenhum consumo registrado para o período filtrado.</div>
+                            <% } else { %>
+                                <% categoryConsumptionList.slice(0, 6).forEach((category) => { %>
+                                    <div class="list-group-item px-0 d-flex justify-content-between align-items-center gap-3">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <span
+                                                class="rounded-circle flex-shrink-0"
+                                                style="width: 10px; height: 10px; background:<%= category.categoryColor || '#6b7280' %>;"
+                                                aria-hidden="true"
+                                            ></span>
+                                            <div>
+                                                <div class="fw-semibold text-truncate"><%= category.categoryName %></div>
+                                                <div class="text-muted small">
+                                                    Média: <%= category.averagePercentage.toFixed(1) %>% · Pico: <%= category.highestPercentage.toFixed(1) %>%
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-semibold"><%= formatCurrency(category.totalConsumption) %></div>
+                                            <div class="text-muted small"><%= category.months %> mês(es)</div>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="col-12 col-xxl-8">
         <div class="card card-soft responsive-panel">
             <div class="card-body">
@@ -172,9 +382,9 @@
                             <i class="bi bi-calendar-week me-1"></i>
                             <%= safeProjectionList.length %> períodos monitorados
                         </span>
-                        <span class="badge rounded-pill <%= goalSummary && goalSummary.alerts ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success' %>">
+                        <span class="badge rounded-pill <%= goalSummaryData && goalSummaryData.alerts ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success' %>">
                             <i class="bi bi-bullseye me-1"></i>
-                            <%= goalSummary && goalSummary.alerts ? `${goalSummary.alerts} meta(s) em atenção` : 'Metas sob controle' %>
+                            <%= goalSummaryData && goalSummaryData.alerts ? `${goalSummaryData.alerts} meta(s) em atenção` : 'Metas sob controle' %>
                         </span>
                     </div>
                 </div>
@@ -286,11 +496,11 @@
                 <hr class="my-4" />
 
                 <h5 class="fw-semibold mb-3">Metas cadastradas</h5>
-                <% if (!financeGoals.length) { %>
+                <% if (!financeGoalsList.length) { %>
                     <p class="text-muted small mb-0">Nenhuma meta cadastrada até o momento.</p>
                 <% } else { %>
                     <div class="list-group list-group-flush">
-                        <% financeGoals.forEach((goal) => { %>
+                        <% financeGoalsList.forEach((goal) => { %>
                             <div class="list-group-item px-0">
                                 <div class="d-flex flex-column gap-2">
                                     <div class="d-flex justify-content-between align-items-start gap-3">
@@ -819,6 +1029,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Descrição</th>
+                            <th>Categoria</th>
                             <th>Tipo</th>
                             <th>Valor</th>
                             <th>Vencimento</th>
@@ -841,6 +1052,14 @@
                                             </span>
                                         <% } %>
                                     </div>
+                                </td>
+                                <td>
+                                    <% if (entry.category) { %>
+                                        <span class="badge rounded-pill" style="background-color: <%= entry.category.color || '#6c757d' %>;" aria-hidden="true"></span>
+                                        <span class="ms-2"><%= entry.category.name %></span>
+                                    <% } else { %>
+                                        <span class="text-muted">—</span>
+                                    <% } %>
                                 </td>
                                 <td>
                                     <% if (entry.type === 'payable') { %>
@@ -1132,10 +1351,21 @@
         style: 'currency',
         currency: 'BRL'
     });
+    const rawBudgetSummaries = <%- JSON.stringify(normalizedBudgetData) %>;
+    const rawCategoryConsumption = <%- JSON.stringify(categoryConsumptionList) %>;
 
     document.addEventListener('DOMContentLoaded', () => {
         const filterForms = document.querySelectorAll('[data-filter-form]');
         const exportLinks = document.querySelectorAll('[data-export-target]');
+        const budgetCardsData = Array.isArray(rawBudgetSummaries) ? rawBudgetSummaries : [];
+        const categoryConsumptionData = Array.isArray(rawCategoryConsumption) ? rawCategoryConsumption : [];
+        const budgetMonthSelector = document.querySelector('[data-budget-month-selector]');
+        const summaryConsumptionEl = document.querySelector('[data-budget-summary="consumption"]');
+        const summaryLimitEl = document.querySelector('[data-budget-summary="limit"]');
+        const summaryUsageEl = document.querySelector('[data-budget-summary="usage"]');
+        const categoryListEl = document.querySelector('[data-category-consumption-list]');
+        const budgetChartCanvas = document.getElementById('budget-consumption-chart');
+        let budgetChartInstance = null;
 
         const buildFiltersQuery = (scope) => {
             if (typeof URLSearchParams === 'undefined') {
@@ -1245,6 +1475,184 @@
         refreshExportLinks();
 
         const chartElement = document.getElementById('financePerformanceChart');
+
+        const getFilteredBudgetData = (month) => {
+            if (!month || month === 'all') {
+                return budgetCardsData;
+            }
+            return budgetCardsData.filter((item) => item && item.month === month);
+        };
+
+        const renderBudgetCards = (month) => {
+            const normalizedMonth = month && month !== 'all' ? month : null;
+            const budgetCards = document.querySelectorAll('[data-budget-card]');
+            budgetCards.forEach((card) => {
+                const cardMonth = card.getAttribute('data-budget-month');
+                const shouldShow = !normalizedMonth || cardMonth === normalizedMonth;
+                card.classList.toggle('d-none', !shouldShow);
+            });
+        };
+
+        const renderBudgetSummary = (month) => {
+            const dataset = getFilteredBudgetData(month);
+            const totalConsumption = dataset.reduce((acc, item) => acc + (Number(item?.consumption) || 0), 0);
+            const totalLimit = dataset.reduce((acc, item) => acc + (Number(item?.monthlyLimit) || 0), 0);
+            const usage = totalLimit > 0 ? (totalConsumption / totalLimit) * 100 : 0;
+
+            if (summaryConsumptionEl) {
+                summaryConsumptionEl.textContent = chartCurrencyFormatter.format(totalConsumption);
+            }
+            if (summaryLimitEl) {
+                summaryLimitEl.textContent = chartCurrencyFormatter.format(totalLimit);
+            }
+            if (summaryUsageEl) {
+                summaryUsageEl.textContent = `${usage.toFixed(1)}%`;
+            }
+        };
+
+        const renderBudgetChart = (month) => {
+            if (!budgetChartCanvas || typeof window.Chart === 'undefined') {
+                return;
+            }
+
+            const dataset = getFilteredBudgetData(month);
+            const aggregated = dataset.reduce((acc, item) => {
+                const key = item?.categoryId || item?.categoryName || Math.random().toString(36).slice(2);
+                if (!acc[key]) {
+                    acc[key] = {
+                        label: item?.categoryName || 'Sem categoria',
+                        color: item?.categoryColor || '#2563eb',
+                        value: 0
+                    };
+                }
+                acc[key].value += Number(item?.consumption) || 0;
+                return acc;
+            }, {});
+
+            const labels = Object.values(aggregated).map((item) => item.label);
+            const values = Object.values(aggregated).map((item) => item.value);
+            const colors = Object.values(aggregated).map((item) => item.color);
+
+            if (budgetChartInstance) {
+                budgetChartInstance.destroy();
+                budgetChartInstance = null;
+            }
+
+            if (!labels.length) {
+                return;
+            }
+
+            const context = budgetChartCanvas.getContext('2d');
+            if (!context) {
+                return;
+            }
+
+            budgetChartInstance = new window.Chart(context, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            data: values,
+                            backgroundColor: colors,
+                            borderWidth: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const label = context.label || '';
+                                    const value = Number.isFinite(context.parsed) ? context.parsed : 0;
+                                    return `${label}: ${chartCurrencyFormatter.format(value)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        const renderCategoryList = (month) => {
+            if (!categoryListEl) {
+                return;
+            }
+
+            const dataset = getFilteredBudgetData(month);
+            if (!dataset.length) {
+                categoryListEl.innerHTML = '<div class="text-muted">Nenhum consumo registrado para o período selecionado.</div>';
+                return;
+            }
+
+            const aggregates = dataset.reduce((acc, item) => {
+                const key = item?.categoryId || item?.categoryName || Math.random().toString(36).slice(2);
+                if (!acc[key]) {
+                    acc[key] = {
+                        name: item?.categoryName || 'Sem categoria',
+                        color: item?.categoryColor || '#6b7280',
+                        consumption: 0,
+                        usage: 0,
+                        months: new Set()
+                    };
+                }
+                acc[key].consumption += Number(item?.consumption) || 0;
+                acc[key].usage = Math.max(acc[key].usage, Number(item?.usage) || 0);
+                if (item?.month) {
+                    acc[key].months.add(item.month);
+                }
+                return acc;
+            }, {});
+
+            const sorted = Object.values(aggregates)
+                .map((item) => ({
+                    ...item,
+                    months: item.months.size
+                }))
+                .sort((a, b) => b.consumption - a.consumption)
+                .slice(0, 6);
+
+            categoryListEl.innerHTML = '';
+
+            sorted.forEach((item) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'list-group-item px-0 d-flex justify-content-between align-items-center gap-3';
+                wrapper.innerHTML = `
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="rounded-circle flex-shrink-0" style="width:10px;height:10px;background:${item.color};" aria-hidden="true"></span>
+                        <div>
+                            <div class="fw-semibold text-truncate">${item.name}</div>
+                            <div class="text-muted small">Média: ${item.usage.toFixed(1)}% · Meses: ${item.months}</div>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-semibold">${chartCurrencyFormatter.format(item.consumption)}</div>
+                    </div>
+                `;
+                categoryListEl.appendChild(wrapper);
+            });
+        };
+
+        const updateBudgetWidgets = (month) => {
+            renderBudgetCards(month);
+            renderBudgetSummary(month);
+            renderBudgetChart(month);
+            renderCategoryList(month);
+        };
+
+        updateBudgetWidgets(budgetMonthSelector?.value || 'all');
+
+        if (budgetMonthSelector) {
+            budgetMonthSelector.addEventListener('change', (event) => {
+                updateBudgetWidgets(event.target.value || 'all');
+            });
+        }
 
         const formatChartMonthLabel = (value) => {
             if (!value) {
