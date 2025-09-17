@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= copy.heroTitle %></title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #0f172a;
+        }
+        .email-wrapper {
+            width: 100%;
+            padding: 32px 0;
+        }
+        .email-card {
+            max-width: 680px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+        }
+        .email-hero {
+            background: <%= budget.accentColor %>;
+            color: #ffffff;
+            padding: 36px 44px 32px;
+        }
+        .email-hero span.label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+        .email-hero h1 {
+            margin: 16px 0 8px;
+            font-size: 30px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .email-hero p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 520px;
+        }
+        .email-body {
+            padding: 36px 44px;
+            line-height: 1.6;
+        }
+        .email-body p {
+            margin: 0 0 18px;
+            color: #475569;
+            font-size: 15px;
+        }
+        .email-body ul {
+            margin: 24px 0;
+            padding-left: 20px;
+            color: #475569;
+            font-size: 15px;
+        }
+        .email-body li {
+            margin-bottom: 10px;
+        }
+        .cta-button {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 14px 28px;
+            border-radius: 999px;
+            background: <%= budget.accentColor %>;
+            color: #ffffff !important;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 36px rgba(15, 23, 42, 0.22);
+        }
+        .email-footer {
+            background: #f1f5f9;
+            padding: 26px 44px;
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        @media (max-width: 640px) {
+            .email-card {
+                margin: 0 16px;
+            }
+            .email-hero,
+            .email-body,
+            .email-footer {
+                padding: 28px;
+            }
+            .email-hero h1 {
+                font-size: 26px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <span style="display:none;color:transparent;height:0;max-height:0;opacity:0;overflow:hidden;">
+        <%= copy.previewText %>
+    </span>
+    <div class="email-wrapper">
+        <div class="email-card">
+            <div class="email-hero">
+                <span class="label"><i>●</i> Alerta financeiro</span>
+                <h1><%= copy.heroTitle %></h1>
+                <p><%= copy.heroSubtitle %></p>
+            </div>
+            <div class="email-body">
+                <p>Olá <strong><%= user.firstName %></strong>,</p>
+                <p>
+                    Detectamos uma atualização importante no orçamento da categoria
+                    <strong><%= budget.categoryName %></strong>.
+                </p>
+
+                <%- await include('./partials/budgetAlertSummary', { budget, displayMode: 'email' }) %>
+
+                <% if (insights && insights.length) { %>
+                    <ul>
+                        <% insights.forEach((insight) => { %>
+                            <li><%= insight %></li>
+                        <% }) %>
+                    </ul>
+                <% } %>
+
+                <a class="cta-button" href="<%= links.accessUrl %>"><%= copy.ctaLabel %></a>
+
+                <p style="margin-top: 28px; font-size: 13px;">
+                    Link seguro válido até <strong><%= tokens.access.expiresAtLabel %></strong>.
+                    Não compartilhe este endereço: ele é exclusivo da sua conta e leva diretamente ao módulo de orçamentos.
+                </p>
+            </div>
+            <div class="email-footer">
+                <p style="margin: 0 0 8px;"><strong><%= meta.organizationName %></strong></p>
+                <p style="margin: 0;">
+                    Você recebeu este alerta automático do módulo financeiro.
+                    Caso não reconheça a operação, revise as permissões de acesso e entre em contato com o time responsável.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
