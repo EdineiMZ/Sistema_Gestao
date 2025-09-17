@@ -138,7 +138,7 @@ describe('userController.updateProfile', () => {
         await userController.updateProfile(req, res);
 
         expect(User.findByPk).toHaveBeenCalledWith(55);
-        expect(userInstance.save).toHaveBeenCalledTimes(1);
+        expect(userInstance.save).not.toHaveBeenCalled();
         expect(req.session.user.name).toBe('Cliente Padrão');
         expect(req.flash).toHaveBeenCalledWith('error_msg', 'Nome é obrigatório.');
         expect(res.redirect).toHaveBeenCalledWith('/users/profile');
