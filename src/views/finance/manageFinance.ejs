@@ -42,6 +42,9 @@
     ? ejsLocals.formatCurrency
     : (value) => intlCurrencyFormatter.format(Number(value) || 0); %>
 <% const formatCurrency = formatCurrencyFn; %>
+<% const currencyFormatter = (typeof ejsLocals.currencyFormatter === 'object' && typeof ejsLocals.currencyFormatter.format === 'function')
+    ? ejsLocals.currencyFormatter
+    : { format: (value) => formatCurrency(value) }; %>
 <% const netAmount = Number(summaryTotals.net || 0); %>
 <% const netClass = netAmount > 0 ? 'text-success' : netAmount < 0 ? 'text-danger' : 'text-muted'; %>
 <% const defaultMonthlySummary = [
@@ -189,6 +192,56 @@
 <% const activeBudgetConsumption = activeBudgetData.reduce((acc, item) => acc + (Number(item.consumption) || 0), 0); %>
 <% const activeBudgetLimit = activeBudgetData.reduce((acc, item) => acc + (Number(item.monthlyLimit) || 0), 0); %>
 <% const activeBudgetUsage = activeBudgetLimit > 0 ? ((activeBudgetConsumption / activeBudgetLimit) * 100) : 0; %>
+<% const defaultThresholdSettings = {
+    overdueDays: 5,
+    spendingAlertPercent: 80,
+    netGoalFloor: 2500
+}; %>
+<% const thresholdSettingsSource = (typeof financeThresholds !== 'undefined' && financeThresholds)
+    ? financeThresholds
+    : ((typeof locals !== 'undefined' && locals && locals.thresholdSettings) ? locals.thresholdSettings : {}); %>
+<% const normalizedThresholds = { ...defaultThresholdSettings, ...thresholdSettingsSource }; %>
+<% const thresholdFormAction = (typeof thresholdUpdateAction !== 'undefined' && thresholdUpdateAction)
+    ? thresholdUpdateAction
+    : '/finance/thresholds'; %>
+<% const budgetNavigationUrl = (typeof budgetPageUrl !== 'undefined' && budgetPageUrl)
+    ? budgetPageUrl
+    : '/finance/budgets'; %>
+<% const quickMetricCards = [
+    {
+        badgeLabel: 'Receitas',
+        badgeClass: 'bg-success-subtle text-success',
+        icon: 'bi-arrow-up-right-circle',
+        subtitle: 'Total previsto a receber',
+        value: formatCurrency(summaryTotals.receivable),
+        footer: 'Entradas confirmadas e previstas.'
+    },
+    {
+        badgeLabel: 'Despesas',
+        badgeClass: 'bg-danger-subtle text-danger',
+        icon: 'bi-arrow-down-right-circle',
+        subtitle: 'Compromissos a pagar',
+        value: formatCurrency(summaryTotals.payable),
+        footer: 'Inclui contas fixas e variáveis.'
+    },
+    {
+        badgeLabel: 'Saldo projetado',
+        badgeClass: 'bg-primary-subtle text-primary',
+        icon: 'bi-graph-up',
+        subtitle: 'Resultado após lançamentos',
+        value: formatCurrency(summaryTotals.net),
+        valueClass: netClass,
+        footer: netAmount >= 0 ? 'Fluxo positivo para o período.' : 'Ajuste metas para evitar déficits.'
+    },
+    {
+        badgeLabel: 'Pagamentos pendentes',
+        badgeClass: 'bg-warning-subtle text-warning',
+        icon: 'bi-exclamation-octagon',
+        subtitle: 'Valores aguardando liquidação',
+        value: formatCurrency(summaryTotals.pending),
+        footer: 'Priorize liquidações críticas.'
+    }
+]; %>
 
 <datalist id="recurring-interval-options">
     <% intervalOptions.forEach((option) => { %>
@@ -222,6 +275,97 @@
                     <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
                 </div>
             <% } %>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                <div>
+                    <h3 class="fw-semibold mb-1">Visão rápida de resultados</h3>
+                    <p class="text-muted mb-0">Use os indicadores-chave para avaliar tendências antes de agir.</p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="<%= budgetNavigationUrl %>" class="btn btn-gradient">
+                        <i class="bi bi-clipboard-data me-2" aria-hidden="true"></i>
+                        Ver planejamento de orçamentos
+                    </a>
+                    <a href="#thresholds" class="btn btn-outline-secondary">
+                        <i class="bi bi-sliders me-2" aria-hidden="true"></i>
+                        Ajustar alertas
+                    </a>
+                </div>
+            </div>
+            <div class="row g-3 g-xl-4" data-quick-metrics>
+                <% quickMetricCards.forEach((metric, index) => { %>
+                    <%- include('./components/metricCard', {
+                        ...metric,
+                        key: `metric-${index}`
+                    }) %>
+                <% }) %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12" id="thresholds">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                <div>
+                    <h3 class="fw-semibold mb-1">Alertas e thresholds inteligentes</h3>
+                    <p class="text-muted mb-0">
+                        Defina limites proativos para alertas de atraso, orçamento e saldo projetado.
+                    </p>
+                </div>
+                <div class="text-muted small">
+                    Ajustes são aplicados imediatamente após salvar.
+                </div>
+            </div>
+            <form action="<%= thresholdFormAction %>" method="POST" class="row g-4" data-thresholds-form novalidate>
+                <%- include('./components/csrfField') %>
+                <%- include('./components/thresholdFieldset', {
+                    title: 'Atrasos em foco',
+                    description: 'Dias desde o vencimento para acionar alertas críticos.',
+                    label: 'Dias de tolerância',
+                    name: 'overdueDays',
+                    value: normalizedThresholds.overdueDays,
+                    icon: 'bi-alarm',
+                    inputId: 'threshold-overdue-days',
+                    max: 90,
+                    helper: 'Alertas serão enviados quando o limite for ultrapassado.'
+                }) %>
+                <%- include('./components/thresholdFieldset', {
+                    title: 'Consumo do orçamento',
+                    description: 'Percentual máximo de uso antes de sinalizar atenção.',
+                    label: 'Percentual de alerta',
+                    name: 'spendingAlertPercent',
+                    value: normalizedThresholds.spendingAlertPercent,
+                    icon: 'bi-speedometer2',
+                    inputId: 'threshold-spending-percent',
+                    suffix: '%',
+                    step: '0.1',
+                    max: 150,
+                    helper: 'Utilize valores entre 50 e 100 para acompanhar variações.'
+                }) %>
+                <%- include('./components/thresholdFieldset', {
+                    title: 'Reserva mínima',
+                    description: 'Saldo líquido projetado esperado após pagamentos.',
+                    label: 'Valor de referência',
+                    name: 'netGoalFloor',
+                    value: normalizedThresholds.netGoalFloor,
+                    icon: 'bi-piggy-bank',
+                    inputId: 'threshold-net-floor',
+                    prefix: 'R$',
+                    step: '0.01',
+                    helper: 'Utilize valores atualizados com base nas metas mensais.'
+                }) %>
+                <div class="col-12 d-flex flex-column flex-sm-row justify-content-end gap-2">
+                    <button type="reset" class="btn btn-outline-secondary" data-threshold-reset>Restaurar padrões</button>
+                    <button type="submit" class="btn btn-gradient" data-threshold-submit>
+                        <i class="bi bi-shield-check me-2" aria-hidden="true"></i>
+                        Salvar thresholds
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -474,7 +618,8 @@
         <div class="card card-soft responsive-panel h-100">
             <div class="card-body">
                 <h4 class="fw-semibold mb-3">Configurar metas mensais</h4>
-                <form action="/finance/goals" method="POST" class="row g-3">
+                <form action="/finance/goals" method="POST" class="row g-3" data-goal-create-form>
+                    <%- include('./components/csrfField') %>
                     <div class="col-12">
                         <label class="form-label">Mês da meta</label>
                         <input type="month" class="form-control" name="month" value="<%= currentHighlightProjection ? currentHighlightProjection.month : '' %>" required />
@@ -515,7 +660,8 @@
                                             <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#goalEdit<%= goal.id %>" aria-expanded="false" aria-controls="goalEdit<%= goal.id %>">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <form action="/finance/goals/<%= goal.id %>?_method=DELETE" method="POST" class="d-inline">
+                                            <form action="/finance/goals/<%= goal.id %>?_method=DELETE" method="POST" class="d-inline" data-goal-delete-form>
+                                                <%- include('./components/csrfField') %>
                                                 <button class="btn btn-outline-danger btn-sm" type="submit">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
@@ -523,7 +669,8 @@
                                         </div>
                                     </div>
                                     <div class="collapse" id="goalEdit<%= goal.id %>">
-                                        <form action="/finance/goals" method="POST" class="row g-3 mt-2">
+                                        <form action="/finance/goals" method="POST" class="row g-3 mt-2" data-goal-update-form>
+                                            <%- include('./components/csrfField') %>
                                             <input type="hidden" name="goalId" value="<%= goal.id %>" />
                                             <div class="col-12">
                                                 <label class="form-label">Mês</label>
@@ -596,14 +743,15 @@
                             </div>
                         </div>
                     <% } %>
-
-                    <form action="/finance/import/commit" method="POST" class="mt-4">
+                    <form action="/finance/import/commit" method="POST" class="mt-4" data-import-commit-form>
+                        <%- include('./components/csrfField') %>
                         <div class="table-responsive table-modern responsive-table">
                             <table class="table align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th class="text-center">Importar</th>
                                         <th>Descrição</th>
+                                        <th>Categoria</th>
                                         <th class="text-center">Tipo</th>
                                         <th>Valor (R$)</th>
                                         <th>Vencimento</th>
@@ -638,6 +786,28 @@
                                                     value="<%= entry.description %>"
                                                     required
                                                 />
+                                            </td>
+                                            <td>
+                                                <% const importCategoryId = Number.parseInt(
+                                                    entry.categoryId ?? entry.financeCategoryId ?? '',
+                                                    10
+                                                ); %>
+                                                <select
+                                                    class="form-select form-select-sm"
+                                                    name="entries[<%= index %>][categoryId]"
+                                                    data-category-select
+                                                    data-category-id="<%= Number.isFinite(importCategoryId) ? importCategoryId : '' %>"
+                                                >
+                                                    <option value="" <%= Number.isFinite(importCategoryId) ? '' : 'selected' %>>Sem categoria</option>
+                                                    <% safeCategories.forEach(function(category) { %>
+                                                        <option
+                                                            value="<%= category.id %>"
+                                                            <%= importCategoryId === category.id ? 'selected' : '' %>
+                                                        >
+                                                            <%= category.name %>
+                                                        </option>
+                                                    <% }) %>
+                                                </select>
                                             </td>
                                             <td class="text-center">
                                                 <select class="form-select form-select-sm" name="entries[<%= index %>][type]" required>
@@ -1054,11 +1224,23 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <% if (entry.category) { %>
-                                        <span class="badge rounded-pill" style="background-color: <%= entry.category.color || '#6c757d' %>;" aria-hidden="true"></span>
-                                        <span class="ms-2"><%= entry.category.name %></span>
+                                    <% const entryCategory = entry.category || {}; %>
+                                    <% const rawEntryCategoryId = Number.parseInt(entry.financeCategoryId || entryCategory.id || '', 10); %>
+                                    <% const entryCategoryId = Number.isFinite(rawEntryCategoryId) && rawEntryCategoryId > 0 ? rawEntryCategoryId : null; %>
+                                    <% const entryCategoryName = entryCategory && entryCategory.name ? String(entryCategory.name).trim() : 'Sem categoria'; %>
+                                    <% const entryCategoryColor = (entryCategory && entryCategory.color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(entryCategory.color)) ? entryCategory.color : '#6c757d'; %>
+                                    <% if (entryCategoryId) { %>
+                                        <span
+                                            class="badge rounded-pill text-white"
+                                            style="background-color: <%= entryCategoryColor %>;"
+                                            data-category-id="<%= entryCategoryId %>"
+                                        >
+                                            <%= entryCategoryName %>
+                                        </span>
                                     <% } else { %>
-                                        <span class="text-muted">—</span>
+                                        <span class="badge bg-secondary-subtle text-secondary-emphasis" data-category-id="">
+                                            Sem categoria
+                                        </span>
                                     <% } %>
                                 </td>
                                 <td>
@@ -1083,14 +1265,16 @@
                                             <i class="bi bi-pencil me-1"></i>Editar
                                         </button>
 
-                                        <form
-                                            action="/finance/delete/<%= entry.id %>?_method=DELETE"
-                                            method="POST"
-                                            class="d-inline"
-                                        >
-                                            <button class="btn btn-outline-danger btn-sm" type="submit">
-                                                <i class="bi bi-trash me-1"></i>Excluir
-                                            </button>
+                                          <form
+                                              action="/finance/delete/<%= entry.id %>?_method=DELETE"
+                                              method="POST"
+                                              class="d-inline"
+                                              data-finance-delete-form
+                                          >
+                                              <%- include('./components/csrfField') %>
+                                              <button class="btn btn-outline-danger btn-sm" type="submit">
+                                                  <i class="bi bi-trash me-1"></i>Excluir
+                                              </button>
                                         </form>
                                     </div>
 
@@ -1101,14 +1285,16 @@
                                         aria-hidden="true"
                                     >
                                         <div class="modal-dialog">
-                                            <form
-                                                action="/finance/update/<%= entry.id %>?_method=PUT"
-                                                method="POST"
-                                                enctype="multipart/form-data"
-                                                class="modal-content"
-                                            >
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">Editar Lançamento #<%= entry.id %></h5>
+                                              <form
+                                                  action="/finance/update/<%= entry.id %>?_method=PUT"
+                                                  method="POST"
+                                                  enctype="multipart/form-data"
+                                                  class="modal-content"
+                                                  data-finance-update-form
+                                              >
+                                                  <%- include('./components/csrfField') %>
+                                                  <div class="modal-header">
+                                                      <h5 class="modal-title">Editar Lançamento #<%= entry.id %></h5>
                                                     <button
                                                         type="button"
                                                         class="btn-close"
@@ -1134,6 +1320,26 @@
                                                         <select class="form-select" name="type" required>
                                                             <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
                                                             <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Categoria</label>
+                                                        <% const modalCategoryId = Number.parseInt(entry.financeCategoryId || (entry.category && entry.category.id) || '', 10); %>
+                                                        <select
+                                                            class="form-select"
+                                                            name="financeCategoryId"
+                                                            data-category-select
+                                                            data-category-id="<%= Number.isFinite(modalCategoryId) ? modalCategoryId : '' %>"
+                                                        >
+                                                            <option value="" <%= Number.isFinite(modalCategoryId) ? '' : 'selected' %>>Sem categoria</option>
+                                                            <% safeCategories.forEach(function(category) { %>
+                                                                <option
+                                                                    value="<%= category.id %>"
+                                                                    <%= modalCategoryId === category.id ? 'selected' : '' %>
+                                                                >
+                                                                    <%= category.name %>
+                                                                </option>
+                                                            <% }) %>
                                                         </select>
                                                     </div>
                                                     <div class="mb-3">
@@ -1260,7 +1466,8 @@
         <div class="card card-soft responsive-panel">
             <h3 class="fw-semibold mb-2">Novo lançamento</h3>
             <p class="text-muted mb-4">Cadastre receitas ou despesas com recorrência opcional e acompanhe tudo no painel.</p>
-            <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid">
+            <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid" data-finance-create-form>
+                <%- include('./components/csrfField') %>
                 <div class="col-md-5">
                     <label class="form-label">Descrição</label>
                     <input
@@ -1276,6 +1483,20 @@
                     <select class="form-select" name="type" required>
                         <option value="payable">Pagar</option>
                         <option value="receivable">Receber</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Categoria</label>
+                    <select
+                        class="form-select"
+                        name="financeCategoryId"
+                        data-category-select
+                        data-category-id=""
+                    >
+                        <option value="" selected>Sem categoria</option>
+                        <% safeCategories.forEach(function(category) { %>
+                            <option value="<%= category.id %>"><%= category.name %></option>
+                        <% }) %>
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -1353,6 +1574,7 @@
     });
     const rawBudgetSummaries = <%- JSON.stringify(normalizedBudgetData) %>;
     const rawCategoryConsumption = <%- JSON.stringify(categoryConsumptionList) %>;
+    const defaultThresholdValues = <%- JSON.stringify(defaultThresholdSettings) %>;
 
     document.addEventListener('DOMContentLoaded', () => {
         const filterForms = document.querySelectorAll('[data-filter-form]');
@@ -1365,7 +1587,138 @@
         const summaryUsageEl = document.querySelector('[data-budget-summary="usage"]');
         const categoryListEl = document.querySelector('[data-category-consumption-list]');
         const budgetChartCanvas = document.getElementById('budget-consumption-chart');
+        const thresholdForm = document.querySelector('[data-thresholds-form]');
+        const thresholdInputs = thresholdForm ? thresholdForm.querySelectorAll('[data-threshold-input]') : [];
+        const thresholdResetButton = thresholdForm ? thresholdForm.querySelector('[data-threshold-reset]') : null;
+        const thresholdSubmitButton = thresholdForm ? thresholdForm.querySelector('[data-threshold-submit]') : null;
+        const managedForms = document.querySelectorAll(
+            '[data-goal-create-form], [data-goal-update-form], [data-goal-delete-form], [data-import-commit-form], [data-finance-create-form], [data-finance-update-form], [data-finance-delete-form]'
+        );
         let budgetChartInstance = null;
+
+        const setInputValidity = (input, message) => {
+            if (!input || typeof input.setCustomValidity !== 'function') {
+                return;
+            }
+
+            input.setCustomValidity(message || '');
+            if (message) {
+                input.classList.add('is-invalid');
+            } else {
+                input.classList.remove('is-invalid');
+            }
+        };
+
+        const validateThresholds = () => {
+            if (!thresholdInputs.length) {
+                return true;
+            }
+
+            let isValid = true;
+            thresholdInputs.forEach((input) => {
+                const rawValue = input.value;
+                const numericValue = Number.parseFloat(rawValue);
+
+                if (rawValue === '' || !Number.isFinite(numericValue) || numericValue < 0) {
+                    setInputValidity(input, 'Informe um valor numérico positivo.');
+                    isValid = false;
+                    return;
+                }
+
+                const maxAttr = input.getAttribute('max');
+                if (maxAttr) {
+                    const maxValue = Number.parseFloat(maxAttr);
+                    if (Number.isFinite(maxValue) && numericValue > maxValue) {
+                        setInputValidity(input, `Utilize um valor menor ou igual a ${maxValue}.`);
+                        isValid = false;
+                        return;
+                    }
+                }
+
+                setInputValidity(input, '');
+            });
+
+            return isValid;
+        };
+
+        if (thresholdForm) {
+            thresholdInputs.forEach((input) => {
+                input.addEventListener('input', () => {
+                    setInputValidity(input, '');
+                });
+
+                input.addEventListener('blur', () => {
+                    validateThresholds();
+                });
+            });
+
+            thresholdForm.addEventListener('submit', (event) => {
+                const thresholdsAreValid = validateThresholds();
+                if (!thresholdsAreValid) {
+                    event.preventDefault();
+                    thresholdForm.classList.add('was-validated');
+                    if (thresholdInputs.length) {
+                        thresholdInputs[0].focus();
+                    }
+                    return;
+                }
+
+                if (thresholdSubmitButton) {
+                    thresholdSubmitButton.setAttribute('aria-busy', 'true');
+                    thresholdSubmitButton.classList.add('disabled');
+                    thresholdSubmitButton.setAttribute('disabled', 'disabled');
+                }
+            });
+
+            if (thresholdResetButton) {
+                thresholdResetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    thresholdInputs.forEach((input) => {
+                        const match = /thresholds\[(.+)\]/.exec(input.name || '');
+                        if (match && Object.prototype.hasOwnProperty.call(defaultThresholdValues, match[1])) {
+                            input.value = defaultThresholdValues[match[1]];
+                        }
+                        setInputValidity(input, '');
+                    });
+                    thresholdForm.classList.remove('was-validated');
+                    if (thresholdSubmitButton) {
+                        thresholdSubmitButton.removeAttribute('aria-busy');
+                        thresholdSubmitButton.classList.remove('disabled');
+                        thresholdSubmitButton.removeAttribute('disabled');
+                    }
+                });
+            }
+        }
+
+        const applyValidationToForm = (form) => {
+            if (!form) {
+                return;
+            }
+
+            form.setAttribute('novalidate', 'novalidate');
+            form.addEventListener('submit', (event) => {
+                if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    form.classList.add('was-validated');
+                }
+            });
+
+            const fields = form.querySelectorAll('input, select, textarea');
+            fields.forEach((field) => {
+                field.addEventListener('input', () => {
+                    if (form.classList.contains('was-validated')) {
+                        if (typeof field.checkValidity === 'function' && field.checkValidity()) {
+                            field.classList.remove('is-invalid');
+                        } else {
+                            field.classList.add('is-invalid');
+                        }
+                    }
+                });
+            });
+        };
+
+        managedForms.forEach((form) => applyValidationToForm(form));
 
         const buildFiltersQuery = (scope) => {
             if (typeof URLSearchParams === 'undefined') {
@@ -1471,188 +1824,26 @@
                 });
             });
         });
+        if (categorySelects.length) {
+            categorySelects.forEach((select) => {
+                const applySanitizedDataset = () => {
+                    const sanitized = sanitizeCategoryId(select.value);
+                    if (sanitized) {
+                        select.dataset.categoryId = sanitized;
+                    } else {
+                        delete select.dataset.categoryId;
+                    }
+                };
+
+                applySanitizedDataset();
+                select.addEventListener('change', applySanitizedDataset);
+                select.addEventListener('input', applySanitizedDataset);
+            });
+        }
 
         refreshExportLinks();
 
         const chartElement = document.getElementById('financePerformanceChart');
-
-        const getFilteredBudgetData = (month) => {
-            if (!month || month === 'all') {
-                return budgetCardsData;
-            }
-            return budgetCardsData.filter((item) => item && item.month === month);
-        };
-
-        const renderBudgetCards = (month) => {
-            const normalizedMonth = month && month !== 'all' ? month : null;
-            const budgetCards = document.querySelectorAll('[data-budget-card]');
-            budgetCards.forEach((card) => {
-                const cardMonth = card.getAttribute('data-budget-month');
-                const shouldShow = !normalizedMonth || cardMonth === normalizedMonth;
-                card.classList.toggle('d-none', !shouldShow);
-            });
-        };
-
-        const renderBudgetSummary = (month) => {
-            const dataset = getFilteredBudgetData(month);
-            const totalConsumption = dataset.reduce((acc, item) => acc + (Number(item?.consumption) || 0), 0);
-            const totalLimit = dataset.reduce((acc, item) => acc + (Number(item?.monthlyLimit) || 0), 0);
-            const usage = totalLimit > 0 ? (totalConsumption / totalLimit) * 100 : 0;
-
-            if (summaryConsumptionEl) {
-                summaryConsumptionEl.textContent = chartCurrencyFormatter.format(totalConsumption);
-            }
-            if (summaryLimitEl) {
-                summaryLimitEl.textContent = chartCurrencyFormatter.format(totalLimit);
-            }
-            if (summaryUsageEl) {
-                summaryUsageEl.textContent = `${usage.toFixed(1)}%`;
-            }
-        };
-
-        const renderBudgetChart = (month) => {
-            if (!budgetChartCanvas || typeof window.Chart === 'undefined') {
-                return;
-            }
-
-            const dataset = getFilteredBudgetData(month);
-            const aggregated = dataset.reduce((acc, item) => {
-                const key = item?.categoryId || item?.categoryName || Math.random().toString(36).slice(2);
-                if (!acc[key]) {
-                    acc[key] = {
-                        label: item?.categoryName || 'Sem categoria',
-                        color: item?.categoryColor || '#2563eb',
-                        value: 0
-                    };
-                }
-                acc[key].value += Number(item?.consumption) || 0;
-                return acc;
-            }, {});
-
-            const labels = Object.values(aggregated).map((item) => item.label);
-            const values = Object.values(aggregated).map((item) => item.value);
-            const colors = Object.values(aggregated).map((item) => item.color);
-
-            if (budgetChartInstance) {
-                budgetChartInstance.destroy();
-                budgetChartInstance = null;
-            }
-
-            if (!labels.length) {
-                return;
-            }
-
-            const context = budgetChartCanvas.getContext('2d');
-            if (!context) {
-                return;
-            }
-
-            budgetChartInstance = new window.Chart(context, {
-                type: 'doughnut',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            data: values,
-                            backgroundColor: colors,
-                            borderWidth: 0
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => {
-                                    const label = context.label || '';
-                                    const value = Number.isFinite(context.parsed) ? context.parsed : 0;
-                                    return `${label}: ${chartCurrencyFormatter.format(value)}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        };
-
-        const renderCategoryList = (month) => {
-            if (!categoryListEl) {
-                return;
-            }
-
-            const dataset = getFilteredBudgetData(month);
-            if (!dataset.length) {
-                categoryListEl.innerHTML = '<div class="text-muted">Nenhum consumo registrado para o período selecionado.</div>';
-                return;
-            }
-
-            const aggregates = dataset.reduce((acc, item) => {
-                const key = item?.categoryId || item?.categoryName || Math.random().toString(36).slice(2);
-                if (!acc[key]) {
-                    acc[key] = {
-                        name: item?.categoryName || 'Sem categoria',
-                        color: item?.categoryColor || '#6b7280',
-                        consumption: 0,
-                        usage: 0,
-                        months: new Set()
-                    };
-                }
-                acc[key].consumption += Number(item?.consumption) || 0;
-                acc[key].usage = Math.max(acc[key].usage, Number(item?.usage) || 0);
-                if (item?.month) {
-                    acc[key].months.add(item.month);
-                }
-                return acc;
-            }, {});
-
-            const sorted = Object.values(aggregates)
-                .map((item) => ({
-                    ...item,
-                    months: item.months.size
-                }))
-                .sort((a, b) => b.consumption - a.consumption)
-                .slice(0, 6);
-
-            categoryListEl.innerHTML = '';
-
-            sorted.forEach((item) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'list-group-item px-0 d-flex justify-content-between align-items-center gap-3';
-                wrapper.innerHTML = `
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="rounded-circle flex-shrink-0" style="width:10px;height:10px;background:${item.color};" aria-hidden="true"></span>
-                        <div>
-                            <div class="fw-semibold text-truncate">${item.name}</div>
-                            <div class="text-muted small">Média: ${item.usage.toFixed(1)}% · Meses: ${item.months}</div>
-                        </div>
-                    </div>
-                    <div class="text-end">
-                        <div class="fw-semibold">${chartCurrencyFormatter.format(item.consumption)}</div>
-                    </div>
-                `;
-                categoryListEl.appendChild(wrapper);
-            });
-        };
-
-        const updateBudgetWidgets = (month) => {
-            renderBudgetCards(month);
-            renderBudgetSummary(month);
-            renderBudgetChart(month);
-            renderCategoryList(month);
-        };
-
-        updateBudgetWidgets(budgetMonthSelector?.value || 'all');
-
-        if (budgetMonthSelector) {
-            budgetMonthSelector.addEventListener('change', (event) => {
-                updateBudgetWidgets(event.target.value || 'all');
-            });
-        }
 
         const formatChartMonthLabel = (value) => {
             if (!value) {

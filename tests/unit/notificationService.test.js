@@ -3,6 +3,7 @@ process.env.NODE_ENV = 'test';
 const mockDescribeTable = jest.fn().mockResolvedValue({ messageHtml: true });
 
 jest.mock('../../database/models', () => ({
+    Sequelize: { Op: require('sequelize').Op },
     Notification: {},
     User: {
         findAll: jest.fn(),

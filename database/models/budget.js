@@ -49,17 +49,17 @@ const normalizeMonthValue = (value) => {
     return normalized.toISOString().slice(0, 10);
 };
 
+const THRESHOLD_RANGE_ERROR = 'Limiares devem ser números entre 0 e 1, com até duas casas decimais.';
+
 const normalizeThresholds = (value) => {
     if (value === undefined || value === null) {
         return getConfiguredThresholdDefaults();
     }
 
     const rawList = Array.isArray(value) ? value : [value];
-    const normalized = rawList
-        .map((item) => {
-            if (item === undefined || item === null || item === '') {
-                return null;
-            }
+    if (rawList.length === 0) {
+        return [];
+    }
 
             const numeric = Number.parseFloat(typeof item === 'string' ? item.replace(',', '.') : item);
             if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1) {
@@ -74,10 +74,12 @@ const normalizeThresholds = (value) => {
         return getConfiguredThresholdDefaults();
     }
 
-    const uniqueValues = Array.from(new Set(normalized));
-    uniqueValues.sort((a, b) => a - b);
+        if (normalized <= 0 || normalized > 1) {
+            throw new Error(THRESHOLD_RANGE_ERROR);
+        }
 
-    return uniqueValues;
+        return normalized;
+    });
 };
 
 const resolveThresholdValues = (value) => {
@@ -118,6 +120,7 @@ module.exports = (sequelize, DataTypes) => {
                     const list = normalizeThresholds(value);
                     if (list.some((item) => item <= 0 || item > 1)) {
                         throw new Error('Percentuais de alerta devem estar entre 0 e 1 (ex.: 0.75).');
+
                     }
                 }
             }
@@ -182,6 +185,14 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
+        if (models.BudgetThresholdLog) {
+            Budget.hasMany(models.BudgetThresholdLog, {
+                as: 'thresholdLogs',
+                foreignKey: 'budgetId',
+                onDelete: 'CASCADE',
+                hooks: true
+            });
+        }
     };
 
     return Budget;

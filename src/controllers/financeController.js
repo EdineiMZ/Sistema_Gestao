@@ -4,11 +4,11 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
+const budgetService = require('../services/budgetService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const fileStorageService = require('../services/fileStorageService');
 const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
-
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const {
     FINANCE_TYPES,
@@ -150,6 +150,24 @@ const sanitizeText = (value) => {
     return String(value).replace(/\s+/g, ' ').trim();
 };
 
+const sanitizeCategoryName = (value) => {
+    const sanitized = sanitizeText(value);
+    return sanitized || 'Sem categoria';
+};
+
+const normalizeCategoryId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const number = Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(number) || number <= 0) {
+        return null;
+    }
+
+    return number;
+};
+
 const formatDateLabel = (value) => {
     if (!value) {
         return null;
@@ -238,76 +256,6 @@ const isMissingTableDbError = (error, tableName) => {
     return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
 };
 
-const buildImportPreview = async (rawEntries = []) => {
-    const totals = { total: 0, new: 0, conflicting: 0, invalid: 0 };
-    if (!Array.isArray(rawEntries) || !rawEntries.length) {
-        return { entries: [], totals, validationErrors: [] };
-    }
-
-    const normalizedEntries = [];
-    const validationErrors = [];
-
-    rawEntries.forEach((entry, index) => {
-        try {
-            const prepared = financeImportService.prepareEntryForPersistence(entry);
-            normalizedEntries.push({ ...prepared, originalIndex: index });
-        } catch (error) {
-            validationErrors.push({ index, message: error.message || 'Entrada inválida.' });
-        }
-    });
-
-    totals.total = normalizedEntries.length + validationErrors.length;
-    totals.invalid = validationErrors.length;
-
-    const dueDates = [...new Set(normalizedEntries.map((item) => item.dueDate))];
-    let existingEntries = [];
-    if (dueDates.length) {
-        existingEntries = await FinanceEntry.findAll({
-            where: {
-                dueDate: { [Op.in]: dueDates }
-            },
-            attributes: ['description', 'value', 'dueDate'],
-            raw: true
-        });
-    }
-
-    const existingHashes = new Set(
-        existingEntries.map((entry) => financeImportService.createEntryHash(entry))
-    );
-
-    const seenHashes = new Set();
-    const previewEntries = normalizedEntries.map((item) => {
-        const conflictWithDatabase = existingHashes.has(item.hash);
-        const duplicateInBatch = seenHashes.has(item.hash);
-        seenHashes.add(item.hash);
-
-        const conflict = conflictWithDatabase || duplicateInBatch;
-        if (conflict) {
-            totals.conflicting += 1;
-        } else {
-            totals.new += 1;
-        }
-
-        return {
-            description: item.description,
-            type: item.type,
-            value: item.value,
-            dueDate: item.dueDate,
-            paymentDate: item.paymentDate,
-            status: item.status,
-            hash: item.hash,
-            conflict,
-            duplicate: duplicateInBatch
-        };
-    });
-
-    return {
-        entries: previewEntries,
-        totals,
-        validationErrors
-    };
-};
-
 const normalizeFilterValue = (value) => {
     if (typeof value !== 'string') {
         return null;
@@ -342,6 +290,22 @@ const buildFiltersFromQuery = (query = {}) => {
 };
 
 const buildEntriesQueryOptions = (filters = {}) => {
+    const include = [
+        {
+            model: FinanceAttachment,
+            as: 'attachments',
+            attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
+        }
+    ];
+
+    if (FinanceCategory) {
+        include.push({
+            model: FinanceCategory,
+            as: 'category',
+            attributes: ['id', 'name', 'slug', 'color']
+        });
+    }
+
     const options = {
         include: [
             {
@@ -349,13 +313,12 @@ const buildEntriesQueryOptions = (filters = {}) => {
                 as: 'attachments',
                 attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
             },
-            {
+            FinanceCategory && {
                 model: FinanceCategory,
                 as: 'category',
-                attributes: ['id', 'name', 'slug', 'color'],
-                required: false
+                attributes: ['id', 'name', 'color']
             }
-        ],
+        ].filter(Boolean),
         order: [
             ['dueDate', 'ASC'],
             ['id', 'ASC'],
@@ -629,27 +592,55 @@ module.exports = {
                     throw error;
                 }
             })();
-            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
                 includeCategoryConsumption: true,
                 entriesPromise
             });
 
-            const [entries, summary, goals, budgetOverview] = await Promise.all([
+            const userId = req.user?.id || req.session?.user?.id || null;
+
+            const categoriesPromise = (async () => {
+                if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
+                    return [];
+                }
+
+                const where = {};
+                if (userId) {
+                    where[Op.or] = [{ ownerId: userId }, { ownerId: null }];
+                } else {
+                    where.ownerId = null;
+                }
+
+                try {
+                    const records = await FinanceCategory.findAll({
+                        where,
+                        order: [['name', 'ASC']]
+                    });
+                    return records.map((record) => {
+                        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+                        return {
+                            id: normalizeCategoryId(plain.id),
+                            name: sanitizeCategoryName(plain.name),
+                            color: (() => {
+                                const candidate = sanitizeText(plain.color);
+                                return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
+                            })()
+                        };
+                    }).filter((category) => Number.isFinite(category.id));
+                } catch (error) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error('Erro ao carregar categorias financeiras:', error);
+                    }
+                    return [];
+                }
+            })();
+
+            const [entries, summary, goals, categories] = await Promise.all([
                 entriesPromise,
                 summaryPromise,
                 goalsPromise,
-                budgetOverviewPromise
+                categoriesPromise
             ]);
-
-            const budgetSummaries = Array.isArray(budgetOverview?.summaries)
-                ? budgetOverview.summaries
-                : [];
-            const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
-                ? budgetOverview.categoryConsumption
-                : [];
-            const budgetMonths = Array.isArray(budgetOverview?.months)
-                ? budgetOverview.months
-                : [];
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -717,13 +708,22 @@ module.exports = {
                 throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
             }
 
-            const preview = await buildImportPreview(parseResult.entries);
+            const currentUserId = req.user?.id ?? req.session?.user?.id ?? null;
+            const preview = await buildImportPreview(parseResult.entries, { ownerId: currentUserId });
             const payload = {
                 fileName: req.file.originalname,
                 uploadedAt: new Date().toISOString(),
                 warnings: parseResult.warnings || [],
                 ...preview
             };
+
+            if (Array.isArray(payload.entries)) {
+                payload.entries = payload.entries.map((entry = {}) => ({
+                    ...entry,
+                    categoryId: normalizeCategoryId(entry.financeCategoryId ?? entry.categoryId),
+                    categoryName: sanitizeCategoryName(entry.categoryName)
+                }));
+            }
 
             if (wantsJsonResponse(req)) {
                 return res.json({ ok: true, preview: payload });
@@ -758,11 +758,13 @@ module.exports = {
                 throw new Error('Nenhum lançamento selecionado para importação.');
             }
 
+            const currentUserId = resolveCurrentUserId(req);
+            const resolveCategory = createCategoryResolver(currentUserId);
             const preparedEntries = [];
             const skippedEntries = [];
             const invalidEntries = [];
 
-            entriesArray.forEach((entry) => {
+            for (const entry of entriesArray) {
                 const includeFlag = entry.include ?? entry.selected ?? entry.import ?? entry.shouldImport;
                 const shouldImport = includeFlag === true
                     || includeFlag === 'true'
@@ -771,16 +773,19 @@ module.exports = {
 
                 if (!shouldImport) {
                     skippedEntries.push(entry);
-                    return;
+                    continue;
                 }
 
                 try {
                     const prepared = financeImportService.prepareEntryForPersistence(entry);
-                    preparedEntries.push(prepared);
+                    preparedEntries.push({
+                        ...prepared,
+                        categoryId: normalizeCategoryId(prepared.financeCategoryId)
+                    });
                 } catch (error) {
                     invalidEntries.push({ entry, message: error.message });
                 }
-            });
+            }
 
             if (!preparedEntries.length) {
                 const baseMessage = invalidEntries.length
@@ -827,7 +832,7 @@ module.exports = {
 
             let createdRecords = [];
             if (finalEntries.length) {
-                const payload = finalEntries.map(({ hash, ...fields }) => fields);
+                const payload = finalEntries.map(({ hash, categoryName, categoryId, ...fields }) => fields);
                 const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
                 createdRecords = Array.isArray(result) ? result : [];
             }
@@ -892,6 +897,9 @@ module.exports = {
 
         try {
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -900,8 +908,10 @@ module.exports = {
                 type,
                 value,
                 dueDate,
+                financeCategoryId,
                 recurring: (recurring === 'true'),
-                recurringInterval: normalizeRecurringInterval(recurringInterval)
+                recurringInterval: normalizeRecurringInterval(recurringInterval),
+                financeCategoryId: finalCategoryId
             };
 
             let entry;
@@ -941,7 +951,20 @@ module.exports = {
 
         try {
             const { id } = req.params;
-            const { description, type, value, dueDate, paymentDate, status, recurring, recurringInterval } = req.body;
+            const {
+                description,
+                type,
+                value,
+                dueDate,
+                paymentDate,
+                status,
+                recurring,
+                recurringInterval
+            } = req.body;
+
+            const financeCategoryId = normalizeCategoryId(
+                req.body.financeCategoryId ?? req.body.categoryId
+            );
 
             transaction = await beginTransaction();
 
@@ -966,8 +989,10 @@ module.exports = {
             entry.dueDate = dueDate;
             entry.paymentDate = paymentDate || null;
             entry.status = status;
+            entry.financeCategoryId = financeCategoryId;
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
+            entry.financeCategoryId = finalCategoryId;
 
             if (transaction) {
                 await entry.save({ transaction });
@@ -1192,20 +1217,99 @@ module.exports = {
 
     exportPdf: async (req, res) => {
         try {
+            const rawId = req.params?.id;
+            const budgetId = Number.parseInt(rawId, 10);
+            if (!Number.isInteger(budgetId) || budgetId <= 0) {
+                const message = 'Identificador de orçamento inválido.';
+                if (expectsJson) {
+                    return res.status(400).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            if (!Budget || typeof Budget.findByPk !== 'function') {
+                const message = 'Recurso de orçamento indisponível.';
+                if (expectsJson) {
+                    return res.status(503).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            const budget = await Budget.findByPk(budgetId);
+            if (!budget) {
+                const message = 'Orçamento não encontrado.';
+                if (expectsJson) {
+                    return res.status(404).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            const input = req.body?.thresholds;
+            const hasCustomInput = !(
+                input === undefined
+                || input === null
+                || (typeof input === 'string' && input.trim() === '')
+            );
+
+            let normalizedThresholds = [];
+
+            if (hasCustomInput) {
+                if (Array.isArray(input)) {
+                    normalizedThresholds = Budget.normalizeThresholds(input);
+                } else if (typeof input === 'string') {
+                    normalizedThresholds = Budget.normalizeThresholds(normalizeThresholdList(input));
+                } else {
+                    normalizedThresholds = Budget.normalizeThresholds([input]);
+                }
+
+                if (!normalizedThresholds.length) {
+                    const message = 'Informe ao menos um limiar válido entre 0 e 1.';
+                    if (expectsJson) {
+                        return res.status(400).json({ success: false, error: message });
+                    }
+                    req.flash('error_msg', message);
+                    return res.redirect('/finance');
+                }
+            } else {
+                normalizedThresholds = getDefaultBudgetThresholds();
+            }
+
+            if (!normalizedThresholds.length) {
+                const message = 'Configuração de limiares indisponível. Defina valores entre 0 e 1.';
+                if (expectsJson) {
+                    return res.status(500).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            await budget.update({ thresholds: normalizedThresholds });
+
+            if (expectsJson) {
+                return res.json({ success: true, thresholds: normalizedThresholds });
+            }
+
+            req.flash('success_msg', 'Limiares de orçamento atualizados.');
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao atualizar limiares de orçamento:', error);
+            if (expectsJson) {
+                return res.status(500).json({ success: false, error: 'Erro ao atualizar limiares de orçamento.' });
+            }
+            req.flash('error_msg', 'Erro ao atualizar limiares de orçamento.');
+            return res.redirect('/finance');
+        }
+    },
+
+    exportPdf: async (req, res) => {
+        try {
             const filters = buildFiltersFromQuery(req.query);
-            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
-                includeCategoryConsumption: true,
-                entriesPromise
-            });
-
-            const [entries, summary, budgetOverview] = await Promise.all([
-                entriesPromise,
-                summaryPromise,
-                budgetOverviewPromise
-            ]);
-
+            const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
             const chartImage = await reportChartService.generateFinanceReportChart(summary);
             const budgetSummaries = Array.isArray(budgetOverview?.summaries)
                 ? budgetOverview.summaries
@@ -1264,18 +1368,17 @@ module.exports = {
             document.fontSize(14).fillColor('#000000').text('Lançamentos', { underline: true });
             document.moveDown(0.5);
 
-            if (!entries.length) {
+            if (!safeEntries.length) {
                 document.fontSize(11).text('Nenhum lançamento encontrado para o período selecionado.');
             } else {
                 document.fontSize(11).text('Descrição | Categoria | Tipo | Valor | Vencimento | Status');
                 document.moveDown(0.3);
                 document.fontSize(10);
 
-                entries.forEach((entry) => {
-                    const categoryLabel = sanitizeText(entry?.category?.name || '—');
+                safeEntries.forEach((entry) => {
                     const line = [
                         sanitizeText(entry.description),
-                        categoryLabel,
+                        sanitizeText(entry.categoryLabel || '—'),
                         entry.type === 'payable' ? 'Pagar' : 'Receber',
                         formatCurrency(entry.value),
                         formatDateLabel(entry.dueDate) || '—',
@@ -1346,7 +1449,7 @@ module.exports = {
             const filters = buildFiltersFromQuery(req.query);
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const budgetOverviewPromise = financeReportingService.getBudgetSummaries(filters, {
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
                 includeCategoryConsumption: true,
                 entriesPromise
             });
@@ -1356,7 +1459,6 @@ module.exports = {
                 summaryPromise,
                 budgetOverviewPromise
             ]);
-
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
@@ -1417,14 +1519,14 @@ module.exports = {
             const worksheet = workbook.addWorksheet('Lançamentos');
             worksheet.columns = [
                 { header: 'Descrição', key: 'description', width: 40 },
-                { header: 'Categoria', key: 'category', width: 26 },
+                { header: 'Categoria', key: 'category', width: 24 },
                 { header: 'Tipo', key: 'type', width: 15 },
                 { header: 'Valor (R$)', key: 'value', width: 18 },
                 { header: 'Vencimento', key: 'dueDate', width: 18 },
                 { header: 'Status', key: 'status', width: 18 }
             ];
 
-            if (!entries.length) {
+            if (!safeEntries.length) {
                 worksheet.addRow({
                     description: 'Nenhum lançamento para o período selecionado',
                     category: '',
@@ -1434,10 +1536,10 @@ module.exports = {
                     status: ''
                 });
             } else {
-                entries.forEach((entry) => {
+                safeEntries.forEach((entry) => {
                     worksheet.addRow({
                         description: sanitizeText(entry.description),
-                        category: sanitizeText(entry?.category?.name || ''),
+                        category: sanitizeText(entry.categoryLabel || '—'),
                         type: entry.type === 'payable' ? 'Pagar' : 'Receber',
                         value: parseAmount(entry.value),
                         dueDate: formatDateLabel(entry.dueDate) || '',
