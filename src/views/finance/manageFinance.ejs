@@ -207,6 +207,35 @@
         label: statusStyle.label
     };
 }; %>
+<% const globalThresholdDefaults = {
+    overdueDays: 0,
+    spendingAlertPercent: 0,
+    netGoalFloor: 0
+}; %>
+<% const thresholdSource = (typeof financeThresholds !== 'undefined' && financeThresholds && typeof financeThresholds === 'object')
+    ? financeThresholds
+    : ((typeof ejsLocals.financeThresholds !== 'undefined' && ejsLocals.financeThresholds && typeof ejsLocals.financeThresholds === 'object')
+        ? ejsLocals.financeThresholds
+        : {});
+%>
+<% const normalizeThresholdNumber = (value, fallback) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+}; %>
+<% const globalThresholds = {
+    overdueDays: normalizeThresholdNumber(thresholdSource.overdueDays, globalThresholdDefaults.overdueDays),
+    spendingAlertPercent: normalizeThresholdNumber(thresholdSource.spendingAlertPercent, globalThresholdDefaults.spendingAlertPercent),
+    netGoalFloor: normalizeThresholdNumber(thresholdSource.netGoalFloor, globalThresholdDefaults.netGoalFloor)
+}; %>
+<% const thresholdsJson = JSON.stringify(globalThresholds); %>
+<% const thresholdsEndpoint = (typeof financeThresholdsEndpoint === 'string' && financeThresholdsEndpoint.trim())
+    ? financeThresholdsEndpoint.trim()
+    : '/finance/thresholds';
+%>
+<% const resolvedCsrfToken = (typeof csrfToken === 'string' && csrfToken)
+    ? csrfToken
+    : ((typeof ejsLocals.csrfToken === 'string' && ejsLocals.csrfToken) ? ejsLocals.csrfToken : '');
+%>
 <% const normalizedBudgetData = rawBudgetData.map((item) => {
     const statusStyle = resolveBudgetStatusStyle(item.status || item.statusMeta?.key || item.statusStyle?.key || 'healthy');
     const usage = Number.isFinite(Number(item.usage))
@@ -318,6 +347,144 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel" data-thresholds-container>
+            <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start align-items-xl-center gap-4">
+                <div>
+                    <h3 class="fw-semibold mb-1">Limites e alertas globais</h3>
+                    <p class="text-muted mb-0">Configure limites de atraso, consumo e objetivo mínimo para antecipar riscos financeiros.</p>
+                </div>
+                <div class="text-muted small">
+                    Ajuste os indicadores para alinhar alertas automáticos com a estratégia da empresa.
+                </div>
+            </div>
+
+            <form
+                action="<%= thresholdsEndpoint %>"
+                method="POST"
+                class="mt-4"
+                data-thresholds-form
+                data-endpoint="<%= thresholdsEndpoint %>"
+                data-method="PATCH"
+                data-initial-thresholds="<%= thresholdsJson %>"
+                novalidate
+            >
+                <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+
+                <div class="row g-4">
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Prazo máximo de atraso</h4>
+                                    <p class="text-muted small mb-0">Número de dias até que um lançamento seja considerado crítico.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-alarm" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-overdue-days">Dias até alerta</label>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-overdue-days"
+                                        name="overdueDays"
+                                        value="<%= globalThresholds.overdueDays %>"
+                                        min="0"
+                                        step="1"
+                                        required
+                                        data-threshold-input
+                                        data-threshold-field="overdueDays"
+                                    />
+                                    <span class="input-group-text">dias</span>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Alerta utilizado para destacar pendências com maior urgência.</p>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Alerta de consumo</h4>
+                                    <p class="text-muted small mb-0">Percentual que dispara avisos de gasto próximo do limite.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-graph-up" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-spending-percent">Percentual de alerta</label>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-spending-percent"
+                                        name="spendingAlertPercent"
+                                        value="<%= globalThresholds.spendingAlertPercent %>"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        required
+                                        data-percent-mask
+                                        data-threshold-input
+                                        data-threshold-field="spendingAlertPercent"
+                                    />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Permite visualizar categorias que ultrapassam o consumo planejado.</p>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Meta mínima de saldo</h4>
+                                    <p class="text-muted small mb-0">Valor mínimo de caixa projetado para manter a operação saudável.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-piggy-bank" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-net-goal-floor">Valor mínimo</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-net-goal-floor"
+                                        name="netGoalFloor"
+                                        value="<%= globalThresholds.netGoalFloor %>"
+                                        min="0"
+                                        step="0.01"
+                                        required
+                                        data-threshold-input
+                                        data-threshold-field="netGoalFloor"
+                                    />
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Utilizado para avisar quando o saldo projetado cair abaixo do limite.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="visually-hidden" data-thresholds-live aria-live="polite"></div>
+                <div class="alert alert-info border-0 shadow-sm d-none mt-4 mb-0" role="status" data-thresholds-feedback></div>
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <button type="reset" class="btn btn-outline-secondary btn-sm" data-thresholds-reset>Restaurar padrão</button>
+                    <button type="submit" class="btn btn-gradient btn-sm" data-thresholds-submit>Salvar limites</button>
+                </div>
+            </form>
         </div>
     </div>
 
