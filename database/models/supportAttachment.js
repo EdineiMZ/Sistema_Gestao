@@ -6,6 +6,10 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER,
             allowNull: false
         },
+        uploadedById: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         originalName: {
             type: DataTypes.STRING(255),
             allowNull: false
@@ -30,21 +34,27 @@ module.exports = (sequelize, DataTypes) => {
         tableName: 'supportAttachments',
         indexes: [
             {
-                name: 'supportAttachments_ticketId',
+                name: 'supportAttachments_ticketId_idx',
                 fields: ['ticketId']
             }
-
         ]
     });
 
     SupportAttachment.associate = (models) => {
-        const { SupportTicket, SupportMessage } = models;
+        const { SupportTicket, SupportMessage, User } = models;
 
         if (SupportTicket) {
             SupportAttachment.belongsTo(SupportTicket, {
                 as: 'ticket',
                 foreignKey: 'ticketId',
                 onDelete: 'CASCADE'
+            });
+        }
+
+        if (User) {
+            SupportAttachment.belongsTo(User, {
+                as: 'uploader',
+                foreignKey: 'uploadedById'
             });
         }
 
