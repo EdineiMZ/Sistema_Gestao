@@ -692,7 +692,8 @@ module.exports = {
                 throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
             }
 
-            const preview = await buildImportPreview(parseResult.entries);
+            const currentUserId = req.user?.id ?? req.session?.user?.id ?? null;
+            const preview = await buildImportPreview(parseResult.entries, { ownerId: currentUserId });
             const payload = {
                 fileName: req.file.originalname,
                 uploadedAt: new Date().toISOString(),
@@ -733,11 +734,14 @@ module.exports = {
                 throw new Error('Nenhum lançamento selecionado para importação.');
             }
 
+            const currentUserId = req.user?.id ?? req.session?.user?.id ?? null;
+            const categoryResolver = await financeImportService.createFinanceCategoryResolver({ ownerId: currentUserId });
+
             const preparedEntries = [];
             const skippedEntries = [];
             const invalidEntries = [];
 
-            entriesArray.forEach((entry) => {
+            for (const entry of entriesArray) {
                 const includeFlag = entry.include ?? entry.selected ?? entry.import ?? entry.shouldImport;
                 const shouldImport = includeFlag === true
                     || includeFlag === 'true'
@@ -746,16 +750,16 @@ module.exports = {
 
                 if (!shouldImport) {
                     skippedEntries.push(entry);
-                    return;
+                    continue;
                 }
 
                 try {
-                    const prepared = financeImportService.prepareEntryForPersistence(entry);
+                    const prepared = await financeImportService.prepareEntryForPersistence(entry, { categoryResolver });
                     preparedEntries.push(prepared);
                 } catch (error) {
                     invalidEntries.push({ entry, message: error.message });
                 }
-            });
+            }
 
             if (!preparedEntries.length) {
                 const baseMessage = invalidEntries.length
