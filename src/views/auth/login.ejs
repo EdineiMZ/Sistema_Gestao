@@ -52,6 +52,24 @@
                         <div class="invalid-feedback">A senha deve conter pelo menos 6 caracteres.</div>
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label for="twoFactorCode" class="form-label">Código de verificação (2FA)</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="twoFactorCode"
+                            id="twoFactorCode"
+                            placeholder="Ex.: ZX81AB"
+                            pattern="[A-Za-z0-9]{6,32}"
+                            inputmode="latin"
+                            autocomplete="one-time-code"
+                        />
+                        <div class="invalid-feedback">Use um código alfanumérico entre 6 e 32 caracteres.</div>
+                    </div>
+                    <div class="form-text">Obrigatório apenas para contas com autenticação em duas etapas ativa.</div>
+                </div>
                 <button type="submit" class="btn btn-gradient w-100">Entrar com segurança</button>
             </form>
 

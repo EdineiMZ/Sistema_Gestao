@@ -36,6 +36,17 @@ const parsePositiveInt = (value, fallback) => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const ARGON2_HASH_OPTIONS = {
+    type: argon2.argon2id,
+    timeCost: parsePositiveInt(process.env.ARGON2_TIME_COST, 3),
+    memoryCost: parsePositiveInt(process.env.ARGON2_MEMORY_COST, 2 ** 16),
+    parallelism: parsePositiveInt(process.env.ARGON2_PARALLELISM, 1)
+};
+
+const normalizeTwoFactorCode = (value = '') => String(value).replace(/\s+/g, '').toUpperCase();
+
+const isValidTwoFactorCode = (value) => /^[A-Z0-9]{6,32}$/.test(value);
+
 const resolveVerificationTtlMs = () => {
     const configuredHours = parsePositiveInt(
         process.env.EMAIL_VERIFICATION_TTL_HOURS,
@@ -204,7 +215,7 @@ module.exports = {
     // Lida com o POST de login
     login: async (req, res) => {
         try {
-            const { email, password } = req.body;
+            const { email, password, twoFactorCode } = req.body;
             if (!email) {
                 req.flash('error_msg', 'E-mail é obrigatório para login.');
                 return res.redirect('/login');
@@ -263,6 +274,32 @@ module.exports = {
                 return res.redirect('/login');
             }
 
+            if (user.twoFactorEnabled) {
+                const normalizedCode = normalizeTwoFactorCode(twoFactorCode);
+
+                if (!normalizedCode) {
+                    req.flash('error_msg', 'Informe o código de verificação para concluir o login.');
+                    return res.redirect('/login');
+                }
+
+                if (!isValidTwoFactorCode(normalizedCode)) {
+                    req.flash('error_msg', 'O código de verificação deve conter entre 6 e 32 caracteres alfanuméricos.');
+                    return res.redirect('/login');
+                }
+
+                if (!user.twoFactorCodeHash) {
+                    console.error('Usuário com 2FA habilitado está sem hash configurado.');
+                    req.flash('error_msg', 'Não foi possível validar o código de verificação. Contacte o suporte.');
+                    return res.redirect('/login');
+                }
+
+                const isTwoFactorValid = await argon2.verify(user.twoFactorCodeHash, normalizedCode);
+                if (!isTwoFactorValid) {
+                    req.flash('error_msg', 'Código de verificação inválido.');
+                    return res.redirect('/login');
+                }
+            }
+
             req.session.user = {
                 id: user.id,
                 name: user.name,
@@ -287,7 +324,35 @@ module.exports = {
     // Lida com o POST de registro
     register: async (req, res) => {
         try {
-            const { name, email, password, phone, address, dateOfBirth } = req.body;
+            const {
+                name,
+                email,
+                password,
+                phone,
+                address,
+                dateOfBirth,
+                twoFactorEnabled: rawTwoFactorEnabled,
+                twoFactorCode
+            } = req.body;
+
+            const wantsTwoFactor = ['on', 'true', '1', 'yes'].includes(
+                String(rawTwoFactorEnabled || '').toLowerCase()
+            );
+            const normalizedTwoFactorCode = wantsTwoFactor
+                ? normalizeTwoFactorCode(twoFactorCode)
+                : '';
+
+            if (wantsTwoFactor) {
+                if (!normalizedTwoFactorCode) {
+                    req.flash('error_msg', 'Informe um código de verificação para habilitar o 2FA.');
+                    return res.redirect('/register');
+                }
+
+                if (!isValidTwoFactorCode(normalizedTwoFactorCode)) {
+                    req.flash('error_msg', 'O código de 2FA deve conter entre 6 e 32 caracteres alfanuméricos.');
+                    return res.redirect('/register');
+                }
+            }
 
             if (!email) {
                 req.flash('error_msg', 'E-mail é obrigatório.');
@@ -319,6 +384,11 @@ module.exports = {
             const { token, hash, expiresAt } = createEmailVerificationToken();
 
             try {
+                let twoFactorCodeHash = null;
+                if (wantsTwoFactor) {
+                    twoFactorCodeHash = await argon2.hash(normalizedTwoFactorCode, ARGON2_HASH_OPTIONS);
+                }
+
                 const createdUser = await User.create({
                     name,
                     email,
@@ -330,7 +400,9 @@ module.exports = {
                     profileImage: profileBuffer,
                     emailVerificationTokenHash: hash,
                     emailVerificationTokenExpiresAt: expiresAt,
-                    emailVerifiedAt: null
+                    emailVerifiedAt: null,
+                    twoFactorEnabled: wantsTwoFactor,
+                    twoFactorCodeHash
                 });
 
                 try {

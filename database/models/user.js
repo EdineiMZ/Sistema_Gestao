@@ -153,9 +153,31 @@ module.exports = (sequelize, DataTypes) => {
         emailVerificationTokenExpiresAt: {
             type: DataTypes.DATE,
             allowNull: true
+        },
+        twoFactorEnabled: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        twoFactorCodeHash: {
+            type: DataTypes.STRING(128),
+            allowNull: true,
+            validate: {
+                len: {
+                    args: [10, 128],
+                    msg: 'Hash do código de 2FA inválido.'
+                }
+            }
         }
     }, {
         tableName: 'Users',
+        validate: {
+            ensureTwoFactorConsistency() {
+                if (this.twoFactorEnabled && !this.twoFactorCodeHash) {
+                    throw new Error('Usuários com 2FA habilitado precisam de um código configurado.');
+                }
+            }
+        },
         hooks: {
             beforeCreate: async (user) => {
                 await hashPassword(user);
