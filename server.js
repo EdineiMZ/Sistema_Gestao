@@ -52,7 +52,38 @@ const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'segredo';
 
 // Segurança
-app.use(helmet());
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: [
+                    "'self'",
+                    "'unsafe-inline'",
+                    'https://cdn.jsdelivr.net'
+                ],
+                styleSrc: [
+                    "'self'",
+                    "'unsafe-inline'",
+                    'https://fonts.googleapis.com',
+                    'https://cdn.jsdelivr.net'
+                ],
+                fontSrc: [
+                    "'self'",
+                    'https://fonts.gstatic.com',
+                    'https://cdn.jsdelivr.net',
+                    'data:'
+                ],
+                imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+                connectSrc: ["'self'"],
+                frameAncestors: ["'self'"],
+                objectSrc: ["'none'"],
+                baseUri: ["'self'"],
+                formAction: ["'self'"]
+            }
+        }
+    })
+);
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15min
     max: 100,
