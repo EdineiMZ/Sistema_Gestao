@@ -1,20 +1,83 @@
 'use strict';
 
-const TABLE_NAME = 'supportMessages';
+const DEFAULT_TABLE_NAME = 'supportMessages';
+const MESSAGE_TABLE_CANDIDATES = Object.freeze(['supportMessages', 'SupportMessages']);
+const TICKET_TABLE_CANDIDATES = Object.freeze(['supportTickets', 'SupportTickets']);
+const MESSAGE_TICKET_INDEX = 'supportMessages_ticketId_createdAt';
+const MESSAGE_SENDER_INDEX = 'supportMessages_senderId_idx';
+const MESSAGE_ATTACHMENT_INDEX = 'supportMessages_attachmentId_idx';
+
+const isTableMissingError = (error) => {
+    const driverCode = error?.original?.code;
+    const message = error?.message ?? '';
+
+    return driverCode === 'ER_NO_SUCH_TABLE' ||
+        driverCode === 'SQLITE_ERROR' ||
+        /does not exist/i.test(message) ||
+        /no such table/i.test(message) ||
+        /unknown table/i.test(message);
+};
+
+const tableExists = async (queryInterface, tableName) => {
+    try {
+        await queryInterface.describeTable(tableName);
+        return true;
+    } catch (error) {
+        if (isTableMissingError(error)) {
+            return false;
+        }
+
+        throw error;
+    }
+};
+
+const resolveExistingTableName = async (queryInterface, candidates) => {
+    for (const name of candidates) {
+        if (await tableExists(queryInterface, name)) {
+            return name;
+        }
+    }
+
+    return null;
+};
+
+const getIndexNames = async (queryInterface, tableName) => {
+    try {
+        const indexes = await queryInterface.showIndex(tableName);
+        return indexes.map((index) => index.name);
+    } catch (error) {
+        if (isTableMissingError(error)) {
+            return [];
+        }
+
+        throw error;
+    }
+};
 
 module.exports = {
     up: async (queryInterface, Sequelize) => {
-        await queryInterface.createTable(TABLE_NAME, {
-            id: {
-                type: Sequelize.INTEGER,
-                primaryKey: true,
-                autoIncrement: true
-            },
-            ticketId: {
-                type: Sequelize.INTEGER,
-                allowNull: false,
-                references: {
-                    model: 'supportTickets',
+        const ticketTableName = await resolveExistingTableName(
+            queryInterface,
+            TICKET_TABLE_CANDIDATES
+        ) ?? TICKET_TABLE_CANDIDATES[0];
+
+        const targetTableName = await resolveExistingTableName(
+            queryInterface,
+            MESSAGE_TABLE_CANDIDATES
+        ) ?? DEFAULT_TABLE_NAME;
+
+        if (!(await tableExists(queryInterface, targetTableName))) {
+            await queryInterface.createTable(targetTableName, {
+                id: {
+                    type: Sequelize.INTEGER,
+                    primaryKey: true,
+                    autoIncrement: true
+                },
+                ticketId: {
+                    type: Sequelize.INTEGER,
+                    allowNull: false,
+                    references: {
+                    model: ticketTableName,
                     key: 'id'
                 },
                 onUpdate: 'CASCADE',
@@ -58,27 +121,67 @@ module.exports = {
                 defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
             }
         });
+        }
 
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'supportMessages_ticketId_createdAt',
-            fields: ['ticketId', 'createdAt']
-        });
+        const existingIndexes = await getIndexNames(queryInterface, targetTableName);
 
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'supportMessages_senderId_idx',
-            fields: ['senderId']
-        });
+        if (!existingIndexes.includes(MESSAGE_TICKET_INDEX)) {
+            await queryInterface.addIndex(targetTableName, {
+                name: MESSAGE_TICKET_INDEX,
+                fields: ['ticketId', 'createdAt']
+            });
+        }
 
-        await queryInterface.addIndex(TABLE_NAME, {
-            name: 'supportMessages_attachmentId_idx',
-            fields: ['attachmentId']
-        });
+        if (!existingIndexes.includes(MESSAGE_SENDER_INDEX)) {
+            await queryInterface.addIndex(targetTableName, {
+                name: MESSAGE_SENDER_INDEX,
+                fields: ['senderId']
+            });
+        }
+
+        if (!existingIndexes.includes(MESSAGE_ATTACHMENT_INDEX)) {
+            await queryInterface.addIndex(targetTableName, {
+                name: MESSAGE_ATTACHMENT_INDEX,
+                fields: ['attachmentId']
+            });
+        }
     },
 
     down: async (queryInterface) => {
-        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_attachmentId_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_senderId_idx');
-        await queryInterface.removeIndex(TABLE_NAME, 'supportMessages_ticketId_createdAt');
-        await queryInterface.dropTable(TABLE_NAME);
+        const targetTableName = await resolveExistingTableName(
+            queryInterface,
+            MESSAGE_TABLE_CANDIDATES
+        );
+
+        if (!targetTableName) {
+            return;
+        }
+
+        const existingIndexes = await getIndexNames(queryInterface, targetTableName);
+
+        if (existingIndexes.includes(MESSAGE_ATTACHMENT_INDEX)) {
+            await queryInterface.removeIndex(
+                targetTableName,
+                MESSAGE_ATTACHMENT_INDEX
+            );
+        }
+
+        if (existingIndexes.includes(MESSAGE_SENDER_INDEX)) {
+            await queryInterface.removeIndex(
+                targetTableName,
+                MESSAGE_SENDER_INDEX
+            );
+        }
+
+        if (existingIndexes.includes(MESSAGE_TICKET_INDEX)) {
+            await queryInterface.removeIndex(
+                targetTableName,
+                MESSAGE_TICKET_INDEX
+            );
+        }
+
+        if (await tableExists(queryInterface, targetTableName)) {
+            await queryInterface.dropTable(targetTableName);
+        }
     }
 };
