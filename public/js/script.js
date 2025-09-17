@@ -1,5 +1,4 @@
 (function () {
-    const loader = document.getElementById('appLoader');
     const THEME_STORAGE_KEY = 'app-theme';
     const themeRoot = document.getElementById('appShell');
     const themeToggle = document.getElementById('themeToggle');
@@ -97,52 +96,6 @@
         } else if (typeof prefersDark.addListener === 'function') {
             prefersDark.addListener(handleSystemPreference);
         }
-    }
-
-    const hideLoader = () => {
-        if (!loader || loader.classList.contains('is-hidden')) {
-            return;
-        }
-
-        loader.classList.add('is-hidden');
-        loader.setAttribute('aria-hidden', 'true');
-
-        const removeOnTransitionEnd = () => {
-            loader.removeEventListener('transitionend', removeOnTransitionEnd);
-            if (loader.parentElement) {
-                loader.parentElement.removeChild(loader);
-            }
-        };
-
-        loader.addEventListener('transitionend', removeOnTransitionEnd);
-    };
-
-    if (loader) {
-        let loaderTimeoutId = window.setTimeout(hideLoader, 1500);
-
-        const requestHideLoader = () => {
-            if (loaderTimeoutId) {
-                window.clearTimeout(loaderTimeoutId);
-                loaderTimeoutId = null;
-            }
-            window.setTimeout(hideLoader, 60);
-        };
-
-        document.addEventListener(
-            'DOMContentLoaded',
-            () => {
-                requestHideLoader();
-            },
-            { once: true }
-        );
-
-        window.addEventListener(
-            'load',
-            () => {
-                requestHideLoader();
-            },
-            { once: true }
-        );
     }
 
     document.addEventListener('DOMContentLoaded', () => {
