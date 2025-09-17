@@ -1079,8 +1079,7 @@ module.exports = {
                 dueDate,
                 financeCategoryId,
                 recurring: (recurring === 'true'),
-                recurringInterval: normalizeRecurringInterval(recurringInterval),
-                financeCategoryId: finalCategoryId
+                recurringInterval: normalizeRecurringInterval(recurringInterval)
             };
 
             let entry;
@@ -1161,7 +1160,6 @@ module.exports = {
             entry.financeCategoryId = financeCategoryId;
             entry.recurring = (recurring === 'true');
             entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
-            entry.financeCategoryId = finalCategoryId;
 
             if (transaction) {
                 await entry.save({ transaction });
