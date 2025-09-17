@@ -16,6 +16,19 @@ const manageUsersValidation = createFilterValidation({
     redirectTo: '/users/manage'
 });
 
+router.get(
+    '/profile',
+    authMiddleware,
+    userController.showProfile
+);
+
+router.post(
+    '/profile',
+    authMiddleware,
+    audit('user.profile.update', (req) => `User:${req.user?.id || 'unknown'}`),
+    userController.updateProfile
+);
+
 // Todas as rotas de gerenciamento de usuários requerem login e perfil de administrador
 router.get(
     '/manage',

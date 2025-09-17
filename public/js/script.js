@@ -174,12 +174,42 @@
         const userMenuToggle = document.getElementById('userMenu');
         const userMenuDropdown = document.getElementById('userMenuDropdown');
         if (userMenuToggle && userMenuDropdown) {
+            const getDropdownInstance = () => {
+                if (!window.bootstrap || !window.bootstrap.Dropdown) {
+                    return null;
+                }
+
+                return window.bootstrap.Dropdown.getOrCreateInstance(userMenuToggle);
+            };
+
             userMenuToggle.addEventListener('shown.bs.dropdown', () => {
-                const focusTarget = userMenuDropdown.querySelector('[data-user-menu-focus]');
+                const focusTarget = userMenuDropdown.querySelector(
+                    'a.dropdown-item, button.dropdown-item, [tabindex]:not([tabindex="-1"])'
+                );
                 if (focusTarget && typeof focusTarget.focus === 'function') {
                     focusTarget.focus();
                 }
             });
+
+            const dropdownClosableLinks = userMenuDropdown.querySelectorAll('[data-nav-close]');
+            if (dropdownClosableLinks.length) {
+                const hideDropdown = () => {
+                    const instance = getDropdownInstance();
+                    if (instance) {
+                        instance.hide();
+                    }
+                };
+
+                dropdownClosableLinks.forEach((link) => {
+                    const scheduleHide = () => window.setTimeout(hideDropdown, 120);
+                    link.addEventListener('click', scheduleHide);
+                    link.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            scheduleHide();
+                        }
+                    });
+                });
+            }
         }
     });
 })();

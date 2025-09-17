@@ -58,14 +58,62 @@
         })
         : [];
 
-    const computedMenuItems = fallbackShortcuts.filter((item) => Array.isArray(item.groups) && item.groups.includes('menu'));
-    const computedQuickActions = fallbackShortcuts.filter((item) => Array.isArray(item.groups) && item.groups.includes('quick'));
+    const normalizeNavItem = (item) => {
+        if (!item || typeof item !== 'object') {
+            return null;
+        }
 
-    const providedMenuItems = typeof userMenuItems !== 'undefined' ? userMenuItems : null;
-    const providedQuickActions = typeof quickActions !== 'undefined' ? quickActions : null;
+        const normalizedRoute = typeof item.route === 'string' ? item.route : '#';
 
-    const navMenuItems = Array.isArray(providedMenuItems) ? providedMenuItems : computedMenuItems;
-    const navQuickActions = Array.isArray(providedQuickActions) ? providedQuickActions : computedQuickActions;
+        return {
+            route: normalizedRoute,
+            label: typeof item.label === 'string' ? item.label : '',
+            icon: typeof item.icon === 'string' ? item.icon : 'bi-circle'
+        };
+    };
+
+    const dedupeByRoute = (items) => {
+        const seenRoutes = new Set();
+
+        return items.filter((item) => {
+            if (!item || typeof item.route !== 'string') {
+                return false;
+            }
+
+            if (seenRoutes.has(item.route)) {
+                return false;
+            }
+
+            seenRoutes.add(item.route);
+            return true;
+        });
+    };
+
+    const computedMenuItems = fallbackShortcuts
+        .filter((item) => Array.isArray(item.groups) && item.groups.includes('menu'))
+        .map(normalizeNavItem)
+        .filter(Boolean);
+
+    const computedQuickActions = fallbackShortcuts
+        .filter((item) => Array.isArray(item.groups) && item.groups.includes('quick'))
+        .map(normalizeNavItem)
+        .filter(Boolean);
+
+    const providedMenuItems =
+        typeof userMenuItems !== 'undefined' && Array.isArray(userMenuItems)
+            ? userMenuItems.map(normalizeNavItem).filter(Boolean)
+            : null;
+
+    const providedQuickActions =
+        typeof quickActions !== 'undefined' && Array.isArray(quickActions)
+            ? quickActions.map(normalizeNavItem).filter(Boolean)
+            : null;
+
+    const navQuickActions = dedupeByRoute(providedQuickActions || computedQuickActions);
+    const quickActionRoutes = new Set(navQuickActions.map((item) => item.route));
+    const navMenuItems = dedupeByRoute(
+        (providedMenuItems || computedMenuItems).filter((item) => !quickActionRoutes.has(item.route))
+    );
 %>
 
 <div id="appLoader" class="app-loader d-flex align-items-center justify-content-center">
@@ -119,36 +167,6 @@
                         </a>
                     </li>
                 <% } else { %>
-                    <% if (navQuickActions.length) { %>
-                        <% navQuickActions.forEach((item) => { %>
-                            <li class="nav-item d-none d-lg-flex">
-                                <a
-                                    class="nav-link nav-quick-action d-flex align-items-center gap-2"
-                                    href="<%= item.route %>"
-                                    data-nav-close="true"
-                                >
-                                    <i class="bi <%= item.icon %>"></i>
-                                    <span><%= item.label %></span>
-                                </a>
-                            </li>
-                        <% }); %>
-                    <% } %>
-
-                    <% if (navMenuItems.length) { %>
-                        <% navMenuItems.forEach((item) => { %>
-                            <li class="nav-item d-lg-none">
-                                <a
-                                    class="nav-link nav-collapsible-link d-flex align-items-center gap-2"
-                                    href="<%= item.route %>"
-                                    data-nav-close="true"
-                                >
-                                    <i class="bi <%= item.icon %>"></i>
-                                    <span><%= item.label %></span>
-                                </a>
-                            </li>
-                        <% }); %>
-                    <% } %>
-
                     <li class="nav-item dropdown user-menu-item">
                         <a
                             class="nav-link dropdown-toggle d-flex align-items-center"
@@ -179,11 +197,11 @@
                                 </small>
                             </div>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <ul id="userMenuDropdown" class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userMenu">
                             <li><span class="dropdown-item-text text-muted">Bem-vindo(a)!</span></li>
                             <li><hr class="dropdown-divider" /></li>
                             <% if (navQuickActions.length) { %>
-                                <li class="dropdown-header text-muted text-uppercase small">Acesso rápido</li>
+                                <li class="dropdown-header text-muted text-uppercase small">Atalhos rápidos</li>
                                 <% navQuickActions.forEach((item) => { %>
                                     <li>
                                         <a
@@ -199,7 +217,7 @@
                                 <li><hr class="dropdown-divider" /></li>
                             <% } %>
                             <% if (navMenuItems.length) { %>
-                                <li class="dropdown-header text-muted text-uppercase small">Navegação</li>
+                                <li class="dropdown-header text-muted text-uppercase small">Navegação principal</li>
                                 <% navMenuItems.forEach((item) => { %>
                                     <li>
                                         <a
@@ -214,6 +232,16 @@
                                 <% }); %>
                                 <li><hr class="dropdown-divider" /></li>
                             <% } %>
+                            <li>
+                                <a
+                                    class="dropdown-item user-menu-link d-flex align-items-center gap-2"
+                                    href="/users/profile"
+                                    data-nav-close="true"
+                                >
+                                    <i class="bi bi-person-circle me-2"></i>
+                                    <span>Perfil</span>
+                                </a>
+                            </li>
                             <li>
                                 <a
                                     class="dropdown-item user-menu-link d-flex align-items-center gap-2"

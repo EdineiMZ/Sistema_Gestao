@@ -6,7 +6,13 @@ const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const fileStorageService = require('../services/fileStorageService');
 
-const { utils: reportingUtils } = financeReportingService;
+const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
+const { FINANCE_TYPES, FINANCE_STATUSES } = financeConstants;
+
+const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
+    value: interval.value,
+    label: interval.label
+}));
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -57,6 +63,15 @@ const formatPeriodLabel = (filters = {}) => {
     return 'Todo o período';
 };
 
+const normalizeFilterValue = (value) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed ? trimmed.toLowerCase() : null;
+};
+
 const buildFiltersFromQuery = (query = {}) => {
     const filters = {};
 
@@ -66,6 +81,16 @@ const buildFiltersFromQuery = (query = {}) => {
 
     if (reportingUtils.isValidISODate(query.endDate)) {
         filters.endDate = query.endDate;
+    }
+
+    const typeFilter = normalizeFilterValue(query.type);
+    if (typeFilter && FINANCE_TYPES.includes(typeFilter)) {
+        filters.type = typeFilter;
+    }
+
+    const statusFilter = normalizeFilterValue(query.status);
+    if (statusFilter && FINANCE_STATUSES.includes(statusFilter)) {
+        filters.status = statusFilter;
     }
 
     return filters;
@@ -87,9 +112,23 @@ const buildEntriesQueryOptions = (filters = {}) => {
         ]
     };
 
+    const where = {};
+
     const dateFilter = reportingUtils.buildDateFilter(filters);
     if (dateFilter) {
-        options.where = { dueDate: dateFilter };
+        where.dueDate = dateFilter;
+    }
+
+    if (filters.type && FINANCE_TYPES.includes(filters.type)) {
+        where.type = filters.type;
+    }
+
+    if (filters.status && FINANCE_STATUSES.includes(filters.status)) {
+        where.status = filters.status;
+    }
+
+    if (Object.keys(where).length > 0) {
+        options.where = where;
     }
 
     return options;
@@ -165,7 +204,8 @@ module.exports = {
                 periodLabel: formatPeriodLabel(filters),
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
-                financeTotals: summary.totals
+                financeTotals: summary.totals,
+                recurringIntervalOptions
             });
         } catch (err) {
             console.error(err);
@@ -195,7 +235,6 @@ module.exports = {
             storedKeys = await persistAttachments(entry.id, req.files, transaction);
 
             await transaction.commit();
-
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
         } catch (err) {
@@ -240,7 +279,7 @@ module.exports = {
             entry.paymentDate = paymentDate || null;
             entry.status = status;
             entry.recurring = (recurring === 'true');
-            entry.recurringInterval = recurringInterval || null;
+            entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
             await entry.save({ transaction });
 
