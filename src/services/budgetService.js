@@ -6,7 +6,6 @@ const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
 const listCache = new Map();
-
 const clearCache = () => {
     listCache.clear();
 };
@@ -43,7 +42,6 @@ const normalizeNumber = (value) => {
         const parsed = Number.parseFloat(sanitized);
         return Number.isFinite(parsed) ? parsed : null;
     }
-
     const parsed = Number.parseFloat(String(value));
     return Number.isFinite(parsed) ? parsed : null;
 };
@@ -292,6 +290,7 @@ const saveBudget = async ({ id, ...data } = {}, options = {}) => {
     }
 
     return createBudget(data, options);
+
 };
 
 const deleteBudget = async ({ id, userId }, options = {}) => {
@@ -301,7 +300,6 @@ const deleteBudget = async ({ id, userId }, options = {}) => {
         error.code = 'BUDGET_NOT_FOUND';
         throw error;
     }
-
     if (typeof budget.destroy === 'function') {
         await budget.destroy({ transaction: options.transaction });
     }
