@@ -2,6 +2,7 @@
 const { Appointment, User, Room, Procedure } = require('../../database/models');
 const { Op } = require('sequelize');
 const { buildQueryFilters } = require('../utils/queryBuilder');
+const { generateRandomHexColor } = require('../utils/color');
 const { USER_ROLES } = require('../constants/roles');
 
 const PROFESSIONAL_ROLES = [
@@ -334,7 +335,7 @@ module.exports = {
                     title: app.description || 'Agendamento',
                     start: app.start,
                     end: app.end,
-                    backgroundColor: '#'+Math.floor(Math.random()*16777215).toString(16),
+                    backgroundColor: generateRandomHexColor(),
                     extendedProps: {
                         profissional: app.professional ? app.professional.name : '',
                         paymentConfirmed: app.paymentConfirmed
