@@ -1,6 +1,5 @@
 const { Budget } = require('../../database/models');
 const financeReportingService = require('./financeReportingService');
-
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -163,7 +162,6 @@ const fallbackNormalizeThresholdList = (list) => {
             return Number(numeric.toFixed(4));
         })
         .filter((item) => item !== null);
-
     const unique = Array.from(new Set(normalized));
     unique.sort((a, b) => a - b);
     return unique;
@@ -432,6 +430,9 @@ const deleteBudget = async ({ id, userId } = {}, options = {}) => {
         error.code = 'BUDGET_NOT_FOUND';
         throw error;
     }
+    if (typeof budget.destroy === 'function') {
+        await budget.destroy({ transaction: options.transaction });
+    }
 
     await budget.destroy({ transaction: options?.transaction });
     clearCache();
@@ -528,6 +529,9 @@ const __testing = {
 
 module.exports = {
     listBudgets,
+    createBudget,
+    updateBudget,
+    getBudgetConsumptionSummary,
     saveBudget,
     createBudget,
     updateBudget,
