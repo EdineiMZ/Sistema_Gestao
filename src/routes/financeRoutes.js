@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const financeController = require('../controllers/financeController');
+const budgetController = require('../controllers/budgetController');
+const { Budget } = require('../../database/models');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
@@ -46,6 +48,161 @@ router.delete(
     permissionMiddleware(USER_ROLES.ADMIN),
     audit('financeEntry.delete', (req) => `FinanceEntry:${req.params.id}`),
     financeController.deleteFinanceEntry
+);
+
+const adaptBudgetJsonResponse = (handler, { prepare } = {}) => async (req, res, next) => {
+    const originalJson = res.json.bind(res);
+
+    res.json = (payload) => {
+        if (payload && typeof payload === 'object') {
+            if (payload.success === true && Object.prototype.hasOwnProperty.call(payload, 'data')) {
+                return originalJson(payload.data);
+            }
+
+            if (payload.success === false && payload.message) {
+                const errorResponse = { message: payload.message };
+                if (payload.details) {
+                    errorResponse.details = payload.details;
+                }
+                return originalJson(errorResponse);
+            }
+        }
+
+        return originalJson(payload);
+    };
+
+    try {
+        if (typeof prepare === 'function') {
+            await prepare(req);
+        }
+        await handler(req, res, next);
+    } catch (error) {
+        if (error && error.__budgetValidation === true) {
+            const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 400;
+            res.status(statusCode).json({ message: error.message });
+            return;
+        }
+        throw error;
+    } finally {
+        res.json = originalJson;
+    }
+};
+
+const normalizeThresholdArray = (value) => {
+    if (Array.isArray(value)) {
+        return value;
+    }
+
+    if (value === undefined || value === null) {
+        return [];
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return [];
+        }
+        return trimmed
+            .split(/[;,\s]+/)
+            .map((item) => item.trim())
+            .filter((item) => item.length);
+    }
+
+    return [value];
+};
+
+const ensureValidBudgetThresholds = (req, { required } = {}) => {
+    const list = normalizeThresholdArray(req.body?.thresholds);
+    const numeric = list
+        .map((item) => {
+            const value = Number.parseFloat(item);
+            return Number.isFinite(value) ? Number(value.toFixed(4)) : null;
+        })
+        .filter((item) => item !== null);
+
+    if (!numeric.length) {
+        if (required || (req.body && Object.prototype.hasOwnProperty.call(req.body, 'thresholds'))) {
+            const error = new Error('Informe ao menos um limite de alerta entre 0 e 1.');
+            error.__budgetValidation = true;
+            error.statusCode = 400;
+            throw error;
+        }
+        return;
+    }
+
+    const invalid = numeric.find((value) => value <= 0 || value >= 1);
+    if (invalid !== undefined) {
+        const error = new Error('Cada limite de alerta deve estar entre 0 e 1.');
+        error.__budgetValidation = true;
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const unique = Array.from(new Set(numeric));
+    unique.sort((a, b) => a - b);
+
+    if (!req.body || typeof req.body !== 'object') {
+        req.body = {};
+    }
+    req.body.thresholds = unique;
+};
+
+router.post(
+    '/budgets',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeBudget.save', (req) => {
+        const categoryId = req.body?.financeCategoryId || 'new';
+        return `FinanceBudget:${categoryId}`;
+    }),
+    adaptBudgetJsonResponse(budgetController.save, {
+        prepare: (req) => {
+            ensureValidBudgetThresholds(req, { required: true });
+        }
+    })
+);
+
+router.put(
+    '/budgets/:id',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeBudget.save', (req) => `FinanceBudget:${req.params.id}`),
+    adaptBudgetJsonResponse(budgetController.save, {
+        prepare: async (req) => {
+            if (!req.body || typeof req.body !== 'object') {
+                req.body = {};
+            }
+            req.body.id = req.params.id;
+
+            const budgetId = Number.parseInt(req.params?.id, 10);
+            if (Number.isInteger(budgetId) && budgetId > 0) {
+                const existing = await Budget.findByPk(budgetId);
+                if (existing && req.body.financeCategoryId === undefined) {
+                    req.body.financeCategoryId = existing.financeCategoryId;
+                }
+            }
+
+            ensureValidBudgetThresholds(req, { required: false });
+        }
+    })
+);
+
+router.delete(
+    '/budgets/:id',
+    authMiddleware,
+    permissionMiddleware(USER_ROLES.ADMIN),
+    audit('financeBudget.delete', (req) => `FinanceBudget:${req.params.id}`),
+    adaptBudgetJsonResponse(budgetController.delete, {
+        prepare: (req) => {
+            if (!req.params) {
+                req.params = {};
+            }
+            if (!req.body || typeof req.body !== 'object') {
+                req.body = {};
+            }
+            req.body.id = req.params.id;
+        }
+    })
 );
 
 router.patch(
