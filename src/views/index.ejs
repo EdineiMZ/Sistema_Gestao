@@ -1,12 +1,5 @@
 <%- include('partials/header') %>
 
-<% if (!user) { %>
-    <div class="landing-cta-floating d-none d-md-flex">
-        <a href="/login" class="btn btn-outline-light shadow-sm">Entrar</a>
-        <a href="/register" class="btn btn-gradient shadow-sm">Criar conta</a>
-    </div>
-<% } %>
-
 <% if (success_msg) { %>
     <div class="alert alert-success alert-auto hero-alert" role="alert" data-auto-dismiss="6000">
         <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
