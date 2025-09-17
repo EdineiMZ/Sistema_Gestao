@@ -19,7 +19,26 @@ jest.mock('../../../database/models', () => {
                 return entry;
             }),
             findByPk: jest.fn(async (id) => {
-                return messages.find((message) => message.id === id) || null;
+                const message = messages.find((item) => item.id === id);
+                if (!message) {
+                    return null;
+                }
+
+                return {
+                    ...message,
+                    attachment: null,
+                    sender: null,
+                    get(options) {
+                        if (options?.plain) {
+                            return {
+                                ...this,
+                                attachment: this.attachment,
+                                sender: this.sender
+                            };
+                        }
+                        return this;
+                    }
+                };
             })
         },
         SupportAttachment: {
@@ -90,10 +109,11 @@ describe('Support chat socket handshake', () => {
                 id: 1,
                 ticketId: TEST_TICKET.id,
                 senderId: TEST_TICKET.userId,
-                senderRole: 'client',
-                messageType: 'text',
-                content: 'Mensagem inicial',
+                body: 'Mensagem inicial',
+                isFromAgent: false,
+                isSystem: false,
                 attachment: null,
+                sender: null,
                 createdAt: new Date()
             }
         ]);
@@ -207,8 +227,7 @@ describe('Support chat socket handshake', () => {
         const messageAck = await new Promise((resolve) => {
             client.emit('support:message', {
                 ticketId: TEST_TICKET.id,
-                content: 'Podem me ajudar?',
-                messageType: 'text'
+                body: 'Podem me ajudar?'
             }, resolve);
         });
 
@@ -216,8 +235,9 @@ describe('Support chat socket handshake', () => {
         expect(models.SupportMessage.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 ticketId: TEST_TICKET.id,
-                senderRole: 'client',
-                content: expect.any(String)
+                body: expect.stringContaining('Podem me ajudar?'),
+                isFromAgent: false,
+                isSystem: false
             }),
             { transaction: undefined }
         );

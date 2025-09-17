@@ -68,7 +68,13 @@ describe('Rotas de suporte - chat e anexos', () => {
             size: 42
         });
         supportChatService.loadTicketHistory.mockResolvedValue([
-            { id: 1, content: 'Mensagem', createdAt: new Date().toISOString() }
+            {
+                id: 1,
+                body: 'Mensagem',
+                isFromAgent: false,
+                isSystem: false,
+                createdAt: new Date().toISOString()
+            }
         ]);
         supportChatService.listTicketAttachments.mockResolvedValue([
             { id: 9, originalName: 'erro.pdf', mimeType: 'application/pdf' }

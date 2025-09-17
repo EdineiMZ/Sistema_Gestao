@@ -3,9 +3,11 @@ const {
     SupportTicket,
     SupportMessage,
     SupportAttachment,
-    Notification
+    Notification,
+    User
 } = require('../../database/models');
 const { USER_ROLES, getRoleLevel } = require('../constants/roles');
+const { isSupportAgentRole } = require('../constants/support');
 const fileStorageService = require('./fileStorageService');
 const notificationService = require('./notificationService');
 
@@ -108,24 +110,37 @@ const mapMessageToPayload = (message) => {
         return null;
     }
 
-    const attachment = message.attachment
+    const plain = typeof message.get === 'function'
+        ? message.get({ plain: true })
+        : message;
+
+    const attachment = plain.attachment
         ? {
-            id: message.attachment.id,
-            originalName: message.attachment.originalName,
-            mimeType: message.attachment.mimeType,
-            size: message.attachment.size
+            id: plain.attachment.id,
+            originalName: plain.attachment.originalName,
+            mimeType: plain.attachment.mimeType,
+            size: plain.attachment.size
+        }
+        : null;
+
+    const sender = plain.sender
+        ? {
+            id: plain.sender.id,
+            name: plain.sender.name,
+            role: plain.sender.role
         }
         : null;
 
     return {
-        id: message.id,
-        ticketId: message.ticketId,
-        senderId: message.senderId,
-        senderRole: message.senderRole,
-        messageType: message.messageType,
-        content: message.content,
+        id: plain.id,
+        ticketId: plain.ticketId,
+        senderId: plain.senderId,
+        body: plain.body || '',
+        isFromAgent: Boolean(plain.isFromAgent),
+        isSystem: Boolean(plain.isSystem),
         attachment,
-        createdAt: message.createdAt
+        sender,
+        createdAt: plain.createdAt
     };
 };
 
@@ -137,6 +152,12 @@ const loadTicketHistory = async (ticketId) => {
                 model: SupportAttachment,
                 as: 'attachment',
                 required: false
+            },
+            {
+                model: User,
+                as: 'sender',
+                required: false,
+                attributes: ['id', 'name', 'role']
             }
         ],
         order: [['createdAt', 'ASC']]
@@ -158,20 +179,24 @@ const listTicketAttachments = async (ticketId) => {
 const persistMessage = async ({
     ticketId,
     senderId,
-    senderRole,
-    messageType = 'text',
-    content = null,
+    body = '',
+    isFromAgent = false,
+    isSystem = false,
     attachmentId = null,
     transaction
 }) => {
     const payload = {
         ticketId,
         senderId,
-        senderRole,
-        messageType,
-        content: content ? sanitizeMessageContent(content) : null,
+        body: sanitizeMessageContent(body),
+        isFromAgent: Boolean(isFromAgent),
+        isSystem: Boolean(isSystem),
         attachmentId: attachmentId || null
     };
+
+    if (!payload.body && !payload.attachmentId && !payload.isSystem) {
+        throw new Error('Mensagem não pode estar vazia.');
+    }
 
     const created = await SupportMessage.create(payload, { transaction });
 
@@ -185,6 +210,12 @@ const persistMessage = async ({
                 model: SupportAttachment,
                 as: 'attachment',
                 required: false
+            },
+            {
+                model: User,
+                as: 'sender',
+                required: false,
+                attributes: ['id', 'name', 'role']
             }
         ],
         transaction
@@ -260,9 +291,9 @@ const notifyAdminJoined = async ({ ticket, adminUser }) => {
         systemMessage = await persistMessage({
             ticketId: ticket.id,
             senderId: adminUser.id,
-            senderRole: adminUser.role,
-            messageType: 'system',
-            content: systemContent
+            body: systemContent,
+            isFromAgent: true,
+            isSystem: true
         });
 
         if (ioInstance) {
@@ -348,7 +379,7 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
         socket.on('support:message', async (payload, ack = () => {}) => {
             try {
                 const user = socket.data.user;
-                const { ticketId, content, attachmentId, messageType } = payload || {};
+                const { ticketId, body, attachmentId } = payload || {};
 
                 if (!joinedTickets.has(ticketId)) {
                     throw new Error('NOT_IN_ROOM');
@@ -375,9 +406,9 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
                 const persisted = await persistMessage({
                     ticketId,
                     senderId: user.id,
-                    senderRole: user.role,
-                    messageType: messageType || (attachmentId ? 'file' : 'text'),
-                    content,
+                    body: body || '',
+                    isFromAgent: isSupportAgentRole(user.role),
+                    isSystem: false,
                     attachmentId: finalAttachmentId
                 });
 
