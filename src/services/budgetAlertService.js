@@ -10,6 +10,7 @@ const {
     FinanceCategory,
     User,
     UserNotificationPreference,
+    BudgetThresholdStatus,
     sequelize,
     Sequelize
 } = require('../../database/models');
@@ -399,6 +400,70 @@ const processBudgetAlerts = async ({ now = new Date() } = {}) => {
     };
 };
 
+const normalizeBudgetId = (value) => {
+    const numeric = Number.parseInt(value, 10);
+    return Number.isInteger(numeric) ? numeric : null;
+};
+
+const normalizeThreshold = (value) => {
+    const numeric = Number.parseFloat(value);
+    const normalized = Number.isFinite(numeric) ? numeric : 0;
+    return normalized.toFixed(2);
+};
+
+const normalizeReferenceMonth = (value) => {
+    const base = value ? new Date(value) : new Date();
+    if (Number.isNaN(base.getTime())) {
+        return normalizeReferenceMonth(new Date());
+    }
+
+    const normalizedDate = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1));
+    return normalizedDate.toISOString().slice(0, 10);
+};
+
+const normalizeTriggeredAt = (value) => {
+    const resolved = value ? new Date(value) : new Date();
+    return Number.isNaN(resolved.getTime()) ? new Date() : resolved;
+};
+
+const registerBudgetAlertTrigger = async ({
+    budgetId,
+    threshold,
+    referenceMonth,
+    triggeredAt,
+    transaction = null
+} = {}) => {
+    const normalizedBudgetId = normalizeBudgetId(budgetId);
+    const normalizedThreshold = normalizeThreshold(threshold);
+    const normalizedReferenceMonth = normalizeReferenceMonth(referenceMonth);
+    const normalizedTriggeredAt = normalizeTriggeredAt(triggeredAt);
+
+    const [record, created] = await BudgetThresholdStatus.findOrCreate({
+        where: {
+            budgetId: normalizedBudgetId,
+            referenceMonth: normalizedReferenceMonth,
+            threshold: normalizedThreshold
+        },
+        defaults: {
+            triggeredAt: normalizedTriggeredAt
+        },
+        transaction
+    });
+
+    if (!created && record && typeof record.update === 'function') {
+        await record.update({
+            triggeredAt: normalizedTriggeredAt
+        }, { transaction });
+    }
+
+    return {
+        record,
+        created,
+        shouldDispatch: Boolean(created)
+    };
+};
+
 module.exports = {
-    processBudgetAlerts
+    processBudgetAlerts,
+    registerBudgetAlertTrigger
 };
