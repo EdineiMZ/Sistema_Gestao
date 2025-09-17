@@ -21,7 +21,8 @@ describe('views/notifications budget alert templates', () => {
         routePath: '/finance/orcamentos',
         organizationName: 'Sistema de Gestão Inteligente',
         appName: 'Sistema de Gestão Inteligente',
-        now
+        now,
+        timeZone: 'America/Sao_Paulo'
     };
 
     let emailUtils;
