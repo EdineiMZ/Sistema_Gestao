@@ -7,8 +7,12 @@ let cronTask = null;
 let activeExpression = null;
 
 const runProcessNotifications = async () => {
+    const startedAt = Date.now();
+    console.log('[Worker] Iniciando ciclo de notificações (inclui alertas de orçamento).');
     try {
         await processNotifications();
+        const duration = Date.now() - startedAt;
+        console.log(`[Worker] Ciclo de notificações concluído em ${duration}ms.`);
     } catch (error) {
         console.error('Erro ao executar worker de notificações:', error);
     }
@@ -20,7 +24,7 @@ function startWorker({ immediate = false, cronExpression } = {}) {
     if (cronTask) {
         if (activeExpression === expression) {
             if (immediate) {
-                console.log('Executando processNotifications() imediatamente via worker.');
+                console.log('[Worker] Execução imediata solicitada.');
                 void runProcessNotifications();
             }
             return cronTask;
@@ -31,7 +35,7 @@ function startWorker({ immediate = false, cronExpression } = {}) {
 
     try {
         cronTask = cron.schedule(expression, () => {
-            console.log(`Executando processNotifications() via worker (${expression})...`);
+            console.log(`[Worker] Disparando ciclo agendado (${expression}).`);
             void runProcessNotifications();
         });
         activeExpression = expression;
@@ -41,7 +45,7 @@ function startWorker({ immediate = false, cronExpression } = {}) {
     }
 
     if (immediate) {
-        console.log('Executando processNotifications() imediatamente via worker.');
+        console.log('[Worker] Execução imediata solicitada.');
         void runProcessNotifications();
     }
 

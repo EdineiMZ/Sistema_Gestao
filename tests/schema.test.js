@@ -25,6 +25,7 @@ const migrations = [
   require('../database/migrations/20240915-create-finance-attachments'),
   require('../database/migrations/20240916-create-finance-categories'),
   require('../database/migrations/20240917-create-budgets'),
+  require('../database/migrations/20240920-create-budget-threshold-logs'),
 ];
 
 (async () => {
@@ -295,6 +296,21 @@ const migrations = [
       throw new Error('Índice único (userId, financeCategoryId) não encontrado em Budgets.');
     }
 
+    const thresholdLogsTable = await queryInterface.describeTable('BudgetThresholdLogs');
+    if (!thresholdLogsTable || !thresholdLogsTable.budgetId) {
+      throw new Error('Tabela BudgetThresholdLogs não encontrada.');
+    }
+
+    if (thresholdLogsTable.threshold.allowNull || thresholdLogsTable.referenceMonth.allowNull) {
+      throw new Error('Colunas obrigatórias ausentes em BudgetThresholdLogs.');
+    }
+
+    const thresholdLogsIndexes = await queryInterface.showIndex('BudgetThresholdLogs');
+    const hasThresholdUnique = thresholdLogsIndexes.some((index) => index.name === 'budget_threshold_logs_unique' && index.unique);
+    if (!hasThresholdUnique) {
+      throw new Error('Índice único esperado em BudgetThresholdLogs não encontrado.');
+    }
+
     const budgetNow = new Date();
     const [users] = await sequelize.query('SELECT id FROM Users ORDER BY id LIMIT 1');
     const userId = users[0]?.id;
@@ -347,12 +363,55 @@ const migrations = [
       throw new Error('Inserção duplicada em Budgets deveria violar índice único.');
     }
 
+    const [budgets] = await sequelize.query('SELECT id FROM Budgets ORDER BY id DESC LIMIT 1');
+    const budgetId = budgets[0]?.id;
+    if (!budgetId) {
+      throw new Error('Falha ao localizar orçamento para validar logs de limiar.');
+    }
+
+    await queryInterface.bulkInsert('BudgetThresholdLogs', [{
+      budgetId,
+      referenceMonth: '2024-09-01',
+      threshold: 0.75,
+      consumptionValue: 1200.00,
+      limitValue: 1500.50,
+      triggeredAt: budgetNow,
+      createdAt: budgetNow,
+      updatedAt: budgetNow,
+    }]);
+
+    let duplicateThresholdError = null;
+    try {
+      await queryInterface.bulkInsert('BudgetThresholdLogs', [{
+        budgetId,
+        referenceMonth: '2024-09-01',
+        threshold: 0.75,
+        consumptionValue: 1250.00,
+        limitValue: 1500.50,
+        triggeredAt: budgetNow,
+        createdAt: budgetNow,
+        updatedAt: budgetNow,
+      }]);
+    } catch (error) {
+      duplicateThresholdError = error;
+    }
+
+    if (!duplicateThresholdError) {
+      throw new Error('Lançamento duplicado em BudgetThresholdLogs deveria violar índice único.');
+    }
+
     await queryInterface.bulkDelete('Users', { id: userId });
 
     const [remainingBudgets] = await sequelize.query('SELECT COUNT(*) as count FROM Budgets');
     const budgetsCount = Number(remainingBudgets[0]?.count || 0);
     if (budgetsCount !== 0) {
       throw new Error('Registros em Budgets deveriam ser removidos ao excluir usuário associado.');
+    }
+
+    const [remainingThresholdLogs] = await sequelize.query('SELECT COUNT(*) as count FROM BudgetThresholdLogs');
+    const thresholdCount = Number(remainingThresholdLogs[0]?.count || 0);
+    if (thresholdCount !== 0) {
+      throw new Error('Logs de limiar deveriam ser removidos ao excluir orçamento associado.');
     }
 
     const [remainingCategories] = await sequelize.query('SELECT ownerId FROM FinanceCategories ORDER BY id DESC LIMIT 1');

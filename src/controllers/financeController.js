@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, FinanceGoal, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, FinanceGoal, Budget, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
@@ -8,6 +8,7 @@ const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const { buildImportPreview } = financeImportService;
 const fileStorageService = require('../services/fileStorageService');
+const { getDefaultBudgetThresholds, normalizeThresholdList } = require('../config/budgets');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const {
@@ -921,6 +922,96 @@ module.exports = {
         } catch (error) {
             console.error(error);
             req.flash('error_msg', 'Erro ao remover meta financeira.');
+            return res.redirect('/finance');
+        }
+    },
+
+    updateBudgetThresholds: async (req, res) => {
+        const expectsJson = wantsJsonResponse(req);
+        try {
+            const rawId = req.params?.id;
+            const budgetId = Number.parseInt(rawId, 10);
+            if (!Number.isInteger(budgetId) || budgetId <= 0) {
+                const message = 'Identificador de orçamento inválido.';
+                if (expectsJson) {
+                    return res.status(400).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            if (!Budget || typeof Budget.findByPk !== 'function') {
+                const message = 'Recurso de orçamento indisponível.';
+                if (expectsJson) {
+                    return res.status(503).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            const budget = await Budget.findByPk(budgetId);
+            if (!budget) {
+                const message = 'Orçamento não encontrado.';
+                if (expectsJson) {
+                    return res.status(404).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            const input = req.body?.thresholds;
+            const hasCustomInput = !(
+                input === undefined
+                || input === null
+                || (typeof input === 'string' && input.trim() === '')
+            );
+
+            let normalizedThresholds = [];
+
+            if (hasCustomInput) {
+                if (Array.isArray(input)) {
+                    normalizedThresholds = Budget.normalizeThresholds(input);
+                } else if (typeof input === 'string') {
+                    normalizedThresholds = Budget.normalizeThresholds(normalizeThresholdList(input));
+                } else {
+                    normalizedThresholds = Budget.normalizeThresholds([input]);
+                }
+
+                if (!normalizedThresholds.length) {
+                    const message = 'Informe ao menos um limiar válido entre 0 e 1.';
+                    if (expectsJson) {
+                        return res.status(400).json({ success: false, error: message });
+                    }
+                    req.flash('error_msg', message);
+                    return res.redirect('/finance');
+                }
+            } else {
+                normalizedThresholds = getDefaultBudgetThresholds();
+            }
+
+            if (!normalizedThresholds.length) {
+                const message = 'Configuração de limiares indisponível. Defina valores entre 0 e 1.';
+                if (expectsJson) {
+                    return res.status(500).json({ success: false, error: message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance');
+            }
+
+            await budget.update({ thresholds: normalizedThresholds });
+
+            if (expectsJson) {
+                return res.json({ success: true, thresholds: normalizedThresholds });
+            }
+
+            req.flash('success_msg', 'Limiares de orçamento atualizados.');
+            return res.redirect('/finance');
+        } catch (error) {
+            console.error('Erro ao atualizar limiares de orçamento:', error);
+            if (expectsJson) {
+                return res.status(500).json({ success: false, error: 'Erro ao atualizar limiares de orçamento.' });
+            }
+            req.flash('error_msg', 'Erro ao atualizar limiares de orçamento.');
             return res.redirect('/finance');
         }
     },

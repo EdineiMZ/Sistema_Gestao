@@ -51,7 +51,7 @@ const normalizeThresholds = (value) => {
 
             return Number(numeric.toFixed(2));
         })
-        .filter((item) => item !== null && item > 0);
+        .filter((item) => item !== null && item > 0 && item <= 1);
 
     const uniqueValues = Array.from(new Set(normalized));
     uniqueValues.sort((a, b) => a - b);
@@ -87,8 +87,8 @@ module.exports = (sequelize, DataTypes) => {
             validate: {
                 isArrayOfPositiveNumbers(value) {
                     const list = normalizeThresholds(value);
-                    if (list.some((item) => item <= 0)) {
-                        throw new Error('Limiares devem ser maiores que zero.');
+                    if (list.some((item) => item <= 0 || item > 1)) {
+                        throw new Error('Limiares devem estar entre 0 e 1.');
                     }
                 }
             }
@@ -154,6 +154,15 @@ module.exports = (sequelize, DataTypes) => {
             as: 'category',
             foreignKey: 'financeCategoryId'
         });
+
+        if (models.BudgetThresholdLog) {
+            Budget.hasMany(models.BudgetThresholdLog, {
+                as: 'thresholdLogs',
+                foreignKey: 'budgetId',
+                onDelete: 'CASCADE',
+                hooks: true
+            });
+        }
     };
 
     return Budget;

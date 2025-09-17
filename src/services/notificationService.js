@@ -14,6 +14,7 @@ const { sendEmail } = require('../utils/email');
 const { buildEmailContent, buildRoleLabel } = require('../utils/placeholderUtils');
 const { parseRole, sortRolesByHierarchy, USER_ROLES } = require('../constants/roles');
 const { Op } = require('sequelize');
+const { processBudgetAlerts } = require('./budgetAlertService');
 
 const ORGANIZATION_NAME = process.env.APP_NAME || 'Sistema de Gestão';
 const DEFAULT_APPOINTMENT_WINDOW_MINUTES = 60;
@@ -431,6 +432,17 @@ async function processNotifications() {
         const hasMessageHtmlColumn = await ensureMessageHtmlColumnExists();
         if (!hasMessageHtmlColumn) {
             return;
+        }
+
+        try {
+            const budgetResult = await processBudgetAlerts({ now });
+            if (budgetResult?.triggeredAlerts?.length) {
+                console.log(
+                    `Alertas de orçamento gerados: ${budgetResult.triggeredAlerts.length} (orçamentos avaliados: ${budgetResult.processedBudgets}).`
+                );
+            }
+        } catch (budgetError) {
+            console.error('Erro ao processar alertas de orçamento:', budgetError);
         }
 
         // Busca notificações ativas, não enviadas, com triggerDate nulo ou menor ou igual a agora.
