@@ -9,6 +9,9 @@ jest.mock('../../database/models', () => {
         FinanceEntry: {
             findAll: jest.fn()
         },
+        FinanceGoal: {
+            findAll: jest.fn()
+        },
         Notification: {
             findAll: jest.fn()
         },
@@ -21,7 +24,7 @@ jest.mock('../../database/models', () => {
 });
 
 const request = require('supertest');
-const { FinanceEntry, Notification } = require('../../database/models');
+const { FinanceEntry, FinanceGoal, Notification } = require('../../database/models');
 const { createRouterTestApp } = require('../utils/createRouterTestApp');
 const { authenticateTestUser } = require('../utils/authTestUtils');
 
@@ -35,6 +38,7 @@ describe('Smoke tests das rotas principais', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        FinanceGoal.findAll.mockResolvedValue([]);
         app = createRouterTestApp({
             routes: [
                 ['/', authRoutes],
@@ -82,8 +86,11 @@ describe('Smoke tests das rotas principais', () => {
         const response = await agent.get('/finance');
 
         expect(FinanceEntry.findAll).toHaveBeenCalledTimes(1);
+        expect(FinanceGoal.findAll).toHaveBeenCalledTimes(2);
         expect(response.status).toBe(200);
         expect(response.text).toContain('Gerenciar finanças estratégicas');
+        expect(response.text).toContain('Metas e projeções');
+        expect(response.text).toContain('Configurar metas mensais');
         expect(response.text).toContain('Lançamentos recentes');
         expect(response.text).toContain('Mensalidade corporativa');
     });

@@ -21,6 +21,11 @@
     const financeCanvas = document.getElementById('financeTrendChart');
     const appointmentCanvas = document.getElementById('appointmentStatusChart');
     const userGrowthCanvas = document.getElementById('userGrowthChart');
+    const projectionElements = {
+        badge: root.querySelector('[data-projection-highlight-badge]'),
+        highlight: root.querySelector('[data-projection-highlight]'),
+        rows: root.querySelector('[data-projection-rows]')
+    };
 
     const charts = {
         financeTrend: null,
@@ -285,6 +290,155 @@
         });
     };
 
+    const formatDifference = (value) => {
+        if (!Number.isFinite(value)) {
+            return '—';
+        }
+        const formatted = formatCurrency(Math.abs(value));
+        if (Math.abs(value) < 0.005) {
+            return formatted;
+        }
+        return `${value > 0 ? '+' : '−'}${formatted}`;
+    };
+
+    const resolveProjectionStatus = (item) => {
+        if (!item || !item.goal) {
+            return {
+                label: 'Sem meta',
+                className: 'badge bg-light text-muted'
+            };
+        }
+
+        if (item.goal.achieved === true) {
+            return {
+                label: 'Meta atingida',
+                className: 'badge bg-success-subtle text-success'
+            };
+        }
+
+        if (item.goal.achieved === false) {
+            return {
+                label: 'Meta em risco',
+                className: 'badge bg-danger-subtle text-danger'
+            };
+        }
+
+        return {
+            label: 'Meta registrada',
+            className: 'badge bg-secondary-subtle text-secondary'
+        };
+    };
+
+    const renderProjectionHighlight = (highlight) => {
+        if (!projectionElements.highlight) {
+            return;
+        }
+
+        const container = projectionElements.highlight;
+
+        if (!highlight) {
+            container.innerHTML = '<div class="text-muted small">Cadastre metas financeiras para acompanhar projeções futuras.</div>';
+            if (projectionElements.badge) {
+                projectionElements.badge.className = 'badge rounded-pill bg-light text-muted';
+                projectionElements.badge.innerHTML = '<i class="bi bi-bullseye me-1"></i>Nenhuma meta ativa';
+            }
+            return;
+        }
+
+        const status = resolveProjectionStatus(highlight);
+        const projectedNet = formatCurrency(highlight?.projected?.net ?? 0);
+        const goalValue = highlight.goal && Number.isFinite(highlight.goal.targetNetAmount)
+            ? formatCurrency(highlight.goal.targetNetAmount)
+            : '—';
+        const gapValue = highlight.goal && Number.isFinite(highlight.goal.gapToGoal)
+            ? formatDifference(highlight.goal.gapToGoal)
+            : '—';
+        const gapClass = highlight.goal && Number.isFinite(highlight.goal.gapToGoal)
+            ? (highlight.goal.gapToGoal >= 0 ? 'text-success' : 'text-danger')
+            : 'text-muted';
+
+        container.innerHTML = `
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <p class="text-muted mb-1 small">Próxima meta monitorada</p>
+                    <h4 class="mb-0">${highlight.label || highlight.month || 'Próximo período'}</h4>
+                </div>
+                <div class="text-end">
+                    <div class="fw-semibold">${projectedNet}</div>
+                    <div class="text-muted small">Meta: <span class="fw-semibold">${goalValue}</span></div>
+                    <div class="text-muted small">Diferença: <span class="fw-semibold ${gapClass}">${gapValue}</span></div>
+                    <span class="${status.className}">${status.label}</span>
+                </div>
+            </div>
+        `;
+
+        if (projectionElements.badge) {
+            let badgeClass = status.className.replace('badge', 'badge rounded-pill');
+            if (!highlight.goal) {
+                badgeClass = 'badge rounded-pill bg-light text-muted';
+            }
+            projectionElements.badge.className = badgeClass;
+            projectionElements.badge.innerHTML = `<i class="bi bi-bullseye me-1"></i>${highlight.label || highlight.month || 'Meta monitorada'}`;
+        }
+    };
+
+    const renderProjectionRows = (months = []) => {
+        if (!projectionElements.rows) {
+            return;
+        }
+
+        const tbody = projectionElements.rows;
+        tbody.innerHTML = '';
+
+        if (!months.length) {
+            const emptyRow = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 5;
+            cell.className = 'text-center text-muted small';
+            cell.textContent = 'Nenhuma meta financeira configurada.';
+            emptyRow.appendChild(cell);
+            tbody.appendChild(emptyRow);
+            return;
+        }
+
+        months.forEach((item) => {
+            const row = document.createElement('tr');
+            if (item.isCurrent) {
+                row.classList.add('table-active');
+            } else if (item.needsAttention) {
+                row.classList.add('table-warning');
+            }
+
+            const projectedNet = formatCurrency(item?.projected?.net ?? 0);
+            const goalValue = item.goal && Number.isFinite(item.goal.targetNetAmount)
+                ? formatCurrency(item.goal.targetNetAmount)
+                : '—';
+            const gapValue = item.goal && Number.isFinite(item.goal.gapToGoal)
+                ? formatDifference(item.goal.gapToGoal)
+                : '—';
+            const gapClass = item.goal && Number.isFinite(item.goal.gapToGoal)
+                ? (item.goal.gapToGoal >= 0 ? 'text-success' : 'text-danger')
+                : 'text-muted';
+            const status = resolveProjectionStatus(item);
+
+            row.innerHTML = `
+                <td>${item.label || item.month}</td>
+                <td>${projectedNet}</td>
+                <td>${goalValue}</td>
+                <td class="${gapClass}">${gapValue}</td>
+                <td class="text-center"><span class="${status.className}">${status.label}</span></td>
+            `;
+
+            tbody.appendChild(row);
+        });
+    };
+
+    const updateProjections = (payload = {}) => {
+        const months = Array.isArray(payload.months) ? payload.months : [];
+        renderProjectionHighlight(payload.highlight || months.find((item) => item.isFuture) || null);
+        renderProjectionRows(months);
+    };
+
     const refreshTimestamp = (timestamp) => {
         if (!updatedAt) {
             return;
@@ -329,6 +483,7 @@
             const payload = await response.json();
             updateSummary(payload.summary || {});
             updateCharts(payload.charts || {});
+            updateProjections(payload.projections || {});
             renderUpcomingAppointments(payload.upcomingAppointments || []);
             refreshTimestamp(payload.generatedAt);
         } catch (error) {

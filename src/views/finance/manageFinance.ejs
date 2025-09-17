@@ -143,74 +143,195 @@
         </div>
     </div>
 
-    <div class="col-12">
+    <div class="col-12 col-xxl-8">
         <div class="card card-soft responsive-panel">
             <div class="card-body">
-                <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
                     <div>
-                        <h3 class="fw-semibold mb-1">Importar lançamentos</h3>
-                        <p class="text-muted mb-0">
-                            Carregue extratos em CSV ou OFX para acelerar o registro de receitas e despesas com validação automática.
-                        </p>
+                        <h3 class="fw-semibold mb-1">Metas e projeções</h3>
+                        <p class="text-muted mb-0">Acompanhe se o saldo projetado atende as metas mensais configuradas.</p>
                     </div>
-                    <div class="text-muted small text-lg-end">
-                        Formatos aceitos<br />
-                        <span class="fw-semibold text-primary">CSV · OFX</span>
+                    <div class="text-lg-end">
+                        <span class="badge rounded-pill bg-light text-muted me-2">
+                            <i class="bi bi-calendar-week me-1"></i>
+                            <%= projectionList.length %> períodos monitorados
+                        </span>
+                        <span class="badge rounded-pill <%= goalSummary && goalSummary.alerts ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success' %>">
+                            <i class="bi bi-bullseye me-1"></i>
+                            <%= goalSummary && goalSummary.alerts ? `${goalSummary.alerts} meta(s) em atenção` : 'Metas sob controle' %>
+                        </span>
                     </div>
                 </div>
-                <form
-                    class="mt-4"
-                    action="/finance/import/preview"
-                    method="POST"
-                    enctype="multipart/form-data"
-                    novalidate
-                >
-                    <div class="row g-3 align-items-center">
-                        <div class="col-12 col-lg">
-                            <div class="input-group input-group-lg shadow-sm">
-                                <span class="input-group-text bg-white">
-                                    <i class="bi bi-upload" aria-hidden="true"></i>
+
+                <% if (alertsList.length) { %>
+                    <div class="alert alert-warning border-0 d-flex align-items-center gap-2" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>
+                            <strong><%= alertsList.length %></strong>
+                            <%= alertsList.length === 1 ? 'meta' : 'metas' %> com projeção abaixo do objetivo.
+                        </span>
+                    </div>
+                <% } %>
+
+                <div class="projection-highlight border rounded-3 p-3 bg-light-subtle mb-3">
+                    <% if (highlightProjection) { %>
+                        <% const highlightGoal = highlightProjection.goal || {}; %>
+                        <% const highlightGap = (typeof highlightGoal.gapToGoal === 'number') ? highlightGoal.gapToGoal : null; %>
+                        <% const gapLabel = highlightGap !== null ? `${highlightGap >= 0 ? '+' : '-'}${currencyFormatter.format(Math.abs(highlightGap))}` : '—'; %>
+                        <% const gapClass = highlightGap !== null ? (highlightGap >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
+                        <% const statusClass = highlightGoal.achieved === true ? 'badge bg-success-subtle text-success' : highlightGoal.achieved === false ? 'badge bg-danger-subtle text-danger' : 'badge bg-secondary-subtle text-secondary'; %>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div>
+                                <p class="text-muted small mb-1">Próxima meta monitorada</p>
+                                <h4 class="fw-semibold mb-0"><%= highlightProjection.label || highlightProjection.month %></h4>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-semibold"><%= currencyFormatter.format(Number(highlightProjection.projected?.net || 0)) %></div>
+                                <div class="text-muted small">
+                                    Meta: <span class="fw-semibold"><%= highlightGoal.targetNetAmount !== null && highlightGoal.targetNetAmount !== undefined ? currencyFormatter.format(Number(highlightGoal.targetNetAmount)) : '—' %></span>
+                                </div>
+                                <div class="text-muted small">
+                                    Diferença: <span class="fw-semibold <%= gapClass %>"><%= gapLabel %></span>
+                                </div>
+                                <span class="<%= statusClass %>">
+                                    <%= highlightGoal.achieved === true ? 'Meta atingida' : highlightGoal.achieved === false ? 'Meta em risco' : 'Meta registrada' %>
                                 </span>
-                                <input
-                                    class="form-control form-control-lg"
-                                    type="file"
-                                    name="importFile"
-                                    accept=".csv,.ofx,text/csv,application/ofx,application/x-ofx"
-                                    required
-                                    aria-label="Selecionar arquivo CSV ou OFX para importação"
-                                />
                             </div>
                         </div>
-                        <div class="col-12 col-lg-auto d-grid d-lg-block">
-                            <button class="btn btn-primary btn-lg w-100" type="submit">
-                                <i class="bi bi-search me-2" aria-hidden="true"></i>
-                                Analisar arquivo
-                            </button>
-                        </div>
-                    </div>
-                    <div class="form-text mt-2">
-                        Os arquivos são processados em memória e descartados após a análise. Revise os lançamentos sugeridos antes de concluir.
-                    </div>
-                </form>
+                    <% } else { %>
+                        <p class="text-muted small mb-0">Cadastre uma meta mensal para visualizar projeções detalhadas.</p>
+                    <% } %>
+                </div>
+
+                <div class="table-responsive table-modern responsive-table">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Mês</th>
+                                <th>Saldo projetado</th>
+                                <th>Meta líquida</th>
+                                <th>Diferença</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!projectionList.length) { %>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted small">Nenhuma projeção disponível.</td>
+                                </tr>
+                            <% } else { %>
+                                <% projectionList.forEach((item) => { %>
+                                    <% const goal = item.goal || {}; %>
+                                    <% const gapValue = (typeof goal.gapToGoal === 'number') ? goal.gapToGoal : null; %>
+                                    <% const gapLabel = gapValue !== null ? `${gapValue >= 0 ? '+' : '-'}${currencyFormatter.format(Math.abs(gapValue))}` : '—'; %>
+                                    <% const gapClass = gapValue !== null ? (gapValue >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
+                                    <% const rowClass = item.needsAttention ? 'table-warning' : (item.isCurrent ? 'table-active' : ''); %>
+                                    <% const statusLabel = goal.achieved === true ? 'Meta atingida' : goal.achieved === false ? 'Meta em risco' : goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? 'Meta registrada' : 'Sem meta'; %>
+                                    <% const statusClass = goal.achieved === true ? 'badge bg-success-subtle text-success' : goal.achieved === false ? 'badge bg-danger-subtle text-danger' : goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? 'badge bg-secondary-subtle text-secondary' : 'badge bg-light text-muted'; %>
+                                    <tr class="<%= rowClass %>">
+                                        <td><%= item.label || item.month %></td>
+                                        <td><%= currencyFormatter.format(Number(item.projected?.net || 0)) %></td>
+                                        <td><%= goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? currencyFormatter.format(Number(goal.targetNetAmount)) : '—' %></td>
+                                        <td class="<%= gapClass %>"><%= gapLabel %></td>
+                                        <td class="text-center"><span class="<%= statusClass %>"><%= statusLabel %></span></td>
+                                    </tr>
+                                <% }) %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
-    <% if (typeof importPreview !== 'undefined' && importPreview) { %>
-        <div class="col-12">
-            <div class="card card-soft border border-primary-subtle responsive-panel">
-                <div class="card-header bg-light d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
-                    <div>
-                        <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">
-                            <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
-                            Pré-visualização
-                        </span>
-                        <h3 class="fw-semibold mt-2 mb-0">Revisar lançamentos importados</h3>
+    <div class="col-12 col-xxl-4">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body">
+                <h4 class="fw-semibold mb-3">Configurar metas mensais</h4>
+                <form action="/finance/goals" method="POST" class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Mês da meta</label>
+                        <input type="month" class="form-control" name="month" value="<%= highlightProjection ? highlightProjection.month : '' %>" required />
                     </div>
-                    <div class="text-muted small text-lg-end">
-                        <div class="fw-semibold text-dark"><%= importPreview.fileName %></div>
-                        <div>Processado em <%= new Date(importPreview.uploadedAt).toLocaleString('pt-BR') %></div>
+                    <div class="col-12">
+                        <label class="form-label">Saldo líquido desejado (R$)</label>
+                        <input type="number" step="0.01" min="0" class="form-control" name="targetNetAmount" placeholder="Ex.: 15000" required />
                     </div>
+                    <div class="col-12">
+                        <label class="form-label">Notas (opcional)</label>
+                        <textarea class="form-control" name="notes" rows="2" maxlength="255" placeholder="Reforços ou observações"></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end gap-2">
+                        <button type="reset" class="btn btn-outline-secondary btn-sm">Limpar</button>
+                        <button type="submit" class="btn btn-gradient btn-sm">Salvar meta</button>
+                    </div>
+                </form>
+
+                <hr class="my-4" />
+
+                <h5 class="fw-semibold mb-3">Metas cadastradas</h5>
+                <% if (!financeGoals.length) { %>
+                    <p class="text-muted small mb-0">Nenhuma meta cadastrada até o momento.</p>
+                <% } else { %>
+                    <div class="list-group list-group-flush">
+                        <% financeGoals.forEach((goal) => { %>
+                            <div class="list-group-item px-0">
+                                <div class="d-flex flex-column gap-2">
+                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                        <div>
+                                            <h6 class="fw-semibold mb-1"><%= goal.monthLabel %></h6>
+                                            <p class="text-muted small mb-1">Meta: <span class="fw-semibold"><%= goal.formattedAmount %></span></p>
+                                            <% if (goal.notes) { %>
+                                                <p class="text-muted small mb-0"><i class="bi bi-chat-left-text me-1"></i><%= goal.notes %></p>
+                                            <% } %>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#goalEdit<%= goal.id %>" aria-expanded="false" aria-controls="goalEdit<%= goal.id %>">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form action="/finance/goals/<%= goal.id %>?_method=DELETE" method="POST" class="d-inline">
+                                                <button class="btn btn-outline-danger btn-sm" type="submit">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    <div class="collapse" id="goalEdit<%= goal.id %>">
+                                        <form action="/finance/goals" method="POST" class="row g-3 mt-2">
+                                            <input type="hidden" name="goalId" value="<%= goal.id %>" />
+                                            <div class="col-12">
+                                                <label class="form-label">Mês</label>
+                                                <input type="month" class="form-control" name="month" value="<%= goal.monthKey %>" required />
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Meta líquida (R$)</label>
+                                                <input type="number" step="0.01" min="0" class="form-control" name="targetNetAmount" value="<%= goal.targetNetAmountInput %>" required />
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Notas</label>
+                                                <textarea class="form-control" name="notes" rows="2" maxlength="255"><%= goal.notes %></textarea>
+                                            </div>
+                                            <div class="col-12 d-flex justify-content-end gap-2">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#goalEdit<%= goal.id %>">Cancelar</button>
+                                                <button type="submit" class="btn btn-gradient btn-sm">Atualizar meta</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
+                    <p class="text-muted mb-0">Monitoramento contínuo de receitas, despesas e recorrências.</p>
                 </div>
                 <div class="card-body">
                     <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">

@@ -37,7 +37,11 @@ const buildViewContext = () => ({
             ]
         }
     ],
-    recurringIntervalOptions: FINANCE_RECURRING_INTERVALS,
+    financeProjections: [],
+    projectionHighlight: null,
+    projectionAlerts: [],
+    financeGoals: [],
+    goalSummary: { total: 0, alerts: 0 },
     success_msg: null,
     error_msg: null,
     error: null,
