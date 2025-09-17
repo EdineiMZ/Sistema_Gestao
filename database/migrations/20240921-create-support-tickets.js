@@ -1,7 +1,7 @@
 'use strict';
 
-const TABLE_NAME = 'SupportTickets';
-const STATUS_ENUM_NAME = 'enum_SupportTickets_status';
+const TABLE_NAME = 'supportTickets';
+const STATUS_ENUM_NAME = 'enum_supportTickets_status';
 
 module.exports = {
     up: async (queryInterface, Sequelize) => {
