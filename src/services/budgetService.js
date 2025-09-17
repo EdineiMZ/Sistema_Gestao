@@ -1,85 +1,85 @@
 const { Budget } = require('../../database/models');
 const financeReportingService = require('./financeReportingService');
+const budgetListCache = new Map();
 
-const DEFAULT_PAGE = 1;
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 100;
-
-const listCache = new Map();
-const clearCache = () => {
-    listCache.clear();
+const toPlainBudget = (budget) => {
+    if (!budget) {
+        return null;
+    }
+    return typeof budget.get === 'function' ? budget.get({ plain: true }) : budget;
 };
 
 const normalizeId = (value) => {
     if (value === undefined || value === null || value === '') {
         return null;
     }
-
-    const parsed = Number.parseInt(value, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-        return null;
-    }
-
-    return parsed;
+    const numeric = Number.parseInt(value, 10);
+    return Number.isInteger(numeric) ? numeric : null;
 };
 
-const normalizeNumber = (value) => {
+const normalizeMonthlyLimit = (value) => {
     if (value === undefined || value === null || value === '') {
         return null;
     }
 
-    if (typeof value === 'number') {
-        return Number.isFinite(value) ? value : null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return Number(value.toFixed(2));
     }
 
     if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) {
+        const cleaned = value.trim().replace(/\./g, '').replace(',', '.');
+        if (!cleaned) {
             return null;
         }
-
-        const sanitized = trimmed.replace(/\./g, '').replace(',', '.');
-        const parsed = Number.parseFloat(sanitized);
-        return Number.isFinite(parsed) ? parsed : null;
+        const parsed = Number.parseFloat(cleaned);
+        return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
     }
-    const parsed = Number.parseFloat(String(value));
-    return Number.isFinite(parsed) ? parsed : null;
+
+    return null;
 };
 
-const normalizeThresholdList = (value) => {
+const normalizeThresholds = (value) => {
     if (value === undefined || value === null) {
         return [];
     }
 
     const list = Array.isArray(value) ? value : [value];
     const normalized = list
-        .map((item) => normalizeNumber(item))
-        .filter((item) => Number.isFinite(item) && item > 0)
-        .map((item) => Number(item.toFixed(4)));
+        .map((item) => {
+            if (item === undefined || item === null) {
+                return null;
+            }
+            if (typeof item === 'number' && Number.isFinite(item)) {
+                return Number(item.toFixed(2));
+            }
+            if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (!trimmed) {
+                    return null;
+                }
+                const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+                return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
+            }
+            return null;
+        })
+        .filter((item) => item !== null);
 
-    const uniqueValues = Array.from(new Set(normalized));
-    uniqueValues.sort((a, b) => a - b);
-    return uniqueValues;
+    if (!normalized.length) {
+        return [];
+    }
+
+    const unique = Array.from(new Set(normalized));
+    unique.sort((a, b) => a - b);
+    return unique;
 };
 
 const normalizeReferenceMonth = (value) => {
-    if (value === undefined || value === null || value === '') {
+    if (!value) {
         return null;
     }
 
-    if (value instanceof Date) {
-        if (Number.isNaN(value.getTime())) {
-            return null;
-        }
-        return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1)).toISOString().slice(0, 10);
-    }
-
-    if (typeof value === 'number') {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {
-            return null;
-        }
-        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
     }
 
     if (typeof value === 'string') {
@@ -87,81 +87,278 @@ const normalizeReferenceMonth = (value) => {
         if (!trimmed) {
             return null;
         }
-
-        let reference;
         if (/^\d{4}-\d{2}$/.test(trimmed)) {
-            reference = new Date(`${trimmed}-01T00:00:00Z`);
-        } else {
-            reference = new Date(trimmed);
+            return `${trimmed}-01`;
         }
+        return trimmed;
+    }
 
-        if (Number.isNaN(reference.getTime())) {
-            return null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) {
+            return date.toISOString().slice(0, 10);
         }
-
-        return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), 1)).toISOString().slice(0, 10);
     }
 
     return null;
 };
 
-const buildBudgetPayload = (input = {}) => {
-    const payload = {};
-
-    if ('monthlyLimit' in input) {
-        const monthlyLimit = normalizeNumber(input.monthlyLimit);
-        if (monthlyLimit !== null) {
-            payload.monthlyLimit = monthlyLimit;
-        }
-    }
-
-    if ('thresholds' in input) {
-        payload.thresholds = normalizeThresholdList(input.thresholds);
-    }
-
-    if ('referenceMonth' in input) {
-        payload.referenceMonth = normalizeReferenceMonth(input.referenceMonth);
-    }
-
-    if ('userId' in input) {
-        const userId = normalizeId(input.userId);
-        if (userId !== null) {
-            payload.userId = userId;
-        }
-    }
-
-    if ('financeCategoryId' in input) {
-        const financeCategoryId = normalizeId(input.financeCategoryId);
-        if (financeCategoryId !== null) {
-            payload.financeCategoryId = financeCategoryId;
-        }
-    }
-
-    return payload;
+const clearCache = () => {
+    budgetListCache.clear();
 };
 
-const normalizePagination = (pagination = {}) => {
-    const pageValue = Number.parseInt(pagination.page, 10);
-    const sizeValue = Number.parseInt(pagination.pageSize, 10);
+const buildCacheKey = (filters, pagination) => {
+    const normalizedFilters = {
+        userId: normalizeId(filters.userId),
+        financeCategoryId: normalizeId(filters.financeCategoryId)
+    };
 
-    const page = Number.isInteger(pageValue) && pageValue > 0 ? pageValue : DEFAULT_PAGE;
-    const pageSize = Number.isInteger(sizeValue) && sizeValue > 0 ? Math.min(sizeValue, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+    return JSON.stringify({ filters: normalizedFilters, pagination });
+};
+
+const getPaginationSettings = (options = {}) => {
+    const parsedPage = Number.parseInt(options.page, 10);
+    const parsedPageSize = Number.parseInt(options.pageSize, 10);
+
+    const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const pageSize = Number.isInteger(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 25;
 
     return { page, pageSize };
 };
 
-const buildCacheKey = (filters, pagination) => JSON.stringify({ filters, pagination });
+const buildWhereClause = (filters = {}) => {
+    const where = {};
 
-const formatBudgetRow = (row) => {
-    if (row && typeof row.get === 'function') {
-        return row.get({ plain: true });
+    const normalizedUserId = normalizeId(filters.userId);
+    if (normalizedUserId !== null) {
+        where.userId = normalizedUserId;
     }
 
-    if (row && typeof row.toJSON === 'function') {
-        return row.toJSON();
+    const normalizedCategoryId = normalizeId(filters.financeCategoryId);
+    if (normalizedCategoryId !== null) {
+        where.financeCategoryId = normalizedCategoryId;
     }
 
-    return { ...row };
+    return where;
+};
+
+const buildEmptyResult = (pagination) => ({
+    data: [],
+    pagination: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        totalItems: 0,
+        totalPages: 0
+    }
+});
+
+const listBudgets = async (filters = {}, paginationOptions = {}) => {
+    const pagination = getPaginationSettings(paginationOptions);
+    const cacheKey = buildCacheKey(filters, pagination);
+
+    if (budgetListCache.has(cacheKey)) {
+        return budgetListCache.get(cacheKey);
+    }
+
+    const where = buildWhereClause(filters);
+    const offset = (pagination.page - 1) * pagination.pageSize;
+
+    try {
+        const { rows, count } = await Budget.findAndCountAll({
+            where,
+            offset,
+            limit: pagination.pageSize,
+            order: [
+                ['referenceMonth', 'DESC'],
+                ['financeCategoryId', 'ASC']
+            ]
+        });
+
+        const data = Array.isArray(rows) ? rows.map(toPlainBudget).filter(Boolean) : [];
+        const totalPages = pagination.pageSize > 0 ? Math.ceil(count / pagination.pageSize) : 0;
+
+        const result = {
+            data,
+            pagination: {
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                totalItems: count,
+                totalPages: Number.isFinite(totalPages) ? totalPages : 0
+            }
+        };
+
+        budgetListCache.set(cacheKey, result);
+        return result;
+    } catch (error) {
+        if (typeof error?.message === 'string' && /no such table/i.test(error.message)) {
+            const emptyResult = buildEmptyResult(pagination);
+            budgetListCache.set(cacheKey, emptyResult);
+            return emptyResult;
+        }
+        throw error;
+    }
+};
+
+const applyBudgetUpdates = (budget, updates) => {
+    if (updates.monthlyLimit !== undefined) {
+        budget.monthlyLimit = normalizeMonthlyLimit(updates.monthlyLimit);
+    }
+
+    if (updates.thresholds !== undefined) {
+        budget.thresholds = normalizeThresholds(updates.thresholds);
+    }
+
+    if (updates.referenceMonth !== undefined) {
+        budget.referenceMonth = normalizeReferenceMonth(updates.referenceMonth);
+    }
+
+    if (updates.userId !== undefined) {
+        budget.userId = normalizeId(updates.userId);
+    }
+
+    if (updates.financeCategoryId !== undefined) {
+        budget.financeCategoryId = normalizeId(updates.financeCategoryId);
+    }
+};
+
+const buildQueryOptions = (options = {}) => {
+    const queryOptions = { ...options };
+    if (!Object.prototype.hasOwnProperty.call(queryOptions, 'transaction')) {
+        queryOptions.transaction = options.transaction;
+    }
+    return queryOptions;
+};
+
+const createBudget = async (input = {}, options = {}) => {
+    const normalizedUserId = normalizeId(input.userId);
+    const normalizedCategoryId = normalizeId(input.financeCategoryId);
+    const normalizedMonthlyLimit = normalizeMonthlyLimit(input.monthlyLimit);
+    const normalizedThresholds = normalizeThresholds(input.thresholds);
+    const normalizedReferenceMonth = normalizeReferenceMonth(input.referenceMonth);
+
+    const payload = {};
+    if (normalizedUserId !== null) {
+        payload.userId = normalizedUserId;
+    }
+    if (normalizedCategoryId !== null) {
+        payload.financeCategoryId = normalizedCategoryId;
+    }
+    if (normalizedMonthlyLimit !== null) {
+        payload.monthlyLimit = normalizedMonthlyLimit;
+    }
+    if (normalizedThresholds.length) {
+        payload.thresholds = normalizedThresholds;
+    }
+    if (normalizedReferenceMonth) {
+        payload.referenceMonth = normalizedReferenceMonth;
+    }
+
+    const queryOptions = buildQueryOptions(options);
+    const budget = await Budget.create(payload, queryOptions);
+    clearCache();
+    return toPlainBudget(budget);
+};
+
+const updateBudget = async (id, updates = {}, options = {}) => {
+    const normalizedId = normalizeId(id);
+    if (normalizedId === null) {
+        return null;
+    }
+
+    const queryOptions = buildQueryOptions(options);
+    const budget = await Budget.findByPk(normalizedId, queryOptions);
+    if (!budget) {
+        return null;
+    }
+
+    applyBudgetUpdates(budget, updates);
+    await budget.save(queryOptions);
+    clearCache();
+    return toPlainBudget(budget);
+};
+
+const getBudgetConsumptionSummary = async (budgetId, filters = {}, options = {}) => {
+    const normalizedBudgetId = normalizeId(budgetId);
+    if (normalizedBudgetId === null) {
+        return null;
+    }
+
+    const overview = await financeReportingService.getBudgetSummaries(filters, {
+        ...options,
+        includeCategoryConsumption: true
+    });
+
+    const summaries = Array.isArray(overview?.summaries)
+        ? overview.summaries.filter((item) => normalizeId(item.budgetId) === normalizedBudgetId)
+        : [];
+
+    if (!summaries.length) {
+        return {
+            budgetId: normalizedBudgetId,
+            totalLimit: 0,
+            totalConsumption: 0,
+            remaining: 0,
+            status: 'ok',
+            months: Array.isArray(overview?.months) ? overview.months : [],
+            categoryConsumption: Array.isArray(overview?.categoryConsumption) ? overview.categoryConsumption : []
+        };
+    }
+
+    const totals = summaries.reduce(
+        (acc, item) => {
+            const monthlyLimit = Number(item.monthlyLimit || 0);
+            const consumption = Number(item.consumption || 0);
+
+            acc.totalLimit += Number.isFinite(monthlyLimit) ? monthlyLimit : 0;
+            acc.totalConsumption += Number.isFinite(consumption) ? consumption : 0;
+
+            const thresholds = Array.isArray(item.thresholds) ? item.thresholds : [];
+            thresholds.forEach((threshold) => {
+                const numeric = Number(threshold);
+                if (Number.isFinite(numeric) && numeric > acc.highestThreshold) {
+                    acc.highestThreshold = numeric;
+                }
+            });
+
+            return acc;
+        },
+        { totalLimit: 0, totalConsumption: 0, highestThreshold: 0 }
+    );
+
+    let status = 'ok';
+    if (totals.totalLimit > 0 && totals.totalConsumption >= totals.totalLimit) {
+        status = 'alert';
+    } else if (totals.highestThreshold > 0 && totals.totalConsumption >= totals.highestThreshold) {
+        status = 'warning';
+    }
+
+    const remaining = totals.totalLimit - totals.totalConsumption;
+
+    return {
+        budgetId: normalizedBudgetId,
+        totalLimit: Number(totals.totalLimit.toFixed(2)),
+        totalConsumption: Number(totals.totalConsumption.toFixed(2)),
+        remaining: Number(remaining.toFixed(2)),
+        status,
+        months: Array.isArray(overview?.months) ? overview.months : [],
+        categoryConsumption: Array.isArray(overview?.categoryConsumption) ? overview.categoryConsumption : []
+    };
+};
+
+const findBudgetById = async ({ id, userId }) => {
+    const where = {};
+
+    const normalizedId = normalizeId(id);
+    if (normalizedId !== null) {
+        where.id = normalizedId;
+    }
+
+    const normalizedUserId = normalizeId(userId);
+    if (normalizedUserId !== null) {
+        where.userId = normalizedUserId;
+    }
+
+    return Budget.findOne({ where });
 };
 
 const listBudgets = async (filters = {}, pagination = {}, options = {}) => {
@@ -286,11 +483,28 @@ const saveBudget = async ({ id, ...data } = {}, options = {}) => {
             error.code = 'BUDGET_NOT_FOUND';
             throw error;
         }
-        return updated;
+
+        budget.monthlyLimit = monthlyLimit;
+        budget.thresholds = thresholds;
+        budget.referenceMonth = referenceMonth;
+        budget.userId = userId;
+        budget.financeCategoryId = financeCategoryId;
+
+        await budget.save();
+        clearCache();
+        return budget;
     }
 
-    return createBudget(data, options);
+    const created = await Budget.create({
+        monthlyLimit,
+        thresholds,
+        referenceMonth,
+        userId,
+        financeCategoryId
+    });
 
+    clearCache();
+    return created;
 };
 
 const deleteBudget = async ({ id, userId }, options = {}) => {
@@ -304,74 +518,17 @@ const deleteBudget = async ({ id, userId }, options = {}) => {
         await budget.destroy({ transaction: options.transaction });
     }
 
+    await budget.destroy();
     clearCache();
-};
-
-const sumValues = (items, key) => items.reduce((total, item) => {
-    const value = Number.parseFloat(item?.[key]);
-    if (!Number.isFinite(value)) {
-        return total;
-    }
-    return total + value;
-}, 0);
-
-const flattenThresholds = (items) => {
-    const values = [];
-    items.forEach((item) => {
-        if (Array.isArray(item?.thresholds)) {
-            item.thresholds.forEach((threshold) => {
-                const normalized = normalizeNumber(threshold);
-                if (normalized !== null) {
-                    values.push(normalized);
-                }
-            });
-        }
-    });
-    return values;
-};
-
-const getBudgetConsumptionSummary = async (budgetId, filters = {}) => {
-    const overview = await financeReportingService.getBudgetSummaries(filters, {
-        includeCategoryConsumption: true,
-        budgetIds: [budgetId]
-    });
-
-    const summaries = Array.isArray(overview?.summaries)
-        ? overview.summaries.filter((item) => normalizeId(item?.budgetId) === normalizeId(budgetId))
-        : [];
-
-    const totalLimit = sumValues(summaries, 'monthlyLimit');
-    const totalConsumption = sumValues(summaries, 'consumption');
-    const thresholds = flattenThresholds(summaries);
-
-    const resolver = financeReportingService.utils?.resolveBudgetStatus;
-    const statusMeta = typeof resolver === 'function'
-        ? resolver(totalConsumption, totalLimit, thresholds)
-        : { key: 'unknown', label: 'Indefinido' };
-
-    return {
-        budgetId: normalizeId(budgetId),
-        totalLimit,
-        totalConsumption,
-        thresholds,
-        status: statusMeta.key,
-        statusLabel: statusMeta.label,
-        statusMeta,
-        months: Array.isArray(overview?.months) ? [...overview.months] : [],
-        summaries,
-        categoryConsumption: Array.isArray(overview?.categoryConsumption)
-            ? [...overview.categoryConsumption]
-            : []
-    };
 };
 
 module.exports = {
     listBudgets,
     createBudget,
     updateBudget,
+    getBudgetConsumptionSummary,
     saveBudget,
     deleteBudget,
-    getBudgetConsumptionSummary,
     __testing: {
         clearCache
     }
