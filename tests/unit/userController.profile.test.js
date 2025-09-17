@@ -1,6 +1,7 @@
 process.env.NODE_ENV = 'test';
 
 jest.mock('../../database/models', () => ({
+    Sequelize: { Op: require('sequelize').Op },
     User: {
         findByPk: jest.fn()
     },

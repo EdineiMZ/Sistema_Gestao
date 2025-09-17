@@ -1,0 +1,47 @@
+<% const resolvedPrefix = typeof prefix === 'string' && prefix.length ? prefix : null; %>
+<% const resolvedSuffix = typeof suffix === 'string' && suffix.length ? suffix : null; %>
+<% const resolvedHelper = typeof helper === 'string' ? helper : ''; %>
+<% const resolvedStep = (typeof step === 'number' || (typeof step === 'string' && step)) ? step : '1'; %>
+<% const resolvedMax = typeof max !== 'undefined' ? max : null; %>
+
+<div class="col-12 col-md-6 col-xl-4">
+    <div class="border rounded-4 p-4 h-100 shadow-sm bg-white threshold-fieldset" data-threshold-card>
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+            <div>
+                <h4 class="h6 fw-semibold mb-1"><%= title %></h4>
+                <p class="text-muted small mb-0"><%= description %></p>
+            </div>
+            <% if (icon) { %>
+                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                    <i class="bi <%= icon %>" aria-hidden="true"></i>
+                </span>
+            <% } %>
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-muted small" for="<%= inputId %>"><%= label %></label>
+            <div class="input-group">
+                <% if (resolvedPrefix) { %>
+                    <span class="input-group-text"><%= resolvedPrefix %></span>
+                <% } %>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="<%= inputId %>"
+                    name="thresholds[<%= name %>]"
+                    value="<%= value %>"
+                    min="0"
+                    step="<%= resolvedStep %>"
+                    <%= resolvedMax !== null ? `max="${resolvedMax}"` : '' %>
+                    required
+                    data-threshold-input
+                />
+                <% if (resolvedSuffix) { %>
+                    <span class="input-group-text"><%= resolvedSuffix %></span>
+                <% } %>
+            </div>
+        </div>
+        <% if (resolvedHelper) { %>
+            <p class="text-muted small mb-0"><%= resolvedHelper %></p>
+        <% } %>
+    </div>
+</div>

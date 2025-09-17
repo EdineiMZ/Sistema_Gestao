@@ -1,0 +1,34 @@
+<div class="card card-soft shadow-sm h-100" data-budget-alert>
+    <div class="card-body">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+            <div>
+                <span class="app-chip mb-2"><i class="bi bi-graph-up-arrow me-2"></i>Orçamentos</span>
+                <h4 class="fw-semibold mb-1"><%= copy.heroTitle %></h4>
+                <p class="text-muted mb-0"><%= budget.highlightMessage %></p>
+            </div>
+            <div class="text-muted small text-lg-end">
+                Atualizado em <strong><%= tokens.access.issuedAtLabel %></strong>
+            </div>
+        </div>
+
+        <%- await include('./partials/budgetAlertSummary', { budget, displayMode: 'in-app' }) %>
+
+        <% if (insights && insights.length) { %>
+            <ul class="text-muted small ps-3 mt-4 mb-4">
+                <% insights.forEach((insight) => { %>
+                    <li><%= insight %></li>
+                <% }) %>
+            </ul>
+        <% } %>
+
+        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mt-4">
+            <div class="text-muted small">
+                Link seguro válido até <strong><%= tokens.access.expiresAtLabel %></strong>
+            </div>
+            <a class="btn btn-gradient" href="<%= links.relativePath %>">
+                <i class="bi bi-arrow-right-short me-1" aria-hidden="true"></i>
+                Ir para orçamentos
+            </a>
+        </div>
+    </div>
+</div>

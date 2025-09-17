@@ -3,6 +3,7 @@ process.env.NODE_ENV = 'test';
 const { Op } = require('sequelize');
 
 jest.mock('../../database/models', () => {
+    const { Op: SequelizeOp } = require('sequelize');
     const sequelizeMock = {
         where: jest.fn((lhs, rhs) => ({ lhs, rhs })),
         fn: jest.fn((fnName, ...args) => ({ fnName, args })),
@@ -17,7 +18,8 @@ jest.mock('../../database/models', () => {
         Procedure: {},
         Room: {},
         Appointment: {},
-        sequelize: sequelizeMock
+        sequelize: sequelizeMock,
+        Sequelize: { Op: SequelizeOp }
     };
 });
 
