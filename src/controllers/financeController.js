@@ -1,15 +1,15 @@
 const { Op } = require('sequelize');
-const { FinanceEntry, FinanceAttachment, FinanceCategory, FinanceGoal, sequelize } = require('../../database/models');
+const { Budget, FinanceEntry, FinanceAttachment, FinanceCategory, FinanceGoal, sequelize } = require('../../database/models');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { pipeline } = require('stream/promises');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
-const { buildImportPreview } = financeImportService;
 const fileStorageService = require('../services/fileStorageService');
 
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
+const { DEFAULT_STATUS_META: SERVICE_STATUS_META, normalizeThresholdList } = reportingUtils;
 const {
     FINANCE_TYPES,
     FINANCE_STATUSES,
@@ -119,6 +119,93 @@ const normalizeAmountInput = (value) => {
     return null;
 };
 
+const FALLBACK_STATUS_META = {
+    healthy: { key: 'healthy', label: 'Consumo saudável', badgeClass: 'bg-success-subtle text-success', icon: 'bi-emoji-smile', barColor: '#10b981' },
+    caution: { key: 'caution', label: 'Consumo moderado', badgeClass: 'bg-primary-subtle text-primary', icon: 'bi-activity', barColor: '#2563eb' },
+    warning: { key: 'warning', label: 'Atenção ao consumo', badgeClass: 'bg-warning-subtle text-warning', icon: 'bi-exclamation-triangle-fill', barColor: '#f59e0b' },
+    critical: { key: 'critical', label: 'Limite excedido', badgeClass: 'bg-danger-subtle text-danger', icon: 'bi-fire', barColor: '#ef4444' }
+};
+
+const buildStatusPalette = () => {
+    const overrides = SERVICE_STATUS_META || {};
+    const keys = new Set([
+        ...Object.keys(FALLBACK_STATUS_META),
+        ...Object.keys(overrides)
+    ]);
+
+    return Array.from(keys).reduce((acc, key) => {
+        const fallback = FALLBACK_STATUS_META[key] || FALLBACK_STATUS_META.healthy;
+        const override = overrides[key] || {};
+        acc[key] = {
+            ...fallback,
+            ...override,
+            key: override.key || fallback.key || key,
+            badgeClass: override.badgeClass || fallback.badgeClass,
+            barColor: override.barColor || fallback.barColor,
+            label: override.label || fallback.label,
+            icon: override.icon || fallback.icon
+        };
+        return acc;
+    }, {});
+};
+
+const normalizeNumeric = (value, precision = 2) => {
+    const numeric = Number.parseFloat(value);
+    if (!Number.isFinite(numeric)) {
+        return 0;
+    }
+    const factor = 10 ** precision;
+    return Math.round(numeric * factor) / factor;
+};
+
+const buildBudgetCardPayload = (summary, statusPalette) => {
+    const monthlyLimit = normalizeNumeric(summary?.monthlyLimit ?? 0);
+    const consumption = normalizeNumeric(summary?.consumption ?? 0);
+    const remaining = normalizeNumeric(
+        summary?.remaining ?? (monthlyLimit - consumption)
+    );
+    const thresholds = normalizeThresholdList ? normalizeThresholdList(summary?.thresholds) : [];
+    const usage = Number.isFinite(Number(summary?.percentage))
+        ? normalizeNumeric(summary.percentage)
+        : (monthlyLimit > 0 ? normalizeNumeric((consumption / monthlyLimit) * 100) : 0);
+    const statusKey = summary?.status || summary?.statusMeta?.key || 'healthy';
+    const palette = statusPalette || {};
+    const paletteMeta = palette[statusKey] || palette.healthy || FALLBACK_STATUS_META.healthy;
+    const metaSource = summary?.statusMeta || {};
+    const mergedStatus = {
+        ...paletteMeta,
+        ...metaSource,
+        key: metaSource.key || paletteMeta.key || statusKey,
+        badgeClass: metaSource.badgeClass || paletteMeta.badgeClass,
+        barColor: metaSource.barColor || paletteMeta.barColor,
+        label: metaSource.label || paletteMeta.label,
+        icon: metaSource.icon || paletteMeta.icon
+    };
+
+    return {
+        ...summary,
+        budgetId: summary?.budgetId ?? summary?.id ?? null,
+        monthlyLimit,
+        consumption,
+        remaining,
+        thresholds,
+        percentage: usage,
+        usage,
+        status: mergedStatus.key || statusKey,
+        statusMeta: mergedStatus,
+        statusStyle: mergedStatus
+    };
+};
+
+const buildBudgetCards = (summaries = [], palette) => {
+    if (!Array.isArray(summaries)) {
+        return [];
+    }
+
+    const statusPalette = palette || buildStatusPalette();
+    return summaries.map((summary) => buildBudgetCardPayload(summary, statusPalette));
+};
+
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL'
@@ -177,33 +264,6 @@ const formatPeriodLabel = (filters = {}) => {
     return 'Todo o período';
 };
 
-const wantsJsonResponse = (req) => {
-    if (!req) {
-        return false;
-    }
-
-    if (req.xhr === true) {
-        return true;
-    }
-
-    const headers = req.headers || {};
-    const acceptHeader = headers.accept || headers.Accept || '';
-    if (typeof acceptHeader === 'string' && acceptHeader.includes('application/json')) {
-        return true;
-    }
-
-    const requestedWith = headers['x-requested-with'] || headers['X-Requested-With'];
-    if (typeof requestedWith === 'string' && requestedWith.toLowerCase() === 'xmlhttprequest') {
-        return true;
-    }
-
-    if (req.query && typeof req.query.format === 'string' && req.query.format.toLowerCase() === 'json') {
-        return true;
-    }
-
-    return false;
-};
-
 const isMissingTableDbError = (error, tableName) => {
     if (!error) {
         return false;
@@ -219,7 +279,7 @@ const isMissingTableDbError = (error, tableName) => {
     return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
 };
 
-const buildImportPreview = async (rawEntries = []) => {
+const prepareImportPreview = async (rawEntries = []) => {
     const totals = { total: 0, new: 0, conflicting: 0, invalid: 0 };
     if (!Array.isArray(rawEntries) || !rawEntries.length) {
         return { entries: [], totals, validationErrors: [] };
@@ -622,7 +682,7 @@ module.exports = {
                 budgetOverviewPromise
             ]);
 
-            const budgetSummaries = Array.isArray(budgetOverview?.summaries)
+            const rawBudgetSummaries = Array.isArray(budgetOverview?.summaries)
                 ? budgetOverview.summaries
                 : [];
             const categoryConsumption = Array.isArray(budgetOverview?.categoryConsumption)
@@ -631,6 +691,9 @@ module.exports = {
             const budgetMonths = Array.isArray(budgetOverview?.months)
                 ? budgetOverview.months
                 : [];
+
+            const statusPalette = buildStatusPalette();
+            const budgetCards = buildBudgetCards(rawBudgetSummaries, statusPalette);
 
             const projections = Array.isArray(summary.projections) ? summary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
@@ -656,12 +719,14 @@ module.exports = {
                     statusSummary: summary.statusSummary,
                     monthlySummary: summary.monthlySummary,
                     financeTotals: summary.totals,
-                    budgetSummaries,
+                    budgetSummaries: rawBudgetSummaries,
+                    budgetCards,
                     categoryConsumption,
                     budgetMonths,
                     importPreview,
                     recurringIntervalOptions,
-                    budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null
+                    budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null,
+                    budgetStatusPalette: statusPalette
                 },
                 (renderError, html) => {
                     if (renderError) {
@@ -674,6 +739,54 @@ module.exports = {
             console.error('Erro ao listar finanças:', err);
             req.flash('error_msg', 'Erro ao listar finanças.');
             res.redirect('/');
+        }
+    },
+
+    updateBudgetThresholds: async (req, res) => {
+        try {
+            const budgetId = Number.parseInt(req.params.id, 10);
+            if (!Number.isInteger(budgetId) || budgetId <= 0) {
+                return res.status(400).json({ ok: false, message: 'Orçamento inválido.' });
+            }
+
+            if (!Budget || typeof Budget.findByPk !== 'function') {
+                return res.status(500).json({ ok: false, message: 'Recurso de orçamento indisponível.' });
+            }
+
+            const budget = await Budget.findByPk(budgetId);
+            if (!budget) {
+                return res.status(404).json({ ok: false, message: 'Orçamento não encontrado.' });
+            }
+
+            const normalizedThresholds = Budget.normalizeThresholds
+                ? Budget.normalizeThresholds(req.body?.thresholds)
+                : normalizeThresholdList(req.body?.thresholds);
+
+            budget.thresholds = normalizedThresholds;
+            await budget.save();
+
+            const filters = buildFiltersFromQuery(req.query);
+            const overview = await financeReportingService.getBudgetSummaries(filters, {
+                includeCategoryConsumption: true
+            });
+
+            const statusPalette = buildStatusPalette();
+            const budgetCards = buildBudgetCards(Array.isArray(overview?.summaries) ? overview.summaries : [], statusPalette);
+
+            return res.json({
+                ok: true,
+                budgetId: budget.id,
+                thresholds: normalizedThresholds,
+                overview: {
+                    ...overview,
+                    summaries: budgetCards
+                },
+                statusPalette
+            });
+        } catch (error) {
+            console.error('Erro ao atualizar thresholds do orçamento:', error);
+            const message = error?.message || 'Não foi possível atualizar os thresholds do orçamento.';
+            return res.status(500).json({ ok: false, message });
         }
     },
 
@@ -692,7 +805,7 @@ module.exports = {
                 throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
             }
 
-            const preview = await buildImportPreview(parseResult.entries);
+            const preview = await prepareImportPreview(parseResult.entries);
             const payload = {
                 fileName: req.file.originalname,
                 uploadedAt: new Date().toISOString(),

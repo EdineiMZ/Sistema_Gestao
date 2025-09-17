@@ -129,12 +129,17 @@
 
     return safeValue;
 }; %>
+<% const providedBudgetCards = (typeof budgetCards !== 'undefined' && Array.isArray(budgetCards))
+    ? budgetCards
+    : ((typeof locals !== 'undefined' && locals && Array.isArray(locals.budgetCards)) ? locals.budgetCards : []); %>
 <% const budgetSummariesSource = (typeof budgetSummaries !== 'undefined')
     ? budgetSummaries
     : ((typeof locals !== 'undefined' && locals && locals.budgetSummaries) ? locals.budgetSummaries : []); %>
-<% const rawBudgetData = Array.isArray(budgetSummariesSource)
-    ? budgetSummariesSource
-    : (budgetSummariesSource && Array.isArray(budgetSummariesSource.summaries) ? budgetSummariesSource.summaries : []); %>
+<% const rawBudgetData = providedBudgetCards.length
+    ? providedBudgetCards
+    : (Array.isArray(budgetSummariesSource)
+        ? budgetSummariesSource
+        : (budgetSummariesSource && Array.isArray(budgetSummariesSource.summaries) ? budgetSummariesSource.summaries : [])); %>
 <% const budgetMonthsSource = (typeof budgetMonths !== 'undefined')
     ? budgetMonths
     : ((typeof locals !== 'undefined' && locals && locals.budgetMonths) ? locals.budgetMonths : []); %>
@@ -147,9 +152,13 @@
 <% const categoryConsumptionList = Array.isArray(categoryConsumptionSource)
     ? categoryConsumptionSource
     : (budgetSummariesSource && Array.isArray(budgetSummariesSource.categoryConsumption) ? budgetSummariesSource.categoryConsumption : []); %>
-<% const budgetStatusSource = (typeof budgetStatusMeta !== 'undefined' && budgetStatusMeta && typeof budgetStatusMeta === 'object')
-    ? budgetStatusMeta
-    : ((typeof locals !== 'undefined' && locals && typeof locals.budgetStatusMeta === 'object') ? locals.budgetStatusMeta : {}); %>
+<% const budgetStatusPaletteSource = (typeof budgetStatusPalette !== 'undefined' && budgetStatusPalette && typeof budgetStatusPalette === 'object')
+    ? budgetStatusPalette
+    : ((typeof locals !== 'undefined' && locals && typeof locals.budgetStatusPalette === 'object') ? locals.budgetStatusPalette : null); %>
+<% const budgetStatusSource = budgetStatusPaletteSource
+    || ((typeof budgetStatusMeta !== 'undefined' && budgetStatusMeta && typeof budgetStatusMeta === 'object')
+        ? budgetStatusMeta
+        : ((typeof locals !== 'undefined' && locals && typeof locals.budgetStatusMeta === 'object') ? locals.budgetStatusMeta : {})); %>
 <% const defaultBudgetStatus = {
     healthy: { key: 'healthy', label: 'Consumo saudável', badgeClass: 'bg-success-subtle text-success', icon: 'bi-emoji-smile', barColor: '#10b981' },
     caution: { key: 'caution', label: 'Consumo moderado', badgeClass: 'bg-primary-subtle text-primary', icon: 'bi-activity', barColor: '#2563eb' },
@@ -168,21 +177,60 @@
         icon: source.icon || fallback.icon
     };
 }; %>
+<% const resolveThresholdPreview = (threshold, item) => {
+    const limit = Number(item.monthlyLimit || 0);
+    const consumption = Number(item.consumption || 0);
+    const numericThreshold = Number(threshold || 0);
+    const percentage = limit > 0 ? (numericThreshold / limit) * 100 : null;
+    const reached = consumption >= numericThreshold && numericThreshold > 0;
+    let statusKey = 'healthy';
+
+    if (Number.isFinite(percentage) && percentage >= 100) {
+        statusKey = reached ? 'critical' : 'warning';
+    } else if (reached) {
+        statusKey = 'warning';
+    } else if (Number.isFinite(percentage) && percentage >= 85) {
+        statusKey = 'warning';
+    } else if (Number.isFinite(percentage) && percentage >= 60) {
+        statusKey = 'caution';
+    }
+
+    const statusStyle = resolveBudgetStatusStyle(statusKey);
+    return {
+        badgeClass: statusStyle.badgeClass,
+        icon: reached ? 'bi-check-circle-fill' : 'bi-flag-fill',
+        percentage: Number.isFinite(percentage) ? percentage : null,
+        label: statusStyle.label
+    };
+}; %>
 <% const normalizedBudgetData = rawBudgetData.map((item) => {
-    const statusStyle = resolveBudgetStatusStyle(item.status || item.statusMeta?.key || 'healthy');
-    const usage = Number(item.percentage || 0);
+    const statusStyle = resolveBudgetStatusStyle(item.status || item.statusMeta?.key || item.statusStyle?.key || 'healthy');
+    const usage = Number.isFinite(Number(item.usage))
+        ? Number(item.usage)
+        : (Number.isFinite(Number(item.percentage)) ? Number(item.percentage) : 0);
     const consumption = Number(item.consumption || 0);
     const limit = Number(item.monthlyLimit || 0);
-    const remaining = Number(item.remaining || 0);
+    const remaining = Number.isFinite(Number(item.remaining)) ? Number(item.remaining) : (limit - consumption);
+    const thresholds = Array.isArray(item.thresholds) ? item.thresholds : [];
     return {
         ...item,
         usage,
+        percentage: usage,
         consumption,
         monthlyLimit: limit,
         remaining,
+        thresholds,
         statusStyle
     };
 }); %>
+<% const allBudgetStatusKeys = Array.from(new Set([
+    ...Object.keys(defaultBudgetStatus),
+    ...Object.keys(budgetStatusSource || {})
+])); %>
+<% const clientBudgetStatusMeta = allBudgetStatusKeys.reduce((acc, key) => {
+    acc[key] = resolveBudgetStatusStyle(key);
+    return acc;
+}, {}); %>
 <% const computedBudgetMonths = budgetMonthList.length ? budgetMonthList : Array.from(new Set(normalizedBudgetData.map((item) => item.month))).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)); %>
 <% const activeBudgetMonth = computedBudgetMonths.length ? computedBudgetMonths[computedBudgetMonths.length - 1] : null; %>
 <% const activeBudgetData = normalizedBudgetData.filter((item) => !activeBudgetMonth || item.month === activeBudgetMonth); %>
@@ -272,8 +320,15 @@
                                 </div>
                             </div>
                         <% } else { %>
-                            <% normalizedBudgetData.forEach((item) => { %>
-                                <div class="col-12 col-md-6" data-budget-card data-budget-month="<%= item.month %>">
+                            <% normalizedBudgetData.forEach((item, index) => { %>
+                                <div
+                                    class="col-12 col-md-6"
+                                    data-budget-card
+                                    data-budget-index="<%= index %>"
+                                    data-budget-month="<%= item.month %>"
+                                    data-budget-id="<%= item.budgetId || item.id || '' %>"
+                                    data-budget-category="<%= item.categoryId || '' %>"
+                                >
                                     <div class="h-100 border rounded-4 p-4 shadow-sm position-relative">
                                         <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                                             <div class="d-flex align-items-start gap-3">
@@ -289,15 +344,20 @@
                                                     </span>
                                                 </div>
                                             </div>
-                                            <span class="badge <%= item.statusStyle.badgeClass %> d-inline-flex align-items-center gap-1">
+                                            <span
+                                                class="badge <%= item.statusStyle.badgeClass %> d-inline-flex align-items-center gap-1"
+                                                data-budget-status-badge
+                                                data-status-key="<%= item.statusStyle.key || item.status || 'healthy' %>"
+                                            >
                                                 <i class="bi <%= item.statusStyle.icon %>" aria-hidden="true"></i>
-                                                <span><%= item.statusStyle.label %></span>
+                                                <span data-budget-status-label><%= item.statusStyle.label %></span>
                                             </span>
                                         </div>
                                         <div class="mb-4">
                                             <div class="progress bg-light rounded-pill" style="height: 8px;">
                                                 <div
                                                     class="progress-bar"
+                                                    data-budget-progress
                                                     role="progressbar"
                                                     style="width: <%= Math.min(item.usage, 130).toFixed(1) %>%; background:<%= item.statusStyle.barColor %>;"
                                                     aria-valuenow="<%= item.usage.toFixed(1) %>"
@@ -307,25 +367,76 @@
                                             </div>
                                             <div class="d-flex justify-content-between text-muted small mt-2">
                                                 <span>Consumido</span>
-                                                <span><%= formatCurrency(item.consumption) %></span>
+                                                <span data-budget-field="consumption"><%= formatCurrency(item.consumption) %></span>
                                             </div>
                                         </div>
                                         <div class="d-flex flex-wrap gap-3 text-sm">
                                             <div>
                                                 <span class="text-muted small d-block">Limite</span>
-                                                <span class="fw-semibold"><%= formatCurrency(item.monthlyLimit) %></span>
+                                                <span class="fw-semibold" data-budget-field="limit"><%= formatCurrency(item.monthlyLimit) %></span>
                                             </div>
                                             <div>
                                                 <span class="text-muted small d-block">Disponível</span>
-                                                <span class="fw-semibold <%= item.remaining < 0 ? 'text-danger' : 'text-success' %>">
+                                                <span
+                                                    class="fw-semibold <%= item.remaining < 0 ? 'text-danger' : 'text-success' %>"
+                                                    data-budget-field="remaining"
+                                                    data-positive-class="text-success"
+                                                    data-negative-class="text-danger"
+                                                >
                                                     <%= formatCurrency(item.remaining) %>
                                                 </span>
                                             </div>
                                             <div>
                                                 <span class="text-muted small d-block">Utilização</span>
-                                                <span class="fw-semibold"><%= item.usage.toFixed(1) %>%</span>
+                                                <span class="fw-semibold" data-budget-field="usage"><%= item.usage.toFixed(1) %>%</span>
                                             </div>
                                         </div>
+                                        <% if (item.budgetId) { %>
+                                            <div class="mt-4" data-threshold-container>
+                                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                                    <div>
+                                                        <span class="text-muted small d-block">Alertas de consumo</span>
+                                                        <span class="text-muted small">Ajuste os limites para antecipar excessos.</span>
+                                                    </div>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-threshold-toggle aria-expanded="false">
+                                                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>
+                                                        Ajustar limites
+                                                    </button>
+                                                </div>
+                                                <div class="d-flex flex-wrap gap-2 align-items-center" data-threshold-badges>
+                                                    <% if (!item.thresholds.length) { %>
+                                                        <span class="badge bg-light text-muted" data-threshold-empty>Sem limites cadastrados</span>
+                                                    <% } else { %>
+                                                        <% item.thresholds.forEach((threshold) => { %>
+                                                            <% const badgeMeta = resolveThresholdPreview(threshold, item); %>
+                                                            <span class="badge <%= badgeMeta.badgeClass %> d-inline-flex align-items-center gap-1">
+                                                                <i class="bi <%= badgeMeta.icon %>" aria-hidden="true"></i>
+                                                                <span>
+                                                                    <%= formatCurrency(Number(threshold)) %>
+                                                                    <% if (badgeMeta.percentage !== null) { %>
+                                                                        (<%= Math.round(badgeMeta.percentage) %>%)
+                                                                    <% } %>
+                                                                </span>
+                                                            </span>
+                                                        <% }) %>
+                                                    <% } %>
+                                                </div>
+                                                <div class="visually-hidden" data-threshold-live aria-live="polite"></div>
+                                                <div class="alert alert-danger d-none mt-3 mb-0 py-2 px-3" role="status" data-threshold-feedback></div>
+                                                <form class="threshold-inline-form d-none mt-3" data-threshold-form novalidate>
+                                                    <div class="small text-muted mb-2">Valores são comparados com o limite mensal definido para o orçamento.</div>
+                                                    <div data-threshold-inputs></div>
+                                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-threshold-cancel>Cancelar</button>
+                                                        <button type="submit" class="btn btn-gradient btn-sm">Salvar limites</button>
+                                                        <button type="button" class="btn btn-link btn-sm text-decoration-none" data-threshold-add>
+                                                            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+                                                            Adicionar limite
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        <% } %>
                                     </div>
                                 </div>
                             <% }) %>
@@ -1353,12 +1464,11 @@
     });
     const rawBudgetSummaries = <%- JSON.stringify(normalizedBudgetData) %>;
     const rawCategoryConsumption = <%- JSON.stringify(categoryConsumptionList) %>;
+    const budgetStatusStyles = <%- JSON.stringify(clientBudgetStatusMeta) %>;
 
     document.addEventListener('DOMContentLoaded', () => {
         const filterForms = document.querySelectorAll('[data-filter-form]');
         const exportLinks = document.querySelectorAll('[data-export-target]');
-        const budgetCardsData = Array.isArray(rawBudgetSummaries) ? rawBudgetSummaries : [];
-        const categoryConsumptionData = Array.isArray(rawCategoryConsumption) ? rawCategoryConsumption : [];
         const budgetMonthSelector = document.querySelector('[data-budget-month-selector]');
         const summaryConsumptionEl = document.querySelector('[data-budget-summary="consumption"]');
         const summaryLimitEl = document.querySelector('[data-budget-summary="limit"]');
@@ -1366,6 +1476,301 @@
         const categoryListEl = document.querySelector('[data-category-consumption-list]');
         const budgetChartCanvas = document.getElementById('budget-consumption-chart');
         let budgetChartInstance = null;
+
+        const fallbackStatusMeta = {
+            key: 'healthy',
+            label: 'Consumo saudável',
+            badgeClass: 'bg-success-subtle text-success',
+            icon: 'bi-emoji-smile',
+            barColor: '#10b981'
+        };
+
+        const normalizeThresholdListClient = (value) => {
+            if (Array.isArray(value)) {
+                const normalized = value
+                    .map((entry) => {
+                        if (entry === null || entry === undefined || entry === '') {
+                            return null;
+                        }
+                        const numeric = typeof entry === 'number' ? entry : Number.parseFloat(entry);
+                        return Number.isFinite(numeric) && numeric > 0 ? Number(numeric.toFixed(2)) : null;
+                    })
+                    .filter((entry) => entry !== null);
+                const unique = Array.from(new Set(normalized));
+                unique.sort((a, b) => a - b);
+                return unique;
+            }
+
+            if (value === null || value === undefined || value === '') {
+                return [];
+            }
+
+            return normalizeThresholdListClient([value]);
+        };
+
+        const resolveBudgetStatusKey = (consumption, limit, thresholds) => {
+            const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 0;
+            const safeConsumption = Number.isFinite(Number(consumption)) ? Number(consumption) : 0;
+            const normalized = normalizeThresholdListClient(thresholds);
+            const ratio = safeLimit > 0 ? (safeConsumption / safeLimit) * 100 : null;
+
+            if (ratio !== null && ratio >= 100) {
+                return 'critical';
+            }
+
+            if (normalized.length) {
+                const highestThreshold = normalized[normalized.length - 1];
+                if (safeConsumption >= highestThreshold) {
+                    return 'warning';
+                }
+            }
+
+            if (ratio !== null && ratio >= 85) {
+                return 'warning';
+            }
+
+            if (ratio !== null && ratio >= 60) {
+                return 'caution';
+            }
+
+            return 'healthy';
+        };
+
+        const resolveThresholdStatusKey = (percentage, reached) => {
+            if (Number.isFinite(percentage) && percentage >= 100) {
+                return reached ? 'critical' : 'warning';
+            }
+            if (reached) {
+                return 'warning';
+            }
+            if (Number.isFinite(percentage) && percentage >= 85) {
+                return 'warning';
+            }
+            if (Number.isFinite(percentage) && percentage >= 60) {
+                return 'caution';
+            }
+            return 'healthy';
+        };
+
+        const resolveStatusMeta = (statusKey) => {
+            const source = budgetStatusStyles[statusKey] || budgetStatusStyles.healthy || fallbackStatusMeta;
+            return {
+                ...fallbackStatusMeta,
+                ...source,
+                key: source.key || statusKey || fallbackStatusMeta.key,
+                badgeClass: source.badgeClass || fallbackStatusMeta.badgeClass,
+                barColor: source.barColor || fallbackStatusMeta.barColor,
+                label: source.label || fallbackStatusMeta.label,
+                icon: source.icon || fallbackStatusMeta.icon
+            };
+        };
+
+        const normalizeBudgetItem = (item = {}) => {
+            const limit = Number(item?.monthlyLimit ?? 0);
+            const consumption = Number(item?.consumption ?? 0);
+            const thresholds = normalizeThresholdListClient(item?.thresholds);
+            const remaining = Number.isFinite(Number(item?.remaining)) ? Number(item.remaining) : (limit - consumption);
+            const usage = Number.isFinite(Number(item?.usage))
+                ? Number(item.usage)
+                : (Number.isFinite(Number(item?.percentage))
+                    ? Number(item.percentage)
+                    : (limit > 0 ? (consumption / limit) * 100 : 0));
+            const statusKey = item?.statusStyle?.key || item?.status || item?.statusMeta?.key || 'healthy';
+            const statusMeta = {
+                ...resolveStatusMeta(statusKey),
+                ...(item?.statusMeta || {})
+            };
+            statusMeta.key = statusMeta.key || statusKey;
+            statusMeta.badgeClass = item?.statusMeta?.badgeClass || statusMeta.badgeClass;
+            statusMeta.barColor = item?.statusMeta?.barColor || statusMeta.barColor;
+            statusMeta.label = item?.statusMeta?.label || statusMeta.label;
+            statusMeta.icon = item?.statusMeta?.icon || statusMeta.icon;
+
+            return {
+                ...item,
+                monthlyLimit: limit,
+                consumption,
+                thresholds,
+                remaining,
+                usage,
+                percentage: usage,
+                statusKey: statusMeta.key,
+                statusStyle: statusMeta,
+                statusMeta
+            };
+        };
+
+        const renderThresholdBadges = (container, dataset) => {
+            if (!container) {
+                return;
+            }
+
+            const thresholds = Array.isArray(dataset?.thresholds) ? dataset.thresholds : [];
+            container.innerHTML = '';
+
+            if (!thresholds.length) {
+                const emptyBadge = document.createElement('span');
+                emptyBadge.className = 'badge bg-light text-muted';
+                emptyBadge.setAttribute('data-threshold-empty', 'true');
+                emptyBadge.textContent = 'Sem limites cadastrados';
+                container.appendChild(emptyBadge);
+                return;
+            }
+
+            const limit = Number(dataset?.monthlyLimit) || 0;
+            const consumption = Number(dataset?.consumption) || 0;
+
+            thresholds.forEach((threshold) => {
+                const numeric = Number(threshold);
+                const percentage = limit > 0 ? (numeric / limit) * 100 : null;
+                const reached = consumption >= numeric && numeric > 0;
+                const statusKey = resolveThresholdStatusKey(percentage, reached);
+                const statusMeta = resolveStatusMeta(statusKey);
+
+                const badge = document.createElement('span');
+                badge.className = `badge ${statusMeta.badgeClass || 'bg-light text-muted'} d-inline-flex align-items-center gap-1`;
+
+                const iconEl = document.createElement('i');
+                iconEl.className = `bi ${reached ? 'bi-check-circle-fill' : 'bi-flag-fill'}`;
+                iconEl.setAttribute('aria-hidden', 'true');
+                badge.appendChild(iconEl);
+
+                const textEl = document.createElement('span');
+                let label = chartCurrencyFormatter.format(numeric);
+                if (Number.isFinite(percentage)) {
+                    label += ` (${Math.round(percentage)}%)`;
+                }
+                textEl.textContent = label;
+                badge.appendChild(textEl);
+
+                container.appendChild(badge);
+            });
+        };
+
+        const updateCardPreview = (card, dataset) => {
+            if (!card || !dataset) {
+                return;
+            }
+
+            const statusMeta = dataset.statusStyle || resolveStatusMeta(dataset.statusKey);
+            const statusBadge = card.querySelector('[data-budget-status-badge]');
+            if (statusBadge) {
+                statusBadge.className = `badge ${statusMeta.badgeClass || 'bg-light text-muted'} d-inline-flex align-items-center gap-1`;
+                statusBadge.setAttribute('data-status-key', statusMeta.key || dataset.statusKey || 'healthy');
+                const iconEl = statusBadge.querySelector('i');
+                if (iconEl) {
+                    iconEl.className = `bi ${statusMeta.icon || 'bi-activity'}`;
+                }
+                const labelEl = statusBadge.querySelector('[data-budget-status-label]');
+                if (labelEl) {
+                    labelEl.textContent = statusMeta.label || 'Consumo saudável';
+                } else {
+                    statusBadge.textContent = statusMeta.label || 'Consumo saudável';
+                }
+            }
+
+            const progressBar = card.querySelector('[data-budget-progress]');
+            if (progressBar) {
+                const usageValue = Number(dataset.usage) || 0;
+                progressBar.style.width = `${Math.min(usageValue, 130).toFixed(1)}%`;
+                if (statusMeta.barColor) {
+                    progressBar.style.background = statusMeta.barColor;
+                }
+                progressBar.setAttribute('aria-valuenow', usageValue.toFixed(1));
+            }
+
+            const consumptionEl = card.querySelector('[data-budget-field="consumption"]');
+            if (consumptionEl) {
+                consumptionEl.textContent = chartCurrencyFormatter.format(Number(dataset.consumption) || 0);
+            }
+
+            const limitEl = card.querySelector('[data-budget-field="limit"]');
+            if (limitEl) {
+                limitEl.textContent = chartCurrencyFormatter.format(Number(dataset.monthlyLimit) || 0);
+            }
+
+            const remainingEl = card.querySelector('[data-budget-field="remaining"]');
+            if (remainingEl) {
+                const value = Number(dataset.remaining) || 0;
+                const positiveClass = remainingEl.getAttribute('data-positive-class') || 'text-success';
+                const negativeClass = remainingEl.getAttribute('data-negative-class') || 'text-danger';
+                remainingEl.classList.remove(positiveClass, negativeClass);
+                remainingEl.classList.add(value < 0 ? negativeClass : positiveClass);
+                remainingEl.textContent = chartCurrencyFormatter.format(value);
+            }
+
+            const usageEl = card.querySelector('[data-budget-field="usage"]');
+            if (usageEl) {
+                const usageValue = Number(dataset.usage) || 0;
+                usageEl.textContent = `${usageValue.toFixed(1)}%`;
+            }
+
+            const badgesContainer = card.querySelector('[data-threshold-badges]');
+            if (badgesContainer) {
+                renderThresholdBadges(badgesContainer, dataset);
+            }
+        };
+
+        const buildPreviewDataset = (index, thresholdValues) => {
+            const base = budgetCardsState[index];
+            if (!base) {
+                return null;
+            }
+
+            const normalized = normalizeThresholdListClient(thresholdValues);
+            const statusKey = resolveBudgetStatusKey(base.consumption, base.monthlyLimit, normalized);
+            const statusMeta = resolveStatusMeta(statusKey);
+
+            return {
+                ...base,
+                thresholds: normalized,
+                statusKey,
+                statusStyle: statusMeta,
+                statusMeta
+            };
+        };
+
+        const showThresholdFeedback = (container, message, variant = 'success') => {
+            const feedbackEl = container.querySelector('[data-threshold-feedback]');
+            const liveEl = container.querySelector('[data-threshold-live]');
+            if (!feedbackEl) {
+                return;
+            }
+
+            feedbackEl.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
+            feedbackEl.classList.add(`alert-${variant}`);
+            feedbackEl.textContent = message;
+
+            if (liveEl) {
+                liveEl.textContent = message;
+            }
+
+            if (feedbackEl.__hideTimeout) {
+                clearTimeout(feedbackEl.__hideTimeout);
+            }
+
+            feedbackEl.__hideTimeout = setTimeout(() => {
+                feedbackEl.classList.add('d-none');
+            }, 5000);
+        };
+
+        const cardElements = Array.from(document.querySelectorAll('[data-budget-card]'));
+        const budgetCardsState = cardElements.map((card, index) => {
+            const source = Array.isArray(rawBudgetSummaries) ? rawBudgetSummaries[index] : null;
+            const normalized = normalizeBudgetItem(source || {});
+            if (!card.getAttribute('data-budget-index')) {
+                card.setAttribute('data-budget-index', String(index));
+            }
+            return normalized;
+        });
+        const budgetCardsData = budgetCardsState;
+        const categoryConsumptionData = Array.isArray(rawCategoryConsumption) ? [...rawCategoryConsumption] : [];
+
+        cardElements.forEach((card, index) => {
+            if (budgetCardsState[index]) {
+                updateCardPreview(card, budgetCardsState[index]);
+            }
+        });
 
         const buildFiltersQuery = (scope) => {
             if (typeof URLSearchParams === 'undefined') {
@@ -1645,6 +2050,232 @@
             renderBudgetChart(month);
             renderCategoryList(month);
         };
+
+        const buildBudgetKey = (item) => {
+            if (!item) {
+                return '::';
+            }
+            return `${item.budgetId ?? item.id ?? ''}::${item.categoryId ?? ''}::${item.month ?? ''}`;
+        };
+
+        const getCardKey = (card) => {
+            if (!card) {
+                return '::';
+            }
+            return `${card.getAttribute('data-budget-id') || ''}::${card.getAttribute('data-budget-category') || ''}::${card.getAttribute('data-budget-month') || ''}`;
+        };
+
+        const applyOverviewUpdate = (overview) => {
+            if (!overview || typeof overview !== 'object') {
+                return;
+            }
+
+            const summaries = Array.isArray(overview.summaries) ? overview.summaries : [];
+            const normalizedSummaries = summaries.map((item) => normalizeBudgetItem(item));
+
+            const summaryMap = new Map();
+            normalizedSummaries.forEach((item) => {
+                summaryMap.set(buildBudgetKey(item), item);
+            });
+
+            cardElements.forEach((card, index) => {
+                const key = getCardKey(card);
+                const updatedItem = summaryMap.get(key);
+                if (updatedItem) {
+                    budgetCardsState[index] = updatedItem;
+                    updateCardPreview(card, updatedItem);
+                }
+            });
+
+            if (Array.isArray(overview.categoryConsumption)) {
+                categoryConsumptionData.length = 0;
+                categoryConsumptionData.push(...overview.categoryConsumption);
+            }
+
+            if (overview.statusPalette && typeof overview.statusPalette === 'object') {
+                Object.assign(budgetStatusStyles, overview.statusPalette);
+            }
+
+            updateBudgetWidgets(budgetMonthSelector?.value || 'all');
+        };
+
+        const setupThresholdEditor = (card, index) => {
+            const container = card?.querySelector('[data-threshold-container]');
+            if (!container) {
+                return;
+            }
+
+            const toggleButton = container.querySelector('[data-threshold-toggle]');
+            const form = container.querySelector('[data-threshold-form]');
+            const inputsWrapper = container.querySelector('[data-threshold-inputs]');
+            const addButton = container.querySelector('[data-threshold-add]');
+            const cancelButton = container.querySelector('[data-threshold-cancel]');
+            const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+
+            if (!form || !inputsWrapper || !toggleButton) {
+                return;
+            }
+
+            let currentValues = [...(budgetCardsState[index]?.thresholds || [])];
+
+            const createInputRow = (value = '') => {
+                const row = document.createElement('div');
+                row.className = 'input-group input-group-sm mb-2';
+                row.innerHTML = `
+                    <span class="input-group-text"><i class="bi bi-flag" aria-hidden="true"></i></span>
+                    <input type="number" class="form-control" step="0.01" min="0" inputmode="decimal" value="${value !== undefined && value !== null ? value : ''}" aria-label="Valor do limite de alerta" />
+                    <button type="button" class="btn btn-outline-danger" aria-label="Remover limite">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                `;
+                const inputEl = row.querySelector('input');
+                const removeButton = row.querySelector('button');
+                removeButton.addEventListener('click', () => {
+                    row.remove();
+                    handleInputChange();
+                });
+                inputEl.addEventListener('input', handleInputChange);
+                return row;
+            };
+
+            const populateInputs = (values) => {
+                inputsWrapper.innerHTML = '';
+                if (!values.length) {
+                    inputsWrapper.appendChild(createInputRow(''));
+                } else {
+                    values.forEach((value) => {
+                        inputsWrapper.appendChild(createInputRow(value));
+                    });
+                }
+            };
+
+            const getInputValues = () => {
+                return Array.from(inputsWrapper.querySelectorAll('input')).map((input) => input.value);
+            };
+
+            const handleInputChange = () => {
+                currentValues = getInputValues();
+                const preview = buildPreviewDataset(index, currentValues);
+                if (preview) {
+                    updateCardPreview(card, preview);
+                }
+            };
+
+            const closeEditor = () => {
+                form.classList.add('d-none');
+                toggleButton.setAttribute('aria-expanded', 'false');
+                updateCardPreview(card, budgetCardsState[index]);
+            };
+
+            const openEditor = () => {
+                currentValues = [...(budgetCardsState[index]?.thresholds || [])];
+                populateInputs(currentValues);
+                handleInputChange();
+                form.classList.remove('d-none');
+                toggleButton.setAttribute('aria-expanded', 'true');
+            };
+
+            toggleButton.addEventListener('click', () => {
+                if (form.classList.contains('d-none')) {
+                    openEditor();
+                } else {
+                    closeEditor();
+                }
+            });
+
+            if (cancelButton) {
+                cancelButton.addEventListener('click', () => {
+                    closeEditor();
+                });
+            }
+
+            if (addButton) {
+                addButton.addEventListener('click', () => {
+                    inputsWrapper.appendChild(createInputRow(''));
+                    const lastInput = inputsWrapper.querySelector('input:last-of-type');
+                    if (lastInput) {
+                        lastInput.focus({ preventScroll: true });
+                    }
+                    handleInputChange();
+                });
+            }
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const dataset = budgetCardsState[index];
+                if (!dataset?.budgetId) {
+                    showThresholdFeedback(container, 'Não foi possível identificar o orçamento selecionado.', 'danger');
+                    return;
+                }
+
+                const normalized = normalizeThresholdListClient(getInputValues());
+
+                try {
+                    [toggleButton, addButton, cancelButton, submitButton].forEach((button) => {
+                        if (button) {
+                            button.disabled = true;
+                        }
+                    });
+
+                    const queryString = window.location.search || '';
+                    const response = await fetch(`/finance/budgets/${dataset.budgetId}/thresholds${queryString}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json'
+                        },
+                        body: JSON.stringify({ thresholds: normalized })
+                    });
+
+                    if (!response.ok) {
+                        let message = 'Falha ao atualizar os limites.';
+                        try {
+                            const payload = await response.json();
+                            if (payload?.message) {
+                                message = payload.message;
+                            }
+                        } catch (err) {
+                            // ignore parse errors
+                        }
+                        throw new Error(message);
+                    }
+
+                    const payload = await response.json();
+                    if (payload?.overview) {
+                        applyOverviewUpdate(payload.overview);
+                    } else {
+                        const statusKey = resolveBudgetStatusKey(dataset.consumption, dataset.monthlyLimit, normalized);
+                        const statusMeta = resolveStatusMeta(statusKey);
+                        budgetCardsState[index] = {
+                            ...dataset,
+                            thresholds: normalized,
+                            statusKey,
+                            statusStyle: statusMeta,
+                            statusMeta
+                        };
+                        updateCardPreview(card, budgetCardsState[index]);
+                        updateBudgetWidgets(budgetMonthSelector?.value || 'all');
+                    }
+
+                    currentValues = [...(budgetCardsState[index]?.thresholds || normalized)];
+                    showThresholdFeedback(container, 'Limites atualizados com sucesso.', 'success');
+                    closeEditor();
+                } catch (error) {
+                    console.error(error);
+                    showThresholdFeedback(container, error.message || 'Não foi possível atualizar os limites.', 'danger');
+                } finally {
+                    [toggleButton, addButton, cancelButton, submitButton].forEach((button) => {
+                        if (button) {
+                            button.disabled = false;
+                        }
+                    });
+                }
+            });
+        };
+
+        cardElements.forEach((card, index) => {
+            setupThresholdEditor(card, index);
+        });
 
         updateBudgetWidgets(budgetMonthSelector?.value || 'all');
 
