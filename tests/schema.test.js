@@ -26,6 +26,7 @@ const migrations = [
   require('../database/migrations/20240916-create-finance-categories'),
   require('../database/migrations/20240917-create-budgets'),
   require('../database/migrations/20240920-create-budget-threshold-logs'),
+  require('../database/migrations/20240921-add-two-factor-authentication'),
 ];
 
 (async () => {
