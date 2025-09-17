@@ -256,6 +256,71 @@ const normalizeCategoryId = (value) => {
     return number;
 };
 
+const normalizeStatusValue = (value, allowedValues = []) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return allowedValues.includes(normalized) ? normalized : null;
+};
+
+const serializeAttachmentForView = (attachment) => {
+    const plain = typeof attachment?.get === 'function'
+        ? attachment.get({ plain: true })
+        : (attachment || {});
+
+    const sizeNumber = Number.parseInt(plain.size, 10);
+
+    return {
+        id: plain.id ?? null,
+        fileName: sanitizeText(plain.fileName),
+        mimeType: sanitizeText(plain.mimeType),
+        size: Number.isFinite(sizeNumber) && sizeNumber >= 0 ? sizeNumber : null,
+        createdAt: plain.createdAt || null
+    };
+};
+
+const serializeEntryForView = (entry) => {
+    const plain = typeof entry?.get === 'function'
+        ? entry.get({ plain: true })
+        : (entry || {});
+
+    const normalizedType = normalizeStatusValue(plain.type, FINANCE_TYPES) || 'payable';
+    const normalizedStatus = normalizeStatusValue(plain.status, FINANCE_STATUSES) || 'pending';
+    const categoryData = plain.category || {};
+    const categoryId = normalizeCategoryId(
+        plain.financeCategoryId
+        ?? plain.categoryId
+        ?? categoryData.id
+    );
+    const categoryLabelSource = plain.categoryLabel
+        || plain.categoryName
+        || categoryData.name
+        || '';
+
+    const attachments = Array.isArray(plain.attachments)
+        ? plain.attachments.map(serializeAttachmentForView)
+        : [];
+
+    return {
+        id: plain.id ?? null,
+        description: sanitizeText(plain.description),
+        type: normalizedType,
+        value: parseAmount(plain.value),
+        dueDate: plain.dueDate || null,
+        paymentDate: plain.paymentDate || null,
+        status: normalizedStatus,
+        categoryId,
+        categoryLabel: sanitizeText(categoryLabelSource),
+        attachments,
+        recurring: Boolean(plain.recurring),
+        recurringInterval: normalizeRecurringInterval
+            ? normalizeRecurringInterval(plain.recurringInterval)
+            : plain.recurringInterval || null
+    };
+};
+
 const formatDateLabel = (value) => {
     if (!value) {
         return null;
@@ -1474,8 +1539,18 @@ module.exports = {
     exportPdf: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
-            const entries = await FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summary = await financeReportingService.getFinanceSummary(filters, { entries });
+            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+            const summaryPromise = createSummaryPromise(entriesPromise, filters);
+            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
+                includeCategoryConsumption: true,
+                entriesPromise
+            });
+
+            const [entries, summary, budgetOverview] = await Promise.all([
+                entriesPromise,
+                summaryPromise,
+                budgetOverviewPromise
+            ]);
             const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
             const chartImage = await reportChartService.generateFinanceReportChart(summary);
             const budgetSummaries = Array.isArray(budgetOverview?.summaries)
@@ -1626,6 +1701,7 @@ module.exports = {
                 summaryPromise,
                 budgetOverviewPromise
             ]);
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
