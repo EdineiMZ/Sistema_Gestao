@@ -3,8 +3,17 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const financeReportingService = require('../services/financeReportingService');
 const reportChartService = require('../services/reportChartService');
+const {
+    FINANCE_RECURRING_INTERVALS,
+    normalizeRecurringInterval
+} = require('../constants/financeRecurringIntervals');
 
 const { utils: reportingUtils } = financeReportingService;
+
+const recurringIntervalOptions = FINANCE_RECURRING_INTERVALS.map((interval) => ({
+    value: interval.value,
+    label: interval.label
+}));
 
 const parseAmount = (value) => {
     if (typeof value === 'number') {
@@ -106,7 +115,8 @@ module.exports = {
                 periodLabel: formatPeriodLabel(filters),
                 statusSummary: summary.statusSummary,
                 monthlySummary: summary.monthlySummary,
-                financeTotals: summary.totals
+                financeTotals: summary.totals,
+                recurringIntervalOptions
             });
         } catch (err) {
             console.error(err);
@@ -124,7 +134,7 @@ module.exports = {
                 value,
                 dueDate,
                 recurring: (recurring === 'true'),
-                recurringInterval: recurringInterval || null
+                recurringInterval: normalizeRecurringInterval(recurringInterval)
             });
             req.flash('success_msg', 'Lançamento criado com sucesso!');
             res.redirect('/finance');
@@ -153,7 +163,7 @@ module.exports = {
             entry.paymentDate = paymentDate || null;
             entry.status = status;
             entry.recurring = (recurring === 'true');
-            entry.recurringInterval = recurringInterval || null;
+            entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
 
             await entry.save();
             req.flash('success_msg', 'Lançamento atualizado!');

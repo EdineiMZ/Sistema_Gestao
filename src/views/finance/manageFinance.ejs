@@ -1,5 +1,7 @@
 <%- include('../partials/header') %>
 
+<% const intervalOptions = Array.isArray(recurringIntervalOptions) ? recurringIntervalOptions : []; %>
+
 <div class="row fade-in responsive-page-row gy-4">
     <div class="col-12">
         <div class="card card-soft responsive-panel">
@@ -214,13 +216,15 @@
                                                     </div>
                                                     <div class="mb-3">
                                                         <label class="form-label">Intervalo de recorrência</label>
-                                                        <input
-                                                            type="text"
-                                                            class="form-control"
-                                                            name="recurringInterval"
-                                                            value="<%= entry.recurringInterval || '' %>"
-                                                            placeholder="Ex.: mensal, trimestral"
-                                                        />
+                                                        <select class="form-select" name="recurringInterval">
+                                                            <option value="" <%= entry.recurringInterval ? '' : 'selected' %>>Selecione um intervalo</option>
+                                                            <% intervalOptions.forEach((option) => { %>
+                                                                <% if (!option || !option.value) { return; } %>
+                                                                <option value="<%= option.value %>" <%= entry.recurringInterval === option.value ? 'selected' : '' %>>
+                                                                    <%= option.label %>
+                                                                </option>
+                                                            <% }); %>
+                                                        </select>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
@@ -294,12 +298,13 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Intervalo (opcional)</label>
-                    <input
-                        type="text"
-                        class="form-control"
-                        name="recurringInterval"
-                        placeholder="Ex.: mensal"
-                    />
+                    <select class="form-select" name="recurringInterval">
+                        <option value="" selected>Selecione um intervalo</option>
+                        <% intervalOptions.forEach((option) => { %>
+                            <% if (!option || !option.value) { return; } %>
+                            <option value="<%= option.value %>"><%= option.label %></option>
+                        <% }); %>
+                    </select>
                 </div>
                 <div class="col-md-12">
                     <div class="responsive-form-actions">

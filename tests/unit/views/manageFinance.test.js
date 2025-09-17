@@ -2,6 +2,7 @@ const path = require('path');
 const ejs = require('ejs');
 
 const { USER_ROLES, ROLE_LABELS, getRoleLevel } = require('../../../src/constants/roles');
+const { FINANCE_RECURRING_INTERVALS } = require('../../../src/constants/financeRecurringIntervals');
 
 const viewPath = path.join(__dirname, '../../../src/views/finance/manageFinance.ejs');
 
@@ -26,9 +27,10 @@ const buildViewContext = () => ({
             paymentDate: '2024-05-02',
             status: 'paid',
             recurring: true,
-            recurringInterval: 'Mensal'
+            recurringInterval: 'monthly'
         }
     ],
+    recurringIntervalOptions: FINANCE_RECURRING_INTERVALS,
     success_msg: null,
     error_msg: null,
     error: null,
@@ -48,6 +50,9 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('data-export-target="/finance/export/excel"');
         expect(html).toContain('Exportar Excel');
         expect(html).toContain('aria-label="Exportar lançamentos filtrados em Excel"');
+
+        expect(html).toContain('option value="monthly"');
+        expect(html).toContain('>Mensal<');
     });
 });
 

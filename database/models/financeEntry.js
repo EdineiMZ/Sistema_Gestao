@@ -1,4 +1,11 @@
 'use strict';
+
+const {
+    FINANCE_RECURRING_INTERVAL_VALUES
+} = require('../../src/constants/financeRecurringIntervals');
+
+const allowedRecurringIntervals = new Set(FINANCE_RECURRING_INTERVAL_VALUES);
+
 module.exports = (sequelize, DataTypes) => {
     const FinanceEntry = sequelize.define('FinanceEntry', {
         description: {
@@ -69,8 +76,9 @@ module.exports = (sequelize, DataTypes) => {
             validate: {
                 isAllowedInterval(value) {
                     if (!value) return;
-                    const allowed = ['weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
-                    if (!allowed.includes(value)) {
+
+                    const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+                    if (!allowedRecurringIntervals.has(normalizedValue)) {
                         throw new Error('Intervalo recorrente inválido.');
                     }
                 }
