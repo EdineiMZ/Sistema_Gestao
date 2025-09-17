@@ -272,8 +272,10 @@ app.use('/audit', auditRoutes);
 app.use('/admin', adminRoutes);
 app.use('/support', supportRoutes);
 
+
 // Conexão DB
 initializeSupportChat({ io, sessionMiddleware });
+
 
 Promise.all([sequelize.sync(), sessionStoreSyncPromise])
     .then(() => {

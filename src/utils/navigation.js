@@ -16,6 +16,13 @@ const rawShortcuts = [
         groups: ['menu']
     },
     {
+        label: 'Suporte',
+        route: '/support/tickets',
+        icon: 'bi-life-preserver',
+        minimumRole: USER_ROLES.CLIENT,
+        groups: ['menu', 'quick']
+    },
+    {
         label: 'Painel',
         route: '/dashboard',
         icon: 'bi-graph-up-arrow',

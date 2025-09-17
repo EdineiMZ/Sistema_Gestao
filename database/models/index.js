@@ -243,6 +243,7 @@ if (SupportAttachment && SupportMessage && !(SupportAttachment.associations && S
     });
 }
 
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 

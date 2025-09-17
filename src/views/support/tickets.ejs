@@ -1,0 +1,223 @@
+<%- include('../partials/header') %>
+
+<div class="container py-5 support-wrapper">
+    <% if (success_msg) { %>
+        <div class="alert alert-success alert-auto" role="alert" data-auto-dismiss="6000">
+            <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
+        </div>
+    <% } %>
+
+    <% if (error_msg) { %>
+        <div class="alert alert-danger alert-auto" role="alert" data-auto-dismiss="6000">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error_msg %>
+        </div>
+    <% } %>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card card-soft shadow-sm h-100">
+                <div class="card-body">
+                    <span class="badge-soft badge-soft-primary mb-3"><i class="bi bi-life-preserver me-2"></i>Novo chamado</span>
+                    <h4 class="card-title mb-3">Precisa de ajuda?</h4>
+                    <p class="text-muted small mb-4">
+                        Descreva sua necessidade com detalhes para que nossa equipe retorne com a solução mais adequada.
+                        Anexos podem ser enviados após abrir o chamado pelo painel administrativo.
+                    </p>
+                    <form method="POST" action="/support/tickets" class="support-form">
+                        <div class="mb-3">
+                            <label for="support-subject" class="form-label">Assunto</label>
+                            <input type="text" class="form-control" id="support-subject" name="subject" maxlength="180" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="support-description" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="support-description" name="description" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-gradient w-100">Abrir chamado</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h3 class="mb-1">Seus chamados</h3>
+                    <p class="text-muted small mb-0">
+                        Acompanhe o histórico de mensagens e atualizações em tempo real.
+                    </p>
+                </div>
+                <span class="badge bg-light text-dark"><i class="bi bi-people me-1"></i><%= isAgent ? 'Painel do atendente' : 'Painel do cliente' %></span>
+            </div>
+
+            <% if (!tickets || tickets.length === 0) { %>
+                <div class="card card-soft">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-inbox display-5 text-muted"></i>
+                        <h5 class="mt-3">Nenhum chamado encontrado</h5>
+                        <p class="text-muted">Assim que você abrir um chamado ele aparecerá aqui.</p>
+                    </div>
+                </div>
+            <% } %>
+
+            <% const statusLabels = { pending: 'Pendente', in_progress: 'Em andamento', resolved: 'Resolvido' }; %>
+            <% const statusEntries = Object.entries(statuses || {}); %>
+
+            <% tickets && tickets.forEach((ticket) => { %>
+                <div class="card card-soft mb-4 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+                            <div>
+                                <h5 class="mb-1"><i class="bi bi-ticket-detailed me-2 text-primary"></i><%= ticket.subject %></h5>
+                                <div class="text-muted small">
+                                    Aberto por <strong><%= ticket.creator?.name || 'Usuário' %></strong>
+                                    em <%= new Date(ticket.createdAt).toLocaleString('pt-BR') %>
+                                </div>
+                                <% if (ticket.assignee) { %>
+                                    <div class="text-muted small">Atribuído para <strong><%= ticket.assignee.name %></strong></div>
+                                <% } %>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge status-badge status-<%= ticket.status %>">
+                                    <i class="bi bi-activity me-1"></i><%= statusLabels[ticket.status] || ticket.status %>
+                                </span>
+                                <div class="text-muted small mt-1">Última atualização: <%= new Date(ticket.updatedAt).toLocaleString('pt-BR') %></div>
+                            </div>
+                        </div>
+
+                        <div class="timeline">
+                            <% (ticket.messages || []).forEach((message) => { %>
+                                <div class="timeline-item">
+                                    <div class="timeline-indicator <%= message.isFromAgent ? 'bg-primary' : 'bg-secondary' %>"></div>
+                                    <div class="timeline-content">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <div class="fw-semibold"><%= message.sender?.name || 'Usuário' %></div>
+                                            <span class="text-muted small"><%= new Date(message.createdAt).toLocaleString('pt-BR') %></span>
+                                        </div>
+                                        <div class="timeline-body">
+                                            <%- message.body %>
+                                        </div>
+                                        <% if (message.attachments && message.attachments.length) { %>
+                                            <div class="attachment-list mt-2">
+                                                <% message.attachments.forEach((attachment) => { %>
+                                                    <div class="attachment-item">
+                                                        <i class="bi bi-paperclip me-2"></i>
+                                                        <span><%= attachment.fileName %></span>
+                                                        <% if (attachment.fileSize) { %>
+                                                            <span class="text-muted ms-2">(<%= (attachment.fileSize / 1024).toFixed(1) %> KB)</span>
+                                                        <% } %>
+                                                    </div>
+                                                <% }); %>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        </div>
+
+                        <div class="row g-3 mt-4">
+                            <div class="col-md-8">
+                                <form method="POST" action="/support/tickets/<%= ticket.id %>/messages" class="reply-form">
+                                    <label class="form-label">Enviar nova mensagem</label>
+                                    <textarea class="form-control" name="body" rows="3" placeholder="Escreva sua atualização..." required></textarea>
+                                    <button type="submit" class="btn btn-soft mt-2">Enviar mensagem</button>
+                                </form>
+                            </div>
+                            <div class="col-md-4">
+                                <form method="POST" action="/support/tickets/<%= ticket.id %>/status" class="status-form">
+                                    <label class="form-label">Atualizar status</label>
+                                    <select class="form-select" name="status">
+                                        <% statusEntries.forEach(([key, value]) => { %>
+                                            <option value="<%= value %>" <%= ticket.status === value ? 'selected' : '' %>>
+                                                <%= statusLabels[value] || key %>
+                                            </option>
+                                        <% }); %>
+                                    </select>
+                                    <button type="submit" class="btn btn-outline-primary w-100 mt-2">Salvar</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>
+
+<style>
+    .support-wrapper .card-soft {
+        border: 1px solid rgba(30, 64, 175, 0.08);
+        border-radius: 18px;
+        backdrop-filter: blur(6px);
+    }
+
+    .support-wrapper .status-badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+    }
+
+    .support-wrapper .status-pending {
+        background: rgba(255, 193, 7, 0.12);
+        color: #b8860b;
+    }
+
+    .support-wrapper .status-in_progress {
+        background: rgba(13, 110, 253, 0.12);
+        color: #0d6efd;
+    }
+
+    .support-wrapper .status-resolved {
+        background: rgba(25, 135, 84, 0.12);
+        color: #198754;
+    }
+
+    .support-wrapper .timeline {
+        border-left: 2px solid rgba(13, 110, 253, 0.15);
+        padding-left: 1.5rem;
+    }
+
+    .support-wrapper .timeline-item {
+        position: relative;
+        padding-bottom: 1.5rem;
+    }
+
+    .support-wrapper .timeline-indicator {
+        position: absolute;
+        left: -1.65rem;
+        top: 0.25rem;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .support-wrapper .timeline-content {
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid rgba(13, 110, 253, 0.08);
+    }
+
+    .support-wrapper .attachment-item {
+        padding: 0.45rem 0.65rem;
+        border-radius: 8px;
+        border: 1px dashed rgba(13, 110, 253, 0.2);
+        background: rgba(13, 110, 253, 0.05);
+        display: inline-flex;
+        align-items: center;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .support-wrapper .btn-soft {
+        background: rgba(13, 110, 253, 0.08);
+        color: #0d6efd;
+    }
+
+    .support-wrapper .btn-soft:hover {
+        background: rgba(13, 110, 253, 0.12);
+        color: #0b5ed7;
+    }
+</style>

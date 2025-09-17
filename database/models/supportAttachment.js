@@ -33,6 +33,7 @@ module.exports = (sequelize, DataTypes) => {
                 name: 'supportAttachments_ticketId',
                 fields: ['ticketId']
             }
+
         ]
     });
 
