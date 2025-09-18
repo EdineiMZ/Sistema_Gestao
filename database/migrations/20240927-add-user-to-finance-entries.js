@@ -42,7 +42,7 @@ module.exports = {
         const userIndexName = 'finance_entries_user_idx';
         const compositeIndexName = 'finance_entries_user_category_idx';
 
-        const tableDefinition = await queryInterface.describeTable(tableName);
+        let tableDefinition = await queryInterface.describeTable(tableName);
 
         if (!tableDefinition[columnName]) {
             await queryInterface.addColumn(tableName, columnName, {
@@ -55,6 +55,7 @@ module.exports = {
                 onUpdate: 'CASCADE',
                 onDelete: 'CASCADE'
             });
+            tableDefinition = await queryInterface.describeTable(tableName);
         }
 
         const existingIndexes = await queryInterface.showIndex(tableName);
@@ -74,29 +75,53 @@ module.exports = {
             });
         }
 
-        const countResult = await queryInterface.rawSelect(
-            tableName,
-            {
-                plain: true,
-                attributes: [[Sequelize.fn('COUNT', Sequelize.col('*')), 'count']]
-            },
-            'count'
+        const nullUserRows = await queryInterface.sequelize.query(
+            'SELECT COUNT(*) AS "count" FROM "FinanceEntries" WHERE "userId" IS NULL',
+            { type: queryInterface.sequelize.QueryTypes.SELECT }
         );
+        const nullUserCount = extractRowCount(nullUserRows);
 
-        const totalRows = extractRowCount(countResult);
+        if (nullUserCount > 0) {
+            const fallbackCandidates = await queryInterface.sequelize.query(
+                'SELECT "id" FROM "Users" ORDER BY CASE WHEN "role" = \'admin\' THEN 0 ELSE 1 END, "createdAt" ASC, "id" ASC LIMIT 1',
+                { type: queryInterface.sequelize.QueryTypes.SELECT }
+            );
 
-        if (totalRows === 0) {
-            await queryInterface.changeColumn(tableName, columnName, {
-                type: Sequelize.INTEGER,
-                allowNull: false,
-                references: {
-                    model: 'Users',
-                    key: 'id'
-                },
-                onUpdate: 'CASCADE',
-                onDelete: 'CASCADE'
-            });
+            const fallbackUserId = fallbackCandidates.length > 0 ? fallbackCandidates[0].id : null;
+
+            if (!fallbackUserId) {
+                throw new Error('FinanceEntries migration failed: no fallback user found. Create an administrator (or any user) before rerunning.');
+            }
+
+            await queryInterface.sequelize.query(
+                'UPDATE "FinanceEntries" SET "userId" = :fallbackUserId WHERE "userId" IS NULL',
+                {
+                    replacements: { fallbackUserId },
+                    type: queryInterface.sequelize.QueryTypes.UPDATE
+                }
+            );
+
+            const remainingNullRows = await queryInterface.sequelize.query(
+                'SELECT COUNT(*) AS "count" FROM "FinanceEntries" WHERE "userId" IS NULL',
+                { type: queryInterface.sequelize.QueryTypes.SELECT }
+            );
+            const remainingNullCount = extractRowCount(remainingNullRows);
+
+            if (remainingNullCount > 0) {
+                throw new Error('FinanceEntries migration failed: unable to assign fallback user to all existing entries.');
+            }
         }
+
+        await queryInterface.changeColumn(tableName, columnName, {
+            type: Sequelize.INTEGER,
+            allowNull: false,
+            references: {
+                model: 'Users',
+                key: 'id'
+            },
+            onUpdate: 'CASCADE',
+            onDelete: 'CASCADE'
+        });
     },
 
     down: async (queryInterface) => {
