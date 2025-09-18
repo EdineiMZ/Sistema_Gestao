@@ -24,6 +24,16 @@ describe('financeReportingService', () => {
         }));
     });
 
+    it('filtra lançamentos pelo usuário informado', async () => {
+        const findSpy = jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([]);
+
+        await getStatusSummary({ userId: 77 });
+
+        expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: 77 })
+        }));
+    });
+
     it('agrupa os lançamentos por status e tipo', async () => {
         jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([
             { type: 'payable', status: 'pending', value: '120.50', dueDate: '2024-04-10' },

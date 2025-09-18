@@ -86,6 +86,9 @@ describe('Smoke tests das rotas principais', () => {
         const response = await agent.get('/finance');
 
         expect(FinanceEntry.findAll).toHaveBeenCalledTimes(1);
+        expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: expect.any(Number) })
+        }));
         expect(FinanceGoal.findAll).toHaveBeenCalledTimes(2);
         expect(response.status).toBe(200);
         expect(response.text).toContain('Gerenciar finanças estratégicas');

@@ -8,6 +8,19 @@ const allowedRecurringIntervals = new Set(FINANCE_RECURRING_INTERVAL_VALUES);
 
 module.exports = (sequelize, DataTypes) => {
     const FinanceEntry = sequelize.define('FinanceEntry', {
+        userId: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            references: {
+                model: 'Users',
+                key: 'id'
+            },
+            validate: {
+                isInt: {
+                    msg: 'Usuário responsável inválido.'
+                }
+            }
+        },
         description: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -114,6 +127,13 @@ module.exports = (sequelize, DataTypes) => {
             FinanceEntry.belongsTo(models.FinanceCategory, {
                 as: 'category',
                 foreignKey: 'financeCategoryId'
+            });
+        }
+
+        if (models.User) {
+            FinanceEntry.belongsTo(models.User, {
+                as: 'user',
+                foreignKey: 'userId'
             });
         }
     };
