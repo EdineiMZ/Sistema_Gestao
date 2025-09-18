@@ -138,12 +138,19 @@ const normalizeUserId = (value) => {
         return null;
     }
 
-    const candidate = typeof value === 'string' ? value.trim() : value;
-    if (candidate === '') {
-        return null;
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        return parsePositiveInteger(trimmed);
     }
 
-    return parsePositiveInteger(candidate);
+    if (typeof value === 'number') {
+        return parsePositiveInteger(value);
+    }
+
+    return null;
 };
 
 const parseNonNegativeNumber = (value) => {
