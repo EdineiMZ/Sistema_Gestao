@@ -133,6 +133,26 @@ const parsePositiveInteger = (value) => {
     return numeric;
 };
 
+const normalizeUserId = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        return parsePositiveInteger(trimmed);
+    }
+
+    if (typeof value === 'number') {
+        return parsePositiveInteger(value);
+    }
+
+    return null;
+};
+
 const parseNonNegativeNumber = (value) => {
     if (value === undefined || value === null || value === '') {
         return null;
