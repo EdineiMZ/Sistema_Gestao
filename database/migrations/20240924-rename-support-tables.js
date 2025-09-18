@@ -26,6 +26,18 @@ const isTableMissingError = (error) => {
         /não existe/i.test(message);
 };
 
+const ignoreIfTableMissing = async (operation) => {
+    try {
+        return await operation();
+    } catch (error) {
+        if (isTableMissingError(error)) {
+            return null;
+        }
+
+        throw error;
+    }
+};
+
 module.exports = {
     up: async (queryInterface, Sequelize) => {
         const transaction = await queryInterface.sequelize.transaction();
@@ -58,25 +70,37 @@ module.exports = {
             const dialect = queryInterface.sequelize.getDialect();
 
             if (await tableExists(PASCAL_TICKET_TABLE)) {
-                await queryInterface.renameTable(PASCAL_TICKET_TABLE, CAMEL_TICKET_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    PASCAL_TICKET_TABLE,
+                    CAMEL_TICKET_TABLE,
+                    { transaction }
+                ));
                 if (dialect === 'postgres') {
-                    await queryInterface.sequelize.query(
+                    await ignoreIfTableMissing(() => queryInterface.sequelize.query(
                         `ALTER TYPE "${PASCAL_STATUS_ENUM}" RENAME TO "${CAMEL_STATUS_ENUM}";`,
                         { transaction }
-                    );
+                    ));
                 }
             }
 
             if (await tableExists(PASCAL_MESSAGE_TABLE)) {
-                await queryInterface.renameTable(PASCAL_MESSAGE_TABLE, CAMEL_MESSAGE_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    PASCAL_MESSAGE_TABLE,
+                    CAMEL_MESSAGE_TABLE,
+                    { transaction }
+                ));
             }
 
             if (await tableExists(PASCAL_ATTACHMENT_TABLE)) {
-                await queryInterface.renameTable(PASCAL_ATTACHMENT_TABLE, CAMEL_ATTACHMENT_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    PASCAL_ATTACHMENT_TABLE,
+                    CAMEL_ATTACHMENT_TABLE,
+                    { transaction }
+                ));
             }
 
-            if (await tableExists(CAMEL_MESSAGE_TABLE)) {
-                await queryInterface.changeColumn(
+            if (await tableExists(CAMEL_MESSAGE_TABLE) && await tableExists(CAMEL_TICKET_TABLE)) {
+                await ignoreIfTableMissing(() => queryInterface.changeColumn(
                     CAMEL_MESSAGE_TABLE,
                     'ticketId',
                     {
@@ -90,11 +114,11 @@ module.exports = {
                         onDelete: 'CASCADE'
                     },
                     { transaction }
-                );
+                ));
             }
 
-            if (await tableExists(CAMEL_ATTACHMENT_TABLE)) {
-                await queryInterface.changeColumn(
+            if (await tableExists(CAMEL_ATTACHMENT_TABLE) && await tableExists(CAMEL_TICKET_TABLE)) {
+                await ignoreIfTableMissing(() => queryInterface.changeColumn(
                     CAMEL_ATTACHMENT_TABLE,
                     'ticketId',
                     {
@@ -108,10 +132,10 @@ module.exports = {
                         onDelete: 'CASCADE'
                     },
                     { transaction }
-                );
+                ));
 
-                if (await columnExists(CAMEL_ATTACHMENT_TABLE, 'messageId')) {
-                    await queryInterface.changeColumn(
+                if (await columnExists(CAMEL_ATTACHMENT_TABLE, 'messageId') && await tableExists(CAMEL_MESSAGE_TABLE)) {
+                    await ignoreIfTableMissing(() => queryInterface.changeColumn(
                         CAMEL_ATTACHMENT_TABLE,
                         'messageId',
                         {
@@ -125,7 +149,7 @@ module.exports = {
                             onDelete: 'CASCADE'
                         },
                         { transaction }
-                    );
+                    ));
                 }
             }
 
@@ -167,25 +191,37 @@ module.exports = {
             const dialect = queryInterface.sequelize.getDialect();
 
             if (await tableExists(CAMEL_ATTACHMENT_TABLE)) {
-                await queryInterface.renameTable(CAMEL_ATTACHMENT_TABLE, PASCAL_ATTACHMENT_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    CAMEL_ATTACHMENT_TABLE,
+                    PASCAL_ATTACHMENT_TABLE,
+                    { transaction }
+                ));
             }
 
             if (await tableExists(CAMEL_MESSAGE_TABLE)) {
-                await queryInterface.renameTable(CAMEL_MESSAGE_TABLE, PASCAL_MESSAGE_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    CAMEL_MESSAGE_TABLE,
+                    PASCAL_MESSAGE_TABLE,
+                    { transaction }
+                ));
             }
 
             if (await tableExists(CAMEL_TICKET_TABLE)) {
-                await queryInterface.renameTable(CAMEL_TICKET_TABLE, PASCAL_TICKET_TABLE, { transaction });
+                await ignoreIfTableMissing(() => queryInterface.renameTable(
+                    CAMEL_TICKET_TABLE,
+                    PASCAL_TICKET_TABLE,
+                    { transaction }
+                ));
                 if (dialect === 'postgres') {
-                    await queryInterface.sequelize.query(
+                    await ignoreIfTableMissing(() => queryInterface.sequelize.query(
                         `ALTER TYPE "${CAMEL_STATUS_ENUM}" RENAME TO "${PASCAL_STATUS_ENUM}";`,
                         { transaction }
-                    );
+                    ));
                 }
             }
 
-            if (await tableExists(PASCAL_MESSAGE_TABLE)) {
-                await queryInterface.changeColumn(
+            if (await tableExists(PASCAL_MESSAGE_TABLE) && await tableExists(PASCAL_TICKET_TABLE)) {
+                await ignoreIfTableMissing(() => queryInterface.changeColumn(
                     PASCAL_MESSAGE_TABLE,
                     'ticketId',
                     {
@@ -199,11 +235,11 @@ module.exports = {
                         onDelete: 'CASCADE'
                     },
                     { transaction }
-                );
+                ));
             }
 
-            if (await tableExists(PASCAL_ATTACHMENT_TABLE)) {
-                await queryInterface.changeColumn(
+            if (await tableExists(PASCAL_ATTACHMENT_TABLE) && await tableExists(PASCAL_TICKET_TABLE)) {
+                await ignoreIfTableMissing(() => queryInterface.changeColumn(
                     PASCAL_ATTACHMENT_TABLE,
                     'ticketId',
                     {
@@ -217,10 +253,10 @@ module.exports = {
                         onDelete: 'CASCADE'
                     },
                     { transaction }
-                );
+                ));
 
-                if (await columnExists(PASCAL_ATTACHMENT_TABLE, 'messageId')) {
-                    await queryInterface.changeColumn(
+                if (await columnExists(PASCAL_ATTACHMENT_TABLE, 'messageId') && await tableExists(PASCAL_MESSAGE_TABLE)) {
+                    await ignoreIfTableMissing(() => queryInterface.changeColumn(
                         PASCAL_ATTACHMENT_TABLE,
                         'messageId',
                         {
@@ -234,7 +270,7 @@ module.exports = {
                             onDelete: 'CASCADE'
                         },
                         { transaction }
-                    );
+                    ));
                 }
             }
 
