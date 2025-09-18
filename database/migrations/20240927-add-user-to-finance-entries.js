@@ -74,10 +74,16 @@ module.exports = {
             });
         }
 
-        const qi = queryInterface.sequelize.getQueryInterface();
-        const quotedTable = typeof qi?.quoteTable === 'function' ? qi.quoteTable(tableName) : tableName;
-        const [rows] = await queryInterface.sequelize.query(`SELECT COUNT(*) AS count FROM ${quotedTable}`);
-        const totalRows = extractRowCount(rows);
+        const countResult = await queryInterface.rawSelect(
+            tableName,
+            {
+                plain: true,
+                attributes: [[Sequelize.fn('COUNT', Sequelize.col('*')), 'count']]
+            },
+            'count'
+        );
+
+        const totalRows = extractRowCount(countResult);
 
         if (totalRows === 0) {
             await queryInterface.changeColumn(tableName, columnName, {
