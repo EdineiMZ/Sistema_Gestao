@@ -1,0 +1,206 @@
+<%- include('../partials/header') %>
+
+<% const currentFilters = filters || {}; %>
+
+<div class="row gy-4 fade-in responsive-page-row">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Campanhas e notificações</h2>
+                <p class="text-muted mb-0">Gerencie mensagens automáticas com filtros dinâmicos e agendamentos inteligentes.</p>
+            </div>
+            <a href="/notifications/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>Nova notificação</a>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <div class="card card-soft responsive-panel mb-4">
+            <form
+                action="/notifications"
+                method="GET"
+                class="row g-3 align-items-end responsive-filter-grid"
+                data-filter-form
+            >
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">Palavra-chave</label>
+                    <div class="input-group input-group-flat">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control border-start-0"
+                            name="keyword"
+                            maxlength="120"
+                            placeholder="Busque por título, mensagem ou ID"
+                            value="<%= currentFilters.keyword || '' %>"
+                        />
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" name="status">
+                        <option value="all" <%= (currentFilters.status || 'all') === 'all' ? 'selected' : '' %>>Todas</option>
+                        <option value="active" <%= currentFilters.status === 'active' ? 'selected' : '' %>>Ativas</option>
+                        <option value="inactive" <%= currentFilters.status === 'inactive' ? 'selected' : '' %>>Inativas</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Programadas a partir de</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="startDate"
+                        value="<%= currentFilters.startDate || '' %>"
+                        max="<%= currentFilters.endDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Até</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="endDate"
+                        value="<%= currentFilters.endDate || '' %>"
+                        min="<%= currentFilters.startDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-2 col-md-12">
+                    <div class="responsive-filter-actions">
+                        <button type="submit" class="btn btn-gradient" data-submit-filters>
+                            <i class="bi bi-funnel me-2"></i>Filtrar
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" data-reset-filters>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="card card-soft responsive-panel">
+            <div class="table-responsive table-modern responsive-table">
+                <table class="table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Título</th>
+                        <th>Tipo</th>
+                        <th>Agendamento</th>
+                        <th>Recorrência</th>
+                        <th>Filtros aplicados</th>
+                        <th>Escopo</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <% notifications.forEach(n => { %>
+                        <tr>
+                            <td><strong><%= n.id %></strong></td>
+                            <td>
+                                <div class="fw-semibold"><%= n.title %></div>
+                                <small class="text-muted d-block text-truncate" style="max-width: 360px;">
+                                    <%= n.message %>
+                                </small>
+                            </td>
+                            <td><span class="badge-soft badge-soft-warning text-uppercase"><%= n.type || 'custom' %></span></td>
+                            <td>
+                                <% if (n.triggerDate) { %>
+                                    <span data-bs-toggle="tooltip" title="Executa em"><i class="bi bi-clock-history me-1"></i><%= new Date(n.triggerDate).toLocaleString('pt-BR') %></span>
+                                <% } else { %>
+                                    <span class="text-muted">Imediato</span>
+                                <% } %>
+                            </td>
+                            <td><%= n.repeatFrequencyLabel %></td>
+                            <td>
+                                <% n.filtersSummary.forEach(summary => { %>
+                                    <span class="app-filter-tag mb-1"><i class="bi bi-funnel me-2"></i><%= summary %></span>
+                                <% }) %>
+                            </td>
+                            <td>
+                                <% if (n.sendToAll) { %>
+                                    <span class="badge-soft badge-soft-success">Todos os usuários</span>
+                                <% } else if (n.userId) { %>
+                                    <span class="badge-soft badge-soft-warning">Usuário ID <%= n.userId %></span>
+                                <% } else { %>
+                                    <span class="badge-soft badge-soft-warning">Filtrado</span>
+                                <% } %>
+                            </td>
+                            <td class="text-end">
+                                <a href="/notifications/edit/<%= n.id %>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                                <form
+                                    action="/notifications/delete/<%= n.id %>?_method=DELETE"
+                                    method="POST"
+                                    class="d-inline"
+                                >
+                                    <button class="btn btn-sm btn-outline-danger ms-2" type="submit"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const filterForms = document.querySelectorAll('[data-filter-form]');
+
+        const buildQueryFromForm = (form) => {
+            const params = new URLSearchParams();
+            const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+            fields.forEach((field) => {
+                const value = typeof field.value === 'string' ? field.value.trim() : field.value;
+                if (value) {
+                    params.append(field.name, value);
+                }
+            });
+            return params.toString();
+        };
+
+        filterForms.forEach((form) => {
+            const action = form.getAttribute('action');
+
+            const submitFilters = () => {
+                const queryString = buildQueryFromForm(form);
+                const targetUrl = queryString ? `${action}?${queryString}` : action;
+                window.location.assign(targetUrl);
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitFilters();
+            });
+
+            const submitButton = form.querySelector('[data-submit-filters]');
+            if (submitButton) {
+                submitButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    submitFilters();
+                });
+            }
+
+            const resetButton = form.querySelector('[data-reset-filters]');
+            if (resetButton) {
+                resetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    form.reset();
+                    window.location.assign(action);
+                });
+            }
+        });
+    });
+</script>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,97 @@
+<%- include('../partials/header') %>
+
+<h2>Editar Agendamento</h2>
+
+<form action="/appointments/update/<%= appointment.id %>?_method=PUT" method="POST">
+    <div class="mb-3">
+        <label class="form-label">Descrição</label>
+        <input
+                type="text"
+                class="form-control"
+                name="description"
+                value="<%= appointment.description %>"
+        />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">E-mail do Cliente</label>
+        <input
+                type="email"
+                class="form-control"
+                name="clientEmail"
+                value="<%= appointment.clientEmail || '' %>"
+        />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Profissional</label>
+        <select class="form-select" name="professionalId">
+            <% professionals.forEach(p => { %>
+                <option value="<%= p.id %>" <%= appointment.professionalId == p.id ? 'selected' : '' %>>
+                    <%= p.name %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Procedimento</label>
+        <select class="form-select" name="procedureId">
+            <% procedures.forEach(proc => { %>
+                <option value="<%= proc.id %>" <%= appointment.procedureId == proc.id ? 'selected' : '' %>>
+                    <%= proc.name %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Sala (se necessário)</label>
+        <select class="form-select" name="roomId">
+            <option value="">— Nenhuma —</option>
+            <% rooms.forEach(r => { %>
+                <option value="<%= r.id %>" <%= appointment.roomId == r.id ? 'selected' : '' %>>
+                    <%= r.name %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Data/Hora Início</label>
+        <input
+                type="datetime-local"
+                class="form-control"
+                name="start"
+                value="<%= appointment.start.toISOString().slice(0,16) %>"
+        />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Data/Hora Fim</label>
+        <input
+                type="datetime-local"
+                class="form-control"
+                name="end"
+                value="<%= appointment.end.toISOString().slice(0,16) %>"
+        />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status">
+            <option value="scheduled" <%= appointment.status === 'scheduled' ? 'selected' : '' %>>Agendado</option>
+            <option value="completed" <%= appointment.status === 'completed' ? 'selected' : '' %>>Concluído</option>
+            <option value="canceled" <%= appointment.status === 'canceled' ? 'selected' : '' %>>Cancelado</option>
+        </select>
+    </div>
+    <div class="form-check form-switch mb-3">
+        <input type="hidden" name="paymentConfirmed" value="false" />
+        <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="paymentConfirmed"
+                name="paymentConfirmed"
+                value="true"
+                <%= appointment.paymentConfirmed ? 'checked' : '' %>
+        />
+        <label class="form-check-label" for="paymentConfirmed">Pagamento confirmado</label>
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+</form>
+
+<%- include('../partials/footer') %>
