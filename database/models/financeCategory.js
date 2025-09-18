@@ -158,6 +158,14 @@ module.exports = (sequelize, DataTypes) => {
                 foreignKey: 'financeCategoryId'
             });
         }
+
+        if (models.FinanceCategoryRate) {
+            FinanceCategory.hasMany(models.FinanceCategoryRate, {
+                as: 'rates',
+                foreignKey: 'financeCategoryId',
+                onDelete: 'SET NULL'
+            });
+        }
     };
 
     return FinanceCategory;

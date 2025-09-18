@@ -204,12 +204,23 @@ module.exports = (sequelize, DataTypes) => {
     };
 
     User.associate = (models) => {
-        User.hasOne(models.UserNotificationPreference, {
-            as: 'notificationPreference',
-            foreignKey: 'userId',
-            onDelete: 'CASCADE',
-            hooks: true
-        });
+        if (models.UserNotificationPreference) {
+            User.hasOne(models.UserNotificationPreference, {
+                as: 'notificationPreference',
+                foreignKey: 'userId',
+                onDelete: 'CASCADE',
+                hooks: true
+            });
+        }
+
+        if (models.FinanceCategoryRate) {
+            User.hasMany(models.FinanceCategoryRate, {
+                as: 'categoryRates',
+                foreignKey: 'userId',
+                onDelete: 'CASCADE',
+                hooks: true
+            });
+        }
     };
 
     return User;

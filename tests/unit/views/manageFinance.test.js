@@ -42,6 +42,38 @@ const buildViewContext = () => ({
     projectionAlerts: [],
     financeGoals: [],
     goalSummary: { total: 0, alerts: 0 },
+    filters: {
+        startDate: '2024-05-01',
+        endDate: '2024-05-31',
+        type: 'receivable',
+        status: 'paid',
+        investmentPeriodMonths: 6,
+        investmentContribution: 200,
+        investmentContributionFrequency: 'monthly'
+    },
+    investmentSimulation: {
+        categories: [
+            {
+                categoryId: 11,
+                categoryName: 'Consultorias',
+                principal: 1500,
+                monthlyContribution: 200,
+                periodMonths: 6,
+                rateSource: 'user',
+                simple: { futureValue: 1800 },
+                compound: { futureValue: 1850 }
+            }
+        ],
+        totals: {
+            principal: 1500,
+            contributions: 1200,
+            simpleFutureValue: 1800,
+            compoundFutureValue: 1850,
+            interestDelta: 50
+        },
+        options: { defaultPeriodMonths: 6 },
+        generatedAt: new Date().toISOString()
+    },
     success_msg: null,
     error_msg: null,
     error: null,
@@ -76,6 +108,9 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('value="2024-05-31"');
         expect(html).toContain('<option value="receivable" selected>');
         expect(html).toContain('<option value="paid" selected>');
+        expect(html).toContain('name="investmentPeriodMonths"');
+        expect(html).toContain('name="investmentContribution"');
+        expect(html).toContain('name="investmentContributionFrequency"');
         expect(html).toContain('data-auto-submit="true"');
     });
 
@@ -92,6 +127,9 @@ describe('views/finance/manageFinance', () => {
         expect(normalizedHtml).toContain('maio de 2024');
         expect(normalizedHtml).toContain('financePerformanceChart');
         expect(normalizedHtml).toContain('chart.umd.min.js');
+        expect(normalizedHtml).toContain('Simulação de investimentos');
+        expect(normalizedHtml).toContain('Consultorias');
+        expect(normalizedHtml).toContain('Ganho adicional estimado');
     });
 
     it('exibe controles de upload e anexos vinculados aos lançamentos', async () => {

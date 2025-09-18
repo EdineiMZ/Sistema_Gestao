@@ -7,6 +7,10 @@ const { authenticateTestUser } = require('../utils/authTestUtils');
 
 const financeRoutes = require('../../src/routes/financeRoutes');
 const financeReportingService = require('../../src/services/financeReportingService');
+jest.mock('../../src/services/investmentSimulationService', () => ({
+    simulateInvestmentProjections: jest.fn()
+}));
+const investmentSimulationService = require('../../src/services/investmentSimulationService');
 const { FinanceEntry, Sequelize } = require('../../database/models');
 
 describe('Finance routes filtering', () => {
@@ -50,6 +54,12 @@ describe('Finance routes filtering', () => {
 
         const findAllSpy = jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(filteredEntries);
         const summarySpy = jest.spyOn(financeReportingService, 'getFinanceSummary');
+        investmentSimulationService.simulateInvestmentProjections.mockResolvedValue({
+            categories: [],
+            totals: { principal: 0, contributions: 0, simpleFutureValue: 0, compoundFutureValue: 0, interestDelta: 0 },
+            options: { defaultPeriodMonths: 12 },
+            generatedAt: new Date().toISOString()
+        });
 
         const { agent } = await authenticateTestUser(app);
         const response = await agent.get(
@@ -81,6 +91,9 @@ describe('Finance routes filtering', () => {
             },
             expect.objectContaining({ entries: filteredEntries })
         );
+        expect(investmentSimulationService.simulateInvestmentProjections).toHaveBeenCalledWith(expect.objectContaining({
+            entries: expect.any(Array)
+        }));
 
         const normalizedHtml = response.text.replace(/\u00a0/g, ' ');
         expect(normalizedHtml).toContain('Visão consolidada');
@@ -90,5 +103,6 @@ describe('Finance routes filtering', () => {
         expect(normalizedHtml).toContain('<option value="paid" selected>');
         expect(normalizedHtml).toContain('Performance mensal');
         expect(normalizedHtml).toContain('março de 2024');
+        expect(normalizedHtml).toContain('Simulação de investimentos');
     });
 });
