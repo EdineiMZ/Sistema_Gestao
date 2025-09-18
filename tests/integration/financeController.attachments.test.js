@@ -27,7 +27,7 @@ jest.mock('../../src/middlewares/audit', () => () => (req, res, next) => next())
 
 const financeRoutes = require('../../src/routes/financeRoutes');
 const fileStorageService = require('../../src/services/fileStorageService');
-const { FinanceEntry, FinanceAttachment, sequelize } = require('../../database/models');
+const { FinanceEntry, FinanceAttachment, sequelize, User } = require('../../database/models');
 
 const buildApp = () => {
     const app = express();
@@ -48,6 +48,15 @@ describe('FinanceController attachments', () => {
 
     beforeEach(async () => {
         await sequelize.sync({ force: true });
+        const unique = `${Date.now()}-${Math.random()}`;
+        await User.create({
+            id: 1,
+            name: 'Finance Attachments',
+            email: `attachments-${unique}@example.com`,
+            password: 'SenhaSegura123',
+            role: 'admin',
+            active: true
+        });
         await fsp.rm(storageRoot, { recursive: true, force: true });
         await fsp.mkdir(storageRoot, { recursive: true });
         app = buildApp();
@@ -97,7 +106,8 @@ describe('FinanceController attachments', () => {
             value: '2200.00',
             dueDate: '2024-10-15',
             recurring: false,
-            recurringInterval: null
+            recurringInterval: null,
+            userId: 1
         });
 
         const noteBuffer = Buffer.from('Relatorio financeiro confidencial');

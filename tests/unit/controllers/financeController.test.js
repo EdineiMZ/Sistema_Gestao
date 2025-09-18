@@ -5,7 +5,8 @@ jest.mock('../../../database/models', () => {
         FinanceEntry: {
             create: jest.fn(),
             findAll: jest.fn(),
-            findByPk: jest.fn()
+            findByPk: jest.fn(),
+            findOne: jest.fn()
         },
         Sequelize: { Op }
     };
@@ -33,7 +34,8 @@ describe('financeController', () => {
                 recurring: 'true',
                 recurringInterval: 'Mensal'
             },
-            flash: jest.fn()
+            flash: jest.fn(),
+            user: { id: 42 }
         };
         const res = buildResponseMock();
 
@@ -42,7 +44,7 @@ describe('financeController', () => {
         await financeController.createFinanceEntry(req, res);
 
         expect(FinanceEntry.create).toHaveBeenCalledWith(
-            expect.objectContaining({ recurringInterval: 'monthly' })
+            expect.objectContaining({ recurringInterval: 'monthly', userId: 42 })
         );
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
         expect(res.redirect).toHaveBeenCalledWith('/finance');
@@ -64,6 +66,7 @@ describe('financeController', () => {
         };
 
         FinanceEntry.findByPk.mockResolvedValue(entry);
+        FinanceEntry.findOne.mockResolvedValue(entry);
 
         const req = {
             params: { id: 7 },
@@ -77,7 +80,8 @@ describe('financeController', () => {
                 recurring: 'true',
                 recurringInterval: 'Quinzenal'
             },
-            flash: jest.fn()
+            flash: jest.fn(),
+            user: { id: 7 }
         };
         const res = buildResponseMock();
 

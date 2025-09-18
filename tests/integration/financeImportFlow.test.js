@@ -20,7 +20,7 @@ jest.mock('../../src/middlewares/permissionMiddleware', () => () => (req, res, n
 jest.mock('../../src/middlewares/audit', () => () => (req, res, next) => next());
 
 const financeRoutes = require('../../src/routes/financeRoutes');
-const { FinanceEntry, sequelize } = require('../../database/models');
+const { FinanceEntry, sequelize, User } = require('../../database/models');
 
 const buildTestApp = () => {
     const app = express();
@@ -43,6 +43,14 @@ describe('Fluxo de importação financeira', () => {
 
     beforeAll(async () => {
         await sequelize.sync({ force: true });
+        await User.create({
+            id: 1,
+            name: 'Finance Tester',
+            email: 'finance.tester@example.com',
+            password: 'SenhaSegura123',
+            role: 'admin',
+            active: true
+        });
         app = buildTestApp();
     });
 
@@ -53,7 +61,8 @@ describe('Fluxo de importação financeira', () => {
             type: 'receivable',
             value: 2500,
             dueDate: '2024-01-15',
-            status: 'paid'
+            status: 'paid',
+            userId: 1
         });
     });
 
@@ -114,11 +123,13 @@ describe('Fluxo de importação financeira', () => {
             description: 'Conta de Luz',
             type: 'payable',
             value: expect.anything(),
-            dueDate: '2024-01-10'
+            dueDate: '2024-01-10',
+            userId: 1
         });
         expect(secondEntry).toMatchObject({
             description: 'Mensalidade Academia',
-            dueDate: '2024-01-15'
+            dueDate: '2024-01-15',
+            userId: 1
         });
     });
 
@@ -145,5 +156,44 @@ describe('Fluxo de importação financeira', () => {
         });
         expect(entry).toHaveProperty('type', 'receivable');
         expect(entry).toHaveProperty('status');
+    });
+
+    it('não marca como duplicados lançamentos existentes de outros usuários', async () => {
+        await User.create({
+            id: 2,
+            name: 'Outro Usuário',
+            email: 'finance.other@example.com',
+            password: 'SenhaSegura123',
+            role: 'admin',
+            active: true
+        });
+
+        await FinanceEntry.create({
+            description: 'Serviço externo',
+            type: 'payable',
+            value: 500,
+            dueDate: '2024-03-10',
+            status: 'pending',
+            userId: 2
+        });
+
+        const csvPayload = [
+            'Descrição;Valor;Data;Tipo',
+            'Serviço externo;-500,00;2024-03-10;Despesa'
+        ].join('\n');
+
+        const response = await request(app)
+            .post('/finance/import/preview')
+            .set('Accept', 'application/json')
+            .attach('importFile', Buffer.from(csvPayload, 'utf8'), 'import.csv');
+
+        expect(response.status).toBe(200);
+        const { preview } = response.body;
+        expect(preview.entries).toHaveLength(1);
+        expect(preview.totals).toMatchObject({ total: 1, new: 1, conflicting: 0 });
+        expect(preview.entries[0]).toMatchObject({
+            description: 'Serviço externo',
+            conflict: false
+        });
     });
 });

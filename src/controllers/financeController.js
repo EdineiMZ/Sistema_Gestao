@@ -122,6 +122,15 @@ const normalizeAmountInput = (value) => {
 
 const resolveCurrentUserId = (req) => req?.user?.id ?? req?.session?.user?.id ?? null;
 
+const normalizeUserId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const numeric = Number(value);
+    return Number.isInteger(numeric) ? numeric : null;
+};
+
 const createCategoryResolver = async (userId) => {
     return financeImportService.createFinanceCategoryResolver({ ownerId: userId });
 };
@@ -369,7 +378,7 @@ const isMissingTableDbError = (error, tableName) => {
     return message.includes('no such table') && message.includes(String(tableName).toLowerCase());
 };
 
-const prepareImportPreview = async (rawEntries = []) => {
+const prepareImportPreview = async (rawEntries = [], options = {}) => {
     const totals = { total: 0, new: 0, conflicting: 0, invalid: 0 };
     if (!Array.isArray(rawEntries) || !rawEntries.length) {
         return { entries: [], totals, validationErrors: [] };
@@ -377,10 +386,20 @@ const prepareImportPreview = async (rawEntries = []) => {
 
     const normalizedEntries = [];
     const validationErrors = [];
+    const userId = normalizeUserId(options.userId);
+    const categoryResolver = options.categoryResolver;
 
     for (const [index, entry] of rawEntries.entries()) {
         try {
-            const prepared = await financeImportService.prepareEntryForPersistence(entry);
+            const prepareOptions = {};
+            if (categoryResolver) {
+                prepareOptions.categoryResolver = categoryResolver;
+            }
+            if (userId !== null) {
+                prepareOptions.userId = userId;
+            }
+
+            const prepared = await financeImportService.prepareEntryForPersistence(entry, prepareOptions);
             normalizedEntries.push({ ...prepared, originalIndex: index });
         } catch (error) {
             const message = error?.message || 'Entrada inválida.';
@@ -394,10 +413,16 @@ const prepareImportPreview = async (rawEntries = []) => {
     const dueDates = [...new Set(normalizedEntries.map((item) => item.dueDate))];
     let existingEntries = [];
     if (dueDates.length) {
+        const where = {
+            dueDate: { [Op.in]: dueDates }
+        };
+
+        if (userId !== null) {
+            where.userId = userId;
+        }
+
         existingEntries = await FinanceEntry.findAll({
-            where: {
-                dueDate: { [Op.in]: dueDates }
-            },
+            where,
             attributes: ['description', 'value', 'dueDate'],
             raw: true
         });
@@ -474,22 +499,6 @@ const buildFiltersFromQuery = (query = {}) => {
 };
 
 const buildEntriesQueryOptions = (filters = {}) => {
-    const include = [
-        {
-            model: FinanceAttachment,
-            as: 'attachments',
-            attributes: ['id', 'fileName', 'mimeType', 'size', 'createdAt']
-        }
-    ];
-
-    if (FinanceCategory) {
-        include.push({
-            model: FinanceCategory,
-            as: 'category',
-            attributes: ['id', 'name', 'slug', 'color']
-        });
-    }
-
     const options = {
         include: [
             {
@@ -512,6 +521,11 @@ const buildEntriesQueryOptions = (filters = {}) => {
 
     const where = {};
 
+    const userId = normalizeUserId(filters.userId);
+    if (userId !== null) {
+        where.userId = userId;
+    }
+
     const dateFilter = reportingUtils.buildDateFilter(filters);
     if (dateFilter) {
         where.dueDate = dateFilter;
@@ -525,9 +539,7 @@ const buildEntriesQueryOptions = (filters = {}) => {
         where.status = filters.status;
     }
 
-    if (Object.keys(where).length > 0) {
-        options.where = where;
-    }
+    options.where = Object.keys(where).length > 0 ? where : undefined;
 
     return options;
 };
@@ -762,6 +774,11 @@ module.exports = {
     listFinanceEntries: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
+            const userId = resolveCurrentUserId(req);
+
+            if (userId !== null) {
+                filters.userId = userId;
+            }
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
             const goalsPromise = (async () => {
@@ -780,8 +797,6 @@ module.exports = {
                 includeCategoryConsumption: true,
                 entriesPromise
             });
-
-            const userId = req.user?.id || req.session?.user?.id || null;
 
             const categoriesPromise = (async () => {
                 if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
@@ -901,11 +916,16 @@ module.exports = {
                 return res.status(400).json({ ok: false, message: 'Orçamento inválido.' });
             }
 
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                return res.status(403).json({ ok: false, message: 'Usuário não autenticado.' });
+            }
+
             if (!Budget || typeof Budget.findByPk !== 'function') {
                 return res.status(500).json({ ok: false, message: 'Recurso de orçamento indisponível.' });
             }
 
-            const budget = await Budget.findByPk(budgetId);
+            const budget = await Budget.findOne({ where: { id: budgetId, userId: currentUserId } });
             if (!budget) {
                 return res.status(404).json({ ok: false, message: 'Orçamento não encontrado.' });
             }
@@ -918,6 +938,7 @@ module.exports = {
             await budget.save();
 
             const filters = buildFiltersFromQuery(req.query);
+            filters.userId = currentUserId;
             const overview = await financeReportingService.getBudgetSummaries(filters, {
                 includeCategoryConsumption: true
             });
@@ -957,7 +978,15 @@ module.exports = {
                 throw new Error('Nenhum lançamento válido foi encontrado no arquivo.');
             }
 
-            const preview = await prepareImportPreview(parseResult.entries);
+            const currentUserId = resolveCurrentUserId(req);
+            const categoryResolver = currentUserId !== null
+                ? await createCategoryResolver(currentUserId)
+                : null;
+
+            const preview = await prepareImportPreview(parseResult.entries, {
+                userId: currentUserId,
+                categoryResolver
+            });
             const payload = {
                 fileName: req.file.originalname,
                 uploadedAt: new Date().toISOString(),
@@ -1007,6 +1036,9 @@ module.exports = {
             }
 
             const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                throw new Error('Usuário não autenticado.');
+            }
             const categoryResolver = await createCategoryResolver(currentUserId);
             const preparedEntries = [];
             const skippedEntries = [];
@@ -1025,7 +1057,10 @@ module.exports = {
                 }
 
                 try {
-                    const prepared = await financeImportService.prepareEntryForPersistence(entry, { categoryResolver });
+                    const prepared = await financeImportService.prepareEntryForPersistence(entry, {
+                        categoryResolver,
+                        userId: currentUserId
+                    });
                     preparedEntries.push({
                         ...prepared,
                         categoryId: normalizeCategoryId(prepared.financeCategoryId)
@@ -1046,7 +1081,10 @@ module.exports = {
             let existingEntries = [];
             if (dueDates.length) {
                 existingEntries = await FinanceEntry.findAll({
-                    where: { dueDate: { [Op.in]: dueDates } },
+                    where: {
+                        dueDate: { [Op.in]: dueDates },
+                        userId: currentUserId
+                    },
                     attributes: ['id', 'description', 'value', 'dueDate']
                 });
             }
@@ -1080,7 +1118,10 @@ module.exports = {
 
             let createdRecords = [];
             if (finalEntries.length) {
-                const payload = finalEntries.map(({ hash, categoryName, categoryId, ...fields }) => fields);
+                const payload = finalEntries.map(({ hash, categoryName, categoryId, ...fields }) => ({
+                    ...fields,
+                    userId: currentUserId
+                }));
                 const result = await FinanceEntry.bulkCreate(payload, { validate: true, returning: true });
                 createdRecords = Array.isArray(result) ? result : [];
             }
@@ -1144,6 +1185,11 @@ module.exports = {
         let storedKeys = [];
 
         try {
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                req.flash('error_msg', 'Usuário não autenticado.');
+                return res.redirect('/finance');
+            }
             const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
             const financeCategoryId = normalizeCategoryId(
                 req.body.financeCategoryId ?? req.body.categoryId
@@ -1157,6 +1203,7 @@ module.exports = {
                 value,
                 dueDate,
                 financeCategoryId,
+                userId: currentUserId,
                 recurring: (recurring === 'true'),
                 recurringInterval: normalizeRecurringInterval(recurringInterval)
             };
@@ -1197,6 +1244,11 @@ module.exports = {
         let storedKeys = [];
 
         try {
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                req.flash('error_msg', 'Usuário não autenticado.');
+                return res.redirect('/finance');
+            }
             const { id } = req.params;
             const {
                 description,
@@ -1215,12 +1267,14 @@ module.exports = {
 
             transaction = await beginTransaction();
 
-            let entry;
+            const findOptions = {
+                where: { id, userId: currentUserId }
+            };
             if (transaction) {
-                entry = await FinanceEntry.findByPk(id, { transaction });
-            } else {
-                entry = await FinanceEntry.findByPk(id);
+                findOptions.transaction = transaction;
             }
+
+            const entry = await FinanceEntry.findOne(findOptions);
 
             if (!entry) {
                 if (transaction) {
@@ -1273,8 +1327,15 @@ module.exports = {
 
     deleteFinanceEntry: async (req, res) => {
         try {
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                req.flash('error_msg', 'Usuário não autenticado.');
+                return res.redirect('/finance');
+            }
             const { id } = req.params;
-            const entry = await FinanceEntry.findByPk(id);
+            const entry = await FinanceEntry.findOne({
+                where: { id, userId: currentUserId }
+            });
             if (!entry) {
                 req.flash('error_msg', 'Lançamento não encontrado.');
                 return res.redirect('/finance');
@@ -1553,6 +1614,11 @@ module.exports = {
     exportPdf: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                return res.status(403).json({ error: 'Usuário não autenticado.' });
+            }
+            filters.userId = currentUserId;
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
             const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
@@ -1703,6 +1769,11 @@ module.exports = {
     exportExcel: async (req, res) => {
         try {
             const filters = buildFiltersFromQuery(req.query);
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                return res.status(403).json({ error: 'Usuário não autenticado.' });
+            }
+            filters.userId = currentUserId;
             const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
             const summaryPromise = createSummaryPromise(entriesPromise, filters);
             const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {

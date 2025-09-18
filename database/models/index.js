@@ -182,6 +182,20 @@ if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEnt
     });
 }
 
+if (User && FinanceEntry && !(FinanceEntry.associations && FinanceEntry.associations.user)) {
+    FinanceEntry.belongsTo(User, {
+        as: 'user',
+        foreignKey: 'userId'
+    });
+}
+
+if (User && FinanceEntry && !(User.associations && User.associations.financeEntries)) {
+    User.hasMany(FinanceEntry, {
+        as: 'financeEntries',
+        foreignKey: 'userId'
+    });
+}
+
 if (SupportTicket && User && !(SupportTicket.associations && SupportTicket.associations.creator)) {
     SupportTicket.belongsTo(User, {
         as: 'creator',

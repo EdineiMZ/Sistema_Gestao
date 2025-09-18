@@ -248,11 +248,12 @@ describe('FinanceController export endpoints', () => {
         expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
             order: expect.any(Array),
             where: expect.objectContaining({
-                dueDate: expect.objectContaining({})
+                dueDate: expect.objectContaining({}),
+                userId: expect.any(Number)
             })
         }));
         expect(financeReportingService.getFinanceSummary).toHaveBeenCalledWith(
-            { startDate: '2024-01-01', endDate: '2024-01-31' },
+            { startDate: '2024-01-01', endDate: '2024-01-31', userId: expect.any(Number) },
             expect.objectContaining({ entries: sampleEntries })
         );
         expect(reportChartService.generateFinanceReportChart).toHaveBeenCalledWith(summaryResponse);
@@ -286,11 +287,12 @@ describe('FinanceController export endpoints', () => {
         expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
             order: expect.any(Array),
             where: expect.objectContaining({
-                dueDate: expect.objectContaining({})
+                dueDate: expect.objectContaining({}),
+                userId: expect.any(Number)
             })
         }));
         expect(financeReportingService.getFinanceSummary).toHaveBeenCalledWith(
-            { startDate: '2024-02-01', endDate: '2024-02-28' },
+            { startDate: '2024-02-01', endDate: '2024-02-28', userId: expect.any(Number) },
             expect.objectContaining({ entries: sampleEntries })
         );
         expect(reportChartService.generateFinanceReportChart).toHaveBeenCalledWith(summaryResponse, {

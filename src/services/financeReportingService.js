@@ -124,6 +124,15 @@ const parseProjectionMonths = (value) => {
     return Math.min(parsed, MAX_PROJECTION_MONTHS);
 };
 
+const parseIntegerId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const numeric = Number(value);
+    return Number.isInteger(numeric) ? numeric : null;
+};
+
 const isMissingTableError = (error, tableName) => {
     if (!error) {
         return false;
@@ -588,6 +597,10 @@ const fetchBudgetRows = async (filters = {}) => {
     }
 
     const where = {};
+    const userId = parseIntegerId(filters.userId);
+    if (userId !== null) {
+        where.userId = userId;
+    }
 
     if (Number.isInteger(filters.userId)) {
         where.userId = filters.userId;
@@ -633,6 +646,10 @@ const fetchCategoryMonthlyConsumption = async (filters = {}) => {
     }
 
     const where = {};
+    const userId = parseIntegerId(filters.userId);
+    if (userId !== null) {
+        where.userId = userId;
+    }
     const dateFilter = buildDateFilter(filters);
     if (dateFilter) {
         where.dueDate = dateFilter;
@@ -1131,6 +1148,11 @@ const buildTotalsFromStatus = (statusSummary) => {
 
 const fetchEntries = async (filters = {}) => {
     const where = {};
+
+    const userId = parseIntegerId(filters.userId);
+    if (userId !== null) {
+        where.userId = userId;
+    }
 
     const dateFilter = buildDateFilter(filters);
     if (dateFilter) {

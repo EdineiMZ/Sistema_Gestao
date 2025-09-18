@@ -538,6 +538,13 @@ const prepareEntryForPersistence = async (input, options = {}) => {
     const paymentDate = input.paymentDate ? normalizeDate(input.paymentDate, 'data de pagamento') : null;
     const status = normalizeStatus(input.status);
     const categoryResolver = options.categoryResolver;
+    const parsedUserId = Number.isInteger(Number(options.userId))
+        ? Number(options.userId)
+        : null;
+
+    if (options.userId !== undefined && parsedUserId === null) {
+        throw new Error('Usuário responsável inválido.');
+    }
 
     const rawCategoryId = input.financeCategoryId ?? input.categoryId ?? null;
     const categorySlug = extractCategorySlugFromInput(input);
@@ -585,7 +592,8 @@ const prepareEntryForPersistence = async (input, options = {}) => {
         status,
         financeCategoryId: resolvedFinanceCategoryId,
         categoryName,
-        hash: createEntryHash({ description, value: Math.abs(numericAmount), dueDate })
+        hash: createEntryHash({ description, value: Math.abs(numericAmount), dueDate }),
+        ...(parsedUserId !== null ? { userId: parsedUserId } : {})
     };
 };
 
@@ -662,9 +670,12 @@ const buildImportPreview = async (rawEntries = [], options = {}) => {
     const entriesArray = Array.isArray(rawEntries) ? rawEntries : [];
 
     let categoryResolver = options.categoryResolver || null;
+    const ownerId = Number.isInteger(Number(options.ownerId))
+        ? Number(options.ownerId)
+        : (Number.isInteger(Number(options.userId)) ? Number(options.userId) : null);
     if (!categoryResolver) {
         categoryResolver = await buildCategoryResolver({
-            ownerId: options.ownerId,
+            ownerId,
             FinanceCategoryModel: options.FinanceCategoryModel || FinanceCategory
         });
     }
@@ -675,7 +686,10 @@ const buildImportPreview = async (rawEntries = [], options = {}) => {
         metadata.categorySlug = metadata.categorySlug || extractCategorySlugFromInput(rawEntry);
 
         try {
-            const prepared = await prepareEntryForPersistence(rawEntry, { categoryResolver });
+            const prepared = await prepareEntryForPersistence(rawEntry, {
+                categoryResolver,
+                userId: ownerId !== null ? ownerId : undefined
+            });
             return {
                 ...prepared,
                 financeCategorySlug: metadata.categorySlug || null,
@@ -702,8 +716,12 @@ const buildImportPreview = async (rawEntries = [], options = {}) => {
 
     let existingEntries = [];
     if (dueDates.length) {
+        const where = { dueDate: { [Op.in]: dueDates } };
+        if (ownerId !== null) {
+            where.userId = ownerId;
+        }
         existingEntries = await FinanceEntry.findAll({
-            where: { dueDate: { [Op.in]: dueDates } },
+            where,
             attributes: ['id', 'description', 'value', 'dueDate']
         });
     }
