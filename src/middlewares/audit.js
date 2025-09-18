@@ -16,6 +16,18 @@ const resolveClientIp = (req) => {
     ).toString();
 };
 
+const resolveUserId = (req) => {
+    if (req?.user && req.user.id !== undefined && req.user.id !== null) {
+        return req.user.id;
+    }
+
+    if (req?.session?.user && req.session.user.id !== undefined && req.session.user.id !== null) {
+        return req.session.user.id;
+    }
+
+    return null;
+};
+
 module.exports = (action, resource) => {
     if (!action) {
         throw new Error('Audit middleware requires an action identifier.');
@@ -54,7 +66,7 @@ module.exports = (action, resource) => {
                 }
 
                 await AuditLog.create({
-                    userId: req.session?.user?.id ?? null,
+                    userId: resolveUserId(req),
                     action,
                     resource: resolvedResource || req.originalUrl,
                     ip: resolveClientIp(req)
