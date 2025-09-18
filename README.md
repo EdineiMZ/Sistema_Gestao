@@ -33,3 +33,7 @@ npm install
 ```
 
 Em ambientes novos, garanta que o banco de dados esteja acessível antes de iniciar o servidor para evitar falhas na sincronização do store de sessões.
+
+## Limpeza automática de lançamentos financeiros
+
+Durante a inicialização o servidor executa uma rotina de saneamento que associa lançamentos em `FinanceEntries` sem `userId` a um usuário de fallback. A rotina prioriza contas com função de administrador; se nenhuma existir, utiliza o usuário mais antigo disponível. Caso nenhum usuário esteja cadastrado, o processo de boot é interrompido com uma mensagem orientando a criação de uma conta para prosseguir.
