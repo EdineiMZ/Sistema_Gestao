@@ -32,4 +32,15 @@ Para instalar todas as dependências do projeto execute:
 npm install
 ```
 
+## Migrations do banco de dados
+
+Antes de subir o servidor pela primeira vez (ou após atualizar para uma nova versão), execute as migrations pendentes:
+
+```bash
+npm run migrate
+```
+
+O comando autentica a conexão configurada no Sequelize, aplica todos os arquivos em `database/migrations` por meio do Umzug e encerra a sessão com o banco.
+Caso opte por iniciar o servidor diretamente com `npm start` ou `npm run dev`, as migrations pendentes também são executadas automaticamente durante a inicialização — ainda assim, recomendamos rodá-las manualmente em ambientes de produção para detectar inconsistências antes do deploy.
+
 Em ambientes novos, garanta que o banco de dados esteja acessível antes de iniciar o servidor para evitar falhas na sincronização do store de sessões.
