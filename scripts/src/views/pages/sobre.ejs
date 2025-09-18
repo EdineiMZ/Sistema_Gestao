@@ -1,0 +1,289 @@
+<%- include('../partials/header') %>
+
+<% const heroTitle = pageTitle || 'Sobre nós'; %>
+<% const heroDescription =
+    pageDescription ||
+    'Unimos tecnologia, governança e pessoas para acelerar resultados de operações complexas com total transparência e segurança.'; %>
+
+<section class="py-5 hero-blur">
+    <div class="container-lg">
+        <div class="row align-items-center g-5">
+            <div class="col-xl-6">
+                <span class="app-chip text-uppercase">Nossa história</span>
+                <h1 class="display-5 fw-semibold mt-3 text-gradient"><%= heroTitle %></h1>
+                <p class="lead-hero mb-4"><%= heroDescription %></p>
+                <div class="card-soft p-4 mb-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge rounded-pill text-bg-primary fw-semibold">NPS 92</span>
+                        <p class="mb-0 text-muted small">
+                            Monitoramos continuamente a satisfação dos usuários para evoluir o produto com base em dados reais.
+                        </p>
+                    </div>
+                </div>
+                <ul class="list-unstyled text-muted small mb-4">
+                    <li class="d-flex align-items-start gap-2 mb-2">
+                        <i class="bi bi-cpu-fill text-primary"></i>
+                        <span><strong>Arquitetura escalável:</strong> multi-tenant seguro, balanceado em múltiplos data centers com failover automático.</span>
+                    </li>
+                    <li class="d-flex align-items-start gap-2 mb-2">
+                        <i class="bi bi-shield-lock-fill text-primary"></i>
+                        <span><strong>Segurança em primeiro lugar:</strong> criptografia ponta a ponta, rastreabilidade total e auditorias independentes.</span>
+                    </li>
+                    <li class="d-flex align-items-start gap-2">
+                        <i class="bi bi-people-fill text-primary"></i>
+                        <span><strong>Especialistas ao seu lado:</strong> squads multidisciplinares focados em adoção, performance e sucesso do cliente.</span>
+                    </li>
+                </ul>
+                <div class="d-flex flex-wrap gap-3">
+                    <a class="btn btn-gradient" href="/pages/contact">Fale com o time</a>
+                    <a class="btn btn-soft" href="/pages/terms">Nossas políticas</a>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="position-relative">
+                    <img
+                        src="/images/foto.png"
+                        class="img-fluid rounded-4 shadow-lg"
+                        alt="Equipe de tecnologia colaborando na construção do sistema"
+                    />
+                    <div class="card-soft position-absolute bottom-0 start-0 translate-middle-y p-3 shadow-lg" style="max-width: 320px;">
+                        <h3 class="h6 fw-semibold mb-1">Plataforma pensada para escala</h3>
+                        <p class="text-muted small mb-0">
+                            50 milhões de registros tratados diariamente, com governança de dados e insights preditivos alimentados por IA responsável.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row row-cols-1 row-cols-md-4 g-4">
+            <div class="col">
+                <div class="card-soft h-100 p-4 text-center">
+                    <p class="display-5 fw-semibold text-primary mb-1">+1.200</p>
+                    <p class="text-muted mb-0">Organizações conectadas</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4 text-center">
+                    <p class="display-5 fw-semibold text-primary mb-1">99,98%</p>
+                    <p class="text-muted mb-0">Disponibilidade comprovada</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4 text-center">
+                    <p class="display-5 fw-semibold text-primary mb-1">50M+</p>
+                    <p class="text-muted mb-0">Transações seguras ao mês</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4 text-center">
+                    <p class="display-5 fw-semibold text-primary mb-1">11</p>
+                    <p class="text-muted mb-0">Países com times dedicados</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="text-center mb-5">
+            <span class="app-chip">Propósito</span>
+            <h2 class="section-title mt-3">Nossa essência</h2>
+            <p class="lead-hero">
+                Ajudamos equipes a tomar decisões confiáveis com base em dados, automatizando fluxos críticos e garantindo compliance em cada etapa.
+            </p>
+        </div>
+        <div class="row row-cols-1 row-cols-lg-3 g-4">
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-primary bg-opacity-10 text-primary fw-semibold mb-3">Missão</span>
+                    <h3 class="h5 fw-semibold">Potencializar operações complexas</h3>
+                    <p class="text-muted">
+                        Entregar uma plataforma única que conecte pessoas, processos e tecnologia, reduzindo riscos operacionais e aumentando a produtividade.
+                    </p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-success bg-opacity-10 text-success fw-semibold mb-3">Visão</span>
+                    <h3 class="h5 fw-semibold">Ser referência em governança inteligente</h3>
+                    <p class="text-muted">
+                        Evoluir continuamente com recursos preditivos, garantindo transparência e escalabilidade para qualquer porte de organização.
+                    </p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <span class="badge text-bg-info bg-opacity-10 text-info fw-semibold mb-3">Valores</span>
+                    <h3 class="h5 fw-semibold">Integridade, inovação e colaboração</h3>
+                    <p class="text-muted">
+                        Operamos com ética, foco em impacto real e espírito de equipe para transformar rotinas em experiências extraordinárias.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <span class="bg-primary bg-opacity-10 text-primary rounded-3 p-3">
+                            <i class="bi bi-graph-up-arrow fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h5 fw-semibold">Performance monitorada</h3>
+                            <p class="text-muted mb-0">Alertas proativos, dashboards em tempo real e recomendações baseadas em machine learning.</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <span class="bg-success bg-opacity-10 text-success rounded-3 p-3">
+                            <i class="bi bi-patch-check-fill fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h6 fw-semibold mb-1">Conformidade contínua</h3>
+                            <p class="text-muted mb-0">Auditorias automatizadas, trilhas de auditoria completas e alertas de risco em segundos.</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="bg-danger bg-opacity-10 text-danger rounded-3 p-3">
+                            <i class="bi bi-shield-shaded fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h6 fw-semibold mb-1">Segurança por padrão</h3>
+                            <p class="text-muted mb-0">Camadas de proteção com políticas de acesso granular, MFA e monitoramento 24/7.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card-soft h-100 p-4">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <span class="bg-warning bg-opacity-10 text-warning rounded-3 p-3">
+                            <i class="bi bi-diagram-3 fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h5 fw-semibold">Integrações sem fricção</h3>
+                            <p class="text-muted mb-0">APIs robustas, webhooks configuráveis e conectores prontos com ERPs, CRMs e plataformas financeiras.</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <span class="bg-info bg-opacity-10 text-info rounded-3 p-3">
+                            <i class="bi bi-people fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h6 fw-semibold mb-1">Cultura centrada no usuário</h3>
+                            <p class="text-muted mb-0">Descobrimos necessidades reais em co-criação com clientes e parceiros estratégicos.</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="bg-secondary bg-opacity-10 text-secondary rounded-3 p-3">
+                            <i class="bi bi-lightbulb-fill fs-4"></i>
+                        </span>
+                        <div>
+                            <h3 class="h6 fw-semibold mb-1">Inovação contínua</h3>
+                            <p class="text-muted mb-0">Laboratório interno de P&D que transforma tendências em funcionalidades reais rapidamente.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="row g-5 align-items-start">
+            <div class="col-lg-6">
+                <span class="app-chip">Linha do tempo</span>
+                <h2 class="section-title mt-3">Nossa jornada até aqui</h2>
+                <p class="text-muted">
+                    Crescemos lado a lado com nossos clientes, evoluindo de um núcleo de especialistas para um ecossistema completo de soluções de gestão.
+                </p>
+                <ul class="timeline">
+                    <li class="timeline-item">
+                        <div class="d-flex flex-column flex-md-row justify-content-between mb-1">
+                            <span class="fw-semibold text-primary">2016</span>
+                            <span class="text-muted">Lançamento do MVP</span>
+                        </div>
+                        <p class="text-muted mb-0">Primeiras implantações em ambientes altamente regulados, com foco em auditoria de processos críticos.</p>
+                    </li>
+                    <li class="timeline-item">
+                        <div class="d-flex flex-column flex-md-row justify-content-between mb-1">
+                            <span class="fw-semibold text-primary">2018</span>
+                            <span class="text-muted">Certificação ISO 27001</span>
+                        </div>
+                        <p class="text-muted mb-0">Implementação de controles rígidos, monitoramento contínuo e programa de segurança alinhado à LGPD.</p>
+                    </li>
+                    <li class="timeline-item">
+                        <div class="d-flex flex-column flex-md-row justify-content-between mb-1">
+                            <span class="fw-semibold text-primary">2020</span>
+                            <span class="text-muted">Arquitetura multi-tenant</span>
+                        </div>
+                        <p class="text-muted mb-0">Escalonamos a plataforma para suportar operações globais com redundância geográfica e analytics avançado.</p>
+                    </li>
+                    <li class="timeline-item">
+                        <div class="d-flex flex-column flex-md-row justify-content-between mb-1">
+                            <span class="fw-semibold text-primary">2023</span>
+                            <span class="text-muted">Inteligência preditiva</span>
+                        </div>
+                        <p class="text-muted mb-0">Modelos de machine learning passaram a sugerir ações e antecipar riscos em tempo real.</p>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="card-soft h-100 p-4">
+                    <h3 class="h4 fw-semibold mb-3">Governança e cultura de confiança</h3>
+                    <p class="text-muted">
+                        Operamos com squads distribuídos em 11 países, com processos padronizados e métricas compartilhadas para acelerar entregas.
+                    </p>
+                    <ul class="list-unstyled small text-muted mb-4">
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-award-fill text-primary"></i>
+                            <span>Framework ESG incorporado ao planejamento estratégico e às rotinas de produto.</span>
+                        </li>
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="bi bi-bar-chart-line-fill text-primary"></i>
+                            <span>OKRs transparentes com acompanhamento semanal e insights compartilhados com clientes.</span>
+                        </li>
+                        <li class="d-flex align-items-start gap-2">
+                            <i class="bi bi-emoji-smile-fill text-primary"></i>
+                            <span>Programas de desenvolvimento contínuo, trilhas de liderança e cultura de feedback aberto.</span>
+                        </li>
+                    </ul>
+                    <div class="bg-primary bg-opacity-10 rounded-4 p-3">
+                        <p class="mb-0 text-muted small">
+                            +500 profissionais certificados sustentam nossa operação, garantindo tempo médio de implantação 42% mais rápido que o mercado.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container-lg">
+        <div class="card-soft p-4 p-lg-5 text-center">
+            <span class="app-chip">Futuro</span>
+            <h2 class="section-title mt-3">Construindo o próximo capítulo com você</h2>
+            <p class="lead-hero mb-4">
+                Seguimos investindo em inteligência artificial responsável, automações low-code e experiências personalizadas para manter seu negócio sempre à frente.
+            </p>
+            <div class="d-flex flex-wrap gap-3 justify-content-center">
+                <a class="btn btn-gradient" href="/register">Começar agora</a>
+                <a class="btn btn-soft" href="/pages/contact">Agendar uma demonstração</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<%- include('../partials/footer') %>

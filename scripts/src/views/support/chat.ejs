@@ -1,0 +1,239 @@
+<%- include('../partials/header') %>
+
+<section class="support-chat-wrapper">
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <aside class="card shadow-sm border-0 h-100 support-chat__sidebar">
+                <div class="card-body p-4 d-flex flex-column gap-3">
+                    <div>
+                        <span class="badge rounded-pill bg-primary-subtle text-primary mb-2">
+                            <i class="bi bi-life-preserver me-1"></i>Chamado #<%= ticket.id %>
+                        </span>
+                        <h1 class="h4 fw-semibold mb-1"><%= ticket.subject %></h1>
+                        <% const initialMessage = Array.isArray(history) && history.length ? history[0].content : null; %>
+                        <% if (initialMessage) { %>
+                            <p class="text-muted small mb-0"><%= initialMessage %></p>
+                        <% } else if (ticket.lastMessageAt) { %>
+                            <p class="text-muted small mb-0">
+                                Última interação em
+                                <%= new Date(ticket.lastMessageAt).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %>
+                            </p>
+                        <% } else { %>
+                            <p class="text-muted small mb-0">Aguardando primeira mensagem.</p>
+                        <% } %>
+                    </div>
+
+                    <div class="support-chat__status d-flex align-items-center gap-2">
+                        <span class="status-indicator"></span>
+                        <span class="text-uppercase small fw-semibold"><%= ticket.status %></span>
+                    </div>
+
+                    <div>
+                        <h2 class="h6 text-uppercase text-muted fw-semibold mb-3">Anexos do ticket</h2>
+                        <div class="support-chat__attachments" data-support-attachments>
+                            <% if (!attachments || !attachments.length) { %>
+                                <p class="text-muted small mb-0">Nenhum anexo adicionado ainda.</p>
+                            <% } else { %>
+                                <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+                                    <% attachments.forEach((attachment) => { %>
+                                        <li class="attachment-item d-flex align-items-center gap-3" data-attachment-id="<%= attachment.id %>">
+                                            <span class="attachment-icon bg-primary-subtle text-primary"><i class="bi bi-paperclip"></i></span>
+                                            <div class="flex-grow-1">
+                                                <a
+                                                    class="text-decoration-none fw-semibold"
+                                                    href="/support/attachments/<%= attachment.id %>/download"
+                                                >
+                                                    <%= attachment.originalName %>
+                                                </a>
+                                                <small class="text-muted d-block">Tamanho: <%= (((attachment.size || 0) / 1024).toFixed(1)) %> KB</small>
+                                            </div>
+                                        </li>
+                                    <% }); %>
+                                </ul>
+                            <% } %>
+                        </div>
+                        <form class="mt-3" data-attachment-form>
+                            <label class="form-label text-muted small text-uppercase fw-semibold">Adicionar anexo</label>
+                            <div class="input-group">
+                                <input type="file" class="form-control" name="file" accept="image/*,application/pdf" />
+                                <button class="btn btn-outline-primary" type="submit">
+                                    <i class="bi bi-upload"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">Formatos aceitos: PNG, JPG, GIF ou PDF (até 10MB).</small>
+                        </form>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <div class="col-lg-8">
+            <section class="card shadow-sm border-0 h-100 support-chat__panel" data-chat-panel>
+                <div class="card-body d-flex flex-column p-0 h-100">
+                    <header class="support-chat__header px-4 py-3 border-bottom">
+                        <div>
+                            <p class="small text-muted mb-1">Converse em tempo real com nossa equipe de especialistas</p>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-semibold">Assistente virtual</span>
+                                <span class="badge rounded-pill bg-success-subtle text-success" data-agent-status>
+                                    Aguardando atendente
+                                </span>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm d-none" data-enter-as-admin>
+                            <i class="bi bi-headset me-1"></i>Entrar como administrador
+                        </button>
+                    </header>
+
+                    <div class="support-chat__messages flex-grow-1 position-relative" data-chat-scroll-container>
+                        <div class="chat-empty-state text-center text-muted" data-chat-empty>
+                            <i class="bi bi-chat-dots display-5 d-block mb-3"></i>
+                            <p class="fw-semibold mb-1">Nenhuma mensagem por aqui ainda.</p>
+                            <p class="mb-0">Envie uma mensagem para iniciar a conversa.</p>
+                        </div>
+                        <ul class="list-unstyled p-4 m-0 d-flex flex-column gap-3" data-chat-messages></ul>
+                    </div>
+
+                    <footer class="support-chat__composer border-top px-4 py-3">
+                        <form class="d-flex flex-column flex-lg-row align-items-lg-center gap-3" data-chat-form>
+                            <div class="flex-grow-1 w-100">
+                                <label class="visually-hidden" for="supportChatMessage">Mensagem</label>
+                                <textarea
+                                    id="supportChatMessage"
+                                    class="form-control support-chat__input"
+                                    rows="2"
+                                    placeholder="Digite sua mensagem"
+                                    maxlength="2000"
+                                    required
+                                ></textarea>
+                            </div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <label class="btn btn-light border mb-0" data-chat-upload>
+                                    <i class="bi bi-paperclip"></i>
+                                    <input type="file" name="chatAttachment" accept="image/*,application/pdf" hidden />
+                                </label>
+                                <button type="submit" class="btn btn-gradient">
+                                    <i class="bi bi-send-fill me-1"></i>Enviar
+                                </button>
+                            </div>
+                        </form>
+                    </footer>
+                </div>
+            </section>
+        </div>
+    </div>
+</section>
+
+<script>
+    window.supportChatConfig = {
+        ticketId: <%- JSON.stringify(ticket.id) %>,
+        history: <%- JSON.stringify(history || []) %>,
+        attachments: <%- JSON.stringify(attachments || []) %>,
+        user: <%- JSON.stringify(user ? { id: user.id, name: user.name, role: user.role } : null) %>
+    };
+</script>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="/js/support-chat.js"></script>
+
+<style>
+    .support-chat-wrapper {
+        min-height: 70vh;
+    }
+
+    .support-chat__panel {
+        background: linear-gradient(135deg, #ffffff 0%, #f7f9fc 100%);
+    }
+
+    .support-chat__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .support-chat__messages {
+        background: rgba(248, 249, 252, 0.8);
+        overflow-y: auto;
+    }
+
+    .support-chat__messages::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .support-chat__messages::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 999px;
+    }
+
+    .support-chat__message {
+        max-width: 80%;
+        border-radius: 1rem;
+        padding: 0.75rem 1rem;
+        position: relative;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    .support-chat__message--self {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: #fff;
+    }
+
+    .support-chat__message--other {
+        align-self: flex-start;
+        background: #ffffff;
+        color: #1f2937;
+    }
+
+    .support-chat__message--system {
+        align-self: center;
+        border-radius: 999px;
+        background: #111827;
+        color: #f8fafc;
+    }
+
+    .support-chat__message small {
+        opacity: 0.8;
+    }
+
+    .support-chat__input {
+        resize: none;
+        border-radius: 1rem;
+    }
+
+    .support-chat__sidebar .attachment-item {
+        background: #f8f9fc;
+        border-radius: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .support-chat__sidebar .attachment-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .support-chat__status .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+    }
+
+    @media (max-width: 991px) {
+        .support-chat__message {
+            max-width: 100%;
+        }
+
+        .support-chat__header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+
+<%- include('../partials/footer') %>

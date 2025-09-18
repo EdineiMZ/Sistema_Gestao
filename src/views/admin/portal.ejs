@@ -1,0 +1,108 @@
+<%- include('../partials/header') %>
+
+<section class="admin-hero fade-in">
+    <div class="row g-4 align-items-center">
+        <div class="col-lg-8">
+            <span class="app-chip mb-3"><i class="bi bi-shield-check me-2"></i>Área administrativa</span>
+            <h1 class="section-title mb-3">Controle estratégico e governança em um só lugar.</h1>
+            <p class="lead-hero mb-4">
+                Bem-vindo, <strong><%= user?.name %></strong>. Como <%= roleLabel %>, você tem acesso aos módulos críticos da
+                operação para garantir segurança, desempenho e eficiência. Utilize os atalhos abaixo para atuar com rapidez.
+            </p>
+            <div class="d-flex flex-wrap gap-3">
+                <a href="/dashboard" class="btn btn-gradient">Abrir dashboard</a>
+                <a href="/notifications" class="btn btn-soft">Automatizar comunicações</a>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="admin-summary card-soft p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="avatar avatar-lg me-3">
+                        <% if (user?.profileImage) { %>
+                            <img
+                                src="data:image/png;base64,<%= user.profileImage.toString('base64') %>"
+                                alt="Avatar administrativo"
+                                class="rounded-circle"
+                                width="64"
+                                height="64"
+                            />
+                        <% } else { %>
+                            <span class="avatar-initials avatar-lg-initials"><%= user?.name ? user.name.charAt(0).toUpperCase() : 'A' %></span>
+                        <% } %>
+                    </span>
+                    <div>
+                        <h5 class="mb-1"><%= user?.name %></h5>
+                        <p class="text-muted mb-0 small"><i class="bi bi-key me-1"></i><%= roleLabel %></p>
+                    </div>
+                </div>
+                <ul class="list-unstyled admin-summary-list mb-0">
+                    <li><i class="bi bi-patch-check-fill text-success me-2"></i>Acesso aprovado às funções críticas</li>
+                    <li><i class="bi bi-activity text-primary me-2"></i>Monitoramento contínuo das rotinas automáticas</li>
+                    <li><i class="bi bi-lock-fill text-warning me-2"></i>Recomendações de segurança em tempo real</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="admin-shortcuts fade-in">
+    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4">
+        <div>
+            <h2 class="section-title fs-3 mb-1">Atalhos operacionais</h2>
+            <p class="text-muted mb-0">Acesse rapidamente os módulos essenciais para tomada de decisão.</p>
+        </div>
+        <a href="/audit/logs" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-text"></i> Relatórios de auditoria
+        </a>
+    </div>
+    <div class="row g-4">
+        <% shortcuts.forEach((shortcut) => { %>
+            <div class="col-md-6 col-xl-4">
+                <a class="admin-tile h-100" href="<%= shortcut.href %>">
+                    <span class="admin-tile-icon bg-<%= shortcut.accent %>-subtle text-<%= shortcut.accent === 'dark' ? 'dark' : shortcut.accent %>">
+                        <i class="bi <%= shortcut.icon %>"></i>
+                    </span>
+                    <div class="admin-tile-body">
+                        <h5 class="mb-2"><%= shortcut.title %></h5>
+                        <p class="text-muted mb-0"><%= shortcut.description %></p>
+                    </div>
+                    <span class="admin-tile-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+                </a>
+            </div>
+        <% }) %>
+    </div>
+</section>
+
+<section class="admin-guidelines fade-in">
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="guideline-card h-100">
+                <div class="guideline-icon bg-primary-subtle text-primary"><i class="bi bi-speedometer"></i></div>
+                <h6 class="mb-2">Performance supervisionada</h6>
+                <p class="text-muted mb-0">
+                    Revise indicadores de uso, identifique gargalos e mantenha os processos com baixa latência.
+                </p>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="guideline-card h-100">
+                <div class="guideline-icon bg-success-subtle text-success"><i class="bi bi-lock"></i></div>
+                <h6 class="mb-2">Postura de segurança ativa</h6>
+                <p class="text-muted mb-0">
+                    Aplique políticas de acesso mínimo, revise permissões e acompanhe alertas de auditoria.
+                </p>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="guideline-card h-100">
+                <div class="guideline-icon bg-warning-subtle text-warning"><i class="bi bi-clipboard-data"></i></div>
+                <h6 class="mb-2">Governança orientada a dados</h6>
+                <p class="text-muted mb-0">
+                    Utilize relatórios executivos para planejar ações, distribuir recursos e projetar resultados.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<%- include('../partials/footer') %>

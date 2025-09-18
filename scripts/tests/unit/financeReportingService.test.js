@@ -1,0 +1,139 @@
+const { getStatusSummary, getMonthlySummary, getMonthlyProjection, getFinanceSummary } = require('../../src/services/financeReportingService');
+const models = require('../../database/models');
+
+const { FinanceEntry, FinanceGoal } = models;
+
+describe('financeReportingService', () => {
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('retorna estrutura vazia ao não encontrar lançamentos', async () => {
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([]);
+
+        const summary = await getStatusSummary();
+
+        expect(summary).toEqual({
+            payable: { pending: 0, paid: 0, overdue: 0, cancelled: 0 },
+            receivable: { pending: 0, paid: 0, overdue: 0, cancelled: 0 }
+        });
+        expect(FinanceEntry.findAll).toHaveBeenCalledTimes(1);
+        expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
+            attributes: ['id', 'type', 'status', 'value', 'dueDate'],
+            raw: true
+        }));
+    });
+
+    it('agrupa os lançamentos por status e tipo', async () => {
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([
+            { type: 'payable', status: 'pending', value: '120.50', dueDate: '2024-04-10' },
+            { type: 'payable', status: 'paid', value: '80', dueDate: '2024-04-11' },
+            { type: 'receivable', status: 'paid', value: '150.20', dueDate: '2024-04-12' },
+            { type: 'receivable', status: 'overdue', value: '200', dueDate: '2024-05-01' },
+            { type: 'receivable', status: 'cancelled', value: '50', dueDate: '2024-05-02' },
+            { type: 'invalid', status: 'pending', value: '999', dueDate: '2024-06-01' }
+        ]);
+
+        const summary = await getStatusSummary();
+
+        expect(summary).toEqual({
+            payable: { pending: 120.5, paid: 80, overdue: 0, cancelled: 0 },
+            receivable: { pending: 0, paid: 150.2, overdue: 200, cancelled: 50 }
+        });
+    });
+
+    it('organiza os dados por mês', async () => {
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([
+            { type: 'payable', status: 'pending', value: 100, dueDate: '2024-01-15' },
+            { type: 'payable', status: 'paid', value: 50, dueDate: '2024-01-20' },
+            { type: 'receivable', status: 'paid', value: '200', dueDate: '2024-02-05' },
+            { type: 'receivable', status: 'paid', value: '150', dueDate: '2024-01-08' },
+            { type: 'receivable', status: 'paid', value: '120', dueDate: '2024-02-12' },
+            { type: 'payable', status: 'paid', value: '10', dueDate: 'invalid-date' }
+        ]);
+
+        const summary = await getMonthlySummary();
+
+        expect(summary).toEqual([
+            { month: '2024-01', payable: 150, receivable: 150 },
+            { month: '2024-02', payable: 0, receivable: 320 }
+        ]);
+    });
+
+    it('calcula resumo completo reutilizando lançamentos pré-carregados', async () => {
+        const entries = [
+            { type: 'payable', status: 'pending', value: 100, dueDate: '2024-03-01' },
+            { type: 'receivable', status: 'paid', value: 250, dueDate: '2024-03-02' }
+        ];
+
+        const findAllSpy = jest.spyOn(FinanceEntry, 'findAll');
+        const goalSpy = jest.spyOn(FinanceGoal, 'findAll').mockResolvedValue([]);
+
+        const summary = await getFinanceSummary({ referenceDate: '2024-03-05', projectionMonths: 1 }, { entries });
+
+        expect(findAllSpy).not.toHaveBeenCalled();
+        expect(goalSpy).toHaveBeenCalledTimes(1);
+        expect(summary.statusSummary).toEqual({
+            payable: { pending: 100, paid: 0, overdue: 0, cancelled: 0 },
+            receivable: { pending: 0, paid: 250, overdue: 0, cancelled: 0 }
+        });
+        expect(summary.monthlySummary).toEqual([
+            { month: '2024-03', payable: 100, receivable: 250 }
+        ]);
+        expect(summary.totals).toEqual({
+            payable: 100,
+            receivable: 250,
+            net: 150,
+            overdue: 0,
+            paid: 250,
+            pending: 100
+        });
+        expect(Array.isArray(summary.projections)).toBe(true);
+        expect(summary.projections.length).toBe(1);
+    });
+
+    it('projeta lançamentos recorrentes e compara com metas', async () => {
+        const entryData = [
+            {
+                type: 'receivable',
+                status: 'pending',
+                value: 500,
+                dueDate: '2024-07-05',
+                recurring: true,
+                recurringInterval: 'monthly'
+            },
+            {
+                type: 'payable',
+                status: 'pending',
+                value: 200,
+                dueDate: '2024-07-10',
+                recurring: true,
+                recurringInterval: 'mensal'
+            }
+        ];
+
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(entryData);
+        jest.spyOn(FinanceGoal, 'findAll').mockResolvedValue([
+            { id: 1, month: '2024-08-01', targetNetAmount: '400.00', notes: null },
+            { id: 2, month: '2024-09-01', targetNetAmount: '250.00', notes: null }
+        ]);
+
+        const projections = await getMonthlyProjection({ referenceDate: '2024-07-15', projectionMonths: 3 });
+
+        expect(Array.isArray(projections)).toBe(true);
+        expect(projections).toHaveLength(3);
+
+        const august = projections.find((item) => item.month === '2024-08');
+        const september = projections.find((item) => item.month === '2024-09');
+
+        expect(august).toBeDefined();
+        expect(august.projected.net).toBeCloseTo(300, 2);
+        expect(august.goal).toMatchObject({ achieved: false });
+        expect(august.goal.gapToGoal).toBeCloseTo(-100, 2);
+
+        expect(september).toBeDefined();
+        expect(september.projected.net).toBeCloseTo(300, 2);
+        expect(september.goal).toMatchObject({ achieved: true });
+        expect(september.goal.gapToGoal).toBeCloseTo(50, 2);
+    });
+});

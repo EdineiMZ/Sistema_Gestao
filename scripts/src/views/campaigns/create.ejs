@@ -1,0 +1,634 @@
+<%- include('../partials/header') %>
+
+<%
+    const availableRoles = roleOptions || [];
+    const storedForm = formData || {};
+    const roleLabelsMap = roleLabels || {};
+    function formatDatetimeLocal(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const pad = (num) => String(num).padStart(2, '0');
+        const year = date.getFullYear();
+        const month = pad(date.getMonth() + 1);
+        const day = pad(date.getDate());
+        const hours = pad(date.getHours());
+        const minutes = pad(date.getMinutes());
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    let segmentJson;
+    if (typeof storedForm.segmentFilters === 'string' && storedForm.segmentFilters.trim().length) {
+        segmentJson = storedForm.segmentFilters.trim();
+    } else if (storedForm.segmentFilters && typeof storedForm.segmentFilters === 'object') {
+        segmentJson = JSON.stringify(storedForm.segmentFilters);
+    } else {
+        segmentJson = JSON.stringify({ logic: 'AND', rules: [] });
+    }
+%>
+
+<div class="row justify-content-center fade-in">
+    <div class="col-12 col-xxl-10">
+        <div class="card card-soft p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="fw-semibold mb-1">Nova campanha multicanal</h2>
+                    <p class="text-muted mb-0">Crie segmentações inteligentes, defina agendamentos e visualize o impacto antes do disparo.</p>
+                </div>
+                <a href="/campaigns" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-arrow-left"></i> Voltar</a>
+            </div>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } else if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <form action="/campaigns" method="POST" class="needs-validation" novalidate data-campaign-form>
+                <fieldset class="scheduler-border mb-4">
+                    <legend class="scheduler-border">Conteúdo</legend>
+                    <div class="row g-3">
+                        <div class="col-lg-8">
+                            <label class="form-label">Assunto</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="title"
+                                maxlength="160"
+                                required
+                                placeholder="Informe um título atrativo"
+                                value="<%= storedForm.title || '' %>"
+                            />
+                        </div>
+                        <div class="col-lg-4">
+                            <label class="form-label">Cor de destaque</label>
+                            <input
+                                type="color"
+                                class="form-control form-control-color"
+                                name="accentColor"
+                                value="<%= storedForm.accentColor || '#0d6efd' %>"
+                            />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Mensagem (texto plano)</label>
+                            <textarea
+                                class="form-control"
+                                name="message"
+                                rows="4"
+                                placeholder="Olá %USUARIO%, temos novidades exclusivas..."
+                            ><%= storedForm.message || '' %></textarea>
+                            <div class="form-text">Use placeholders como %USUARIO%, %USER_EMAIL%, %ORGANIZACAO% para personalizações automáticas.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Mensagem rica (HTML opcional)</label>
+                            <textarea
+                                class="form-control"
+                                name="messageHtml"
+                                rows="5"
+                                placeholder="<p>Olá &lt;strong&gt;%USUARIO%&lt;/strong&gt;, ...</p>"
+                            ><%= storedForm.messageHtml || '' %></textarea>
+                            <div class="form-text">O HTML é sanitizado automaticamente para proteger contra scripts maliciosos.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Texto de pré-visualização</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="previewText"
+                                maxlength="120"
+                                placeholder="Resumo exibido na caixa de entrada"
+                                value="<%= storedForm.previewText || '' %>"
+                            />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="scheduler-border mb-4">
+                    <legend class="scheduler-border">Agendamento</legend>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label">Data e hora de envio</label>
+                            <input
+                                type="datetime-local"
+                                class="form-control"
+                                name="scheduledAt"
+                                value="<%= formatDatetimeLocal(storedForm.scheduledAt) %>"
+                            />
+                            <div class="form-text">Deixe em branco para salvar como rascunho ou enviar imediatamente.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info mb-0 small">
+                                <i class="bi bi-info-circle me-2"></i>Campanhas agendadas entram automaticamente na fila quando chegar a hora definida.
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="scheduler-border mb-4" data-segment-builder>
+                    <legend class="scheduler-border">Segmentação dinâmica</legend>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-lg-3 col-md-6">
+                            <label class="form-label">Campo</label>
+                            <select class="form-select" data-segment-field>
+                                <option value="role">Perfil do usuário</option>
+                                <option value="active">Status</option>
+                                <option value="creditBalance">Crédito em conta</option>
+                                <option value="createdAt">Data de cadastro</option>
+                                <option value="emailDomain">Domínio do e-mail</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label class="form-label">Operador</label>
+                            <select class="form-select" data-segment-operator></select>
+                        </div>
+                        <div class="col-lg-4 col-md-7" data-segment-value-container>
+                            <label class="form-label">Valor</label>
+                            <div data-segment-value></div>
+                        </div>
+                        <div class="col-lg-2 col-md-5 d-grid">
+                            <button type="button" class="btn btn-gradient" data-add-rule><i class="bi bi-plus-lg me-2"></i>Adicionar filtro</button>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Combinação</label>
+                            <div class="btn-group" role="group">
+                                <input class="btn-check" type="radio" name="segmentLogic" id="logicAnd" value="AND" checked />
+                                <label class="btn btn-outline-primary" for="logicAnd">Todos os filtros (E)</label>
+                                <input class="btn-check" type="radio" name="segmentLogic" id="logicOr" value="OR" />
+                                <label class="btn btn-outline-primary" for="logicOr">Qualquer filtro (OU)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0 text-uppercase text-muted">Resumo da segmentação</h6>
+                                        <span class="badge bg-soft-primary" data-logic-badge>Combinação AND</span>
+                                    </div>
+                                    <ul class="list-unstyled mb-0 small" data-rules-summary>
+                                        <li class="text-muted">Defina filtros e visualize aqui a audiência.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="segmentFilters" value="<%= segmentJson %>" data-segment-input />
+                </fieldset>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <h5 class="fw-semibold">Pré-visualização em tempo real</h5>
+                                <p class="text-muted small">Simulação da mensagem com as personalizações aplicadas.</p>
+                                <div class="campaign-preview" data-preview-container>
+                                    <div class="campaign-preview-header" data-preview-header>
+                                        <h6 class="mb-0" data-preview-subject>Assunto da campanha</h6>
+                                        <small class="text-muted" data-preview-preview>Prévia exibida na caixa de entrada</small>
+                                    </div>
+                                    <div class="campaign-preview-body" data-preview-body>
+                                        <em>Escreva uma mensagem para visualizar como seus usuários receberão.</em>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="fw-semibold">Ações rápidas</h5>
+                                <p class="text-muted small">Escolha como deseja salvar esta campanha.</p>
+                                <div class="d-grid gap-2 mt-auto">
+                                    <button type="submit" name="action" value="draft" class="btn btn-outline-secondary rounded-pill">Salvar como rascunho</button>
+                                    <button type="submit" name="action" value="queue" class="btn btn-gradient rounded-pill">Salvar e agendar envio</button>
+                                    <button type="submit" name="action" value="dispatch" class="btn btn-primary rounded-pill">Enviar agora</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="campaign-config">
+<%- JSON.stringify({
+    roles: availableRoles,
+    roleLabels: roleLabelsMap,
+    initialSegment: segmentJson,
+    storedPreview: {
+        title: storedForm.title || '',
+        preview: storedForm.previewText || '',
+        accentColor: storedForm.accentColor || '#0d6efd',
+        message: storedForm.message || '',
+        messageHtml: storedForm.messageHtml || ''
+    }
+}) %>
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.querySelector('[data-campaign-form]');
+        if (!form) return;
+
+        const configElement = document.getElementById('campaign-config');
+        let config = { roles: [], roleLabels: {}, initialSegment: { logic: 'AND', rules: [] }, storedPreview: {} };
+        try {
+            if (configElement?.textContent) {
+                config = JSON.parse(configElement.textContent);
+            }
+        } catch (error) {
+            console.warn('Não foi possível carregar a configuração da campanha.', error);
+        }
+
+        const fieldSelect = form.querySelector('[data-segment-field]');
+        const operatorSelect = form.querySelector('[data-segment-operator]');
+        const valueContainer = form.querySelector('[data-segment-value]');
+        const addRuleButton = form.querySelector('[data-add-rule]');
+        const logicRadios = form.querySelectorAll('input[name="segmentLogic"]');
+        const summaryList = form.querySelector('[data-rules-summary]');
+        const logicBadge = form.querySelector('[data-logic-badge]');
+        const hiddenInput = form.querySelector('[data-segment-input]');
+
+        const previewSubject = form.querySelector('[data-preview-subject]');
+        const previewPreview = form.querySelector('[data-preview-preview]');
+        const previewBody = form.querySelector('[data-preview-body]');
+        const previewHeader = form.querySelector('[data-preview-header]');
+
+        const fieldConfig = {
+            role: {
+                label: 'Perfil do usuário',
+                operators: {
+                    in: { label: 'Está entre', type: 'multiselect', options: config.roles },
+                    notIn: { label: 'Não está entre', type: 'multiselect', options: config.roles }
+                }
+            },
+            active: {
+                label: 'Status',
+                operators: {
+                    eq: {
+                        label: 'É',
+                        type: 'select',
+                        options: [
+                            { value: true, label: 'Ativo' },
+                            { value: false, label: 'Inativo' }
+                        ]
+                    }
+                }
+            },
+            creditBalance: {
+                label: 'Crédito em conta',
+                operators: {
+                    gte: { label: 'Maior ou igual a', type: 'number' },
+                    lte: { label: 'Menor ou igual a', type: 'number' },
+                    between: { label: 'Entre valores', type: 'number-range' }
+                }
+            },
+            createdAt: {
+                label: 'Data de cadastro',
+                operators: {
+                    gte: { label: 'A partir de', type: 'date' },
+                    lte: { label: 'Até', type: 'date' },
+                    between: { label: 'Entre datas', type: 'date-range' }
+                }
+            },
+            emailDomain: {
+                label: 'Domínio do e-mail',
+                operators: {
+                    contains: { label: 'Termina com', type: 'text' },
+                    notContains: { label: 'Não termina com', type: 'text' }
+                }
+            }
+        };
+
+        let initialSegment = { logic: 'AND', rules: [] };
+        try {
+            if (config.initialSegment) {
+                initialSegment = typeof config.initialSegment === 'string'
+                    ? JSON.parse(config.initialSegment)
+                    : config.initialSegment;
+            }
+        } catch (error) {
+            initialSegment = { logic: 'AND', rules: [] };
+        }
+
+        const state = {
+            logic: initialSegment?.logic === 'OR' ? 'OR' : 'AND',
+            rules: Array.isArray(initialSegment?.rules) ? initialSegment.rules.slice(0, 20) : []
+        };
+
+        const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        });
+
+        const renderOperatorOptions = () => {
+            const field = fieldSelect.value;
+            const operators = fieldConfig[field]?.operators || {};
+            operatorSelect.innerHTML = '';
+            Object.entries(operators).forEach(([value, meta], index) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = meta.label;
+                if (index === 0) {
+                    option.selected = true;
+                }
+                operatorSelect.appendChild(option);
+            });
+            renderValueInput();
+        };
+
+        const buildSelect = (options = [], multiple = false) => {
+            const select = document.createElement('select');
+            select.className = 'form-select';
+            if (multiple) {
+                select.multiple = true;
+            }
+            options.forEach((option) => {
+                const opt = document.createElement('option');
+                opt.value = option.value;
+                opt.textContent = option.label;
+                select.appendChild(opt);
+            });
+            return select;
+        };
+
+        const buildNumberInput = () => {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.step = '0.01';
+            input.className = 'form-control';
+            input.placeholder = 'Ex.: 100.00';
+            return input;
+        };
+
+        const buildDateInput = () => {
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.className = 'form-control';
+            return input;
+        };
+
+        const buildTextInput = () => {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.placeholder = 'exemplo.com';
+            return input;
+        };
+
+        const renderValueInput = () => {
+            const field = fieldSelect.value;
+            const operator = operatorSelect.value;
+            const operatorMeta = fieldConfig[field]?.operators?.[operator];
+            valueContainer.innerHTML = '';
+
+            if (!operatorMeta) {
+                valueContainer.appendChild(buildTextInput());
+                return;
+            }
+
+            switch (operatorMeta.type) {
+                case 'multiselect':
+                    valueContainer.appendChild(buildSelect(operatorMeta.options || [], true));
+                    break;
+                case 'select':
+                    valueContainer.appendChild(buildSelect(operatorMeta.options || []));
+                    break;
+                case 'number':
+                    valueContainer.appendChild(buildNumberInput());
+                    break;
+                case 'number-range': {
+                    const row = document.createElement('div');
+                    row.className = 'row g-2';
+                    const startCol = document.createElement('div');
+                    startCol.className = 'col-6';
+                    const endCol = document.createElement('div');
+                    endCol.className = 'col-6';
+                    startCol.appendChild(buildNumberInput());
+                    endCol.appendChild(buildNumberInput());
+                    row.appendChild(startCol);
+                    row.appendChild(endCol);
+                    valueContainer.appendChild(row);
+                    break;
+                }
+                case 'date':
+                    valueContainer.appendChild(buildDateInput());
+                    break;
+                case 'date-range': {
+                    const row = document.createElement('div');
+                    row.className = 'row g-2';
+                    const startCol = document.createElement('div');
+                    startCol.className = 'col-6';
+                    const endCol = document.createElement('div');
+                    endCol.className = 'col-6';
+                    startCol.appendChild(buildDateInput());
+                    endCol.appendChild(buildDateInput());
+                    valueContainer.appendChild(row);
+                    row.appendChild(startCol);
+                    row.appendChild(endCol);
+                    break;
+                }
+                default:
+                    valueContainer.appendChild(buildTextInput());
+            }
+        };
+
+        const collectValue = () => {
+            const field = fieldSelect.value;
+            const operator = operatorSelect.value;
+            const operatorMeta = fieldConfig[field]?.operators?.[operator];
+            if (!operatorMeta) return null;
+
+            const inputElement = valueContainer.querySelector('input, select');
+            if (!inputElement) return null;
+
+            switch (operatorMeta.type) {
+                case 'multiselect': {
+                    const values = Array.from(valueContainer.querySelectorAll('option:checked')).map((opt) => opt.value);
+                    return values;
+                }
+                case 'select':
+                    return inputElement.value;
+                case 'number': {
+                    const value = inputElement.value.trim();
+                    if (!value) return null;
+                    return parseFloat(value);
+                }
+                case 'number-range': {
+                    const inputs = valueContainer.querySelectorAll('input');
+                    const start = inputs[0]?.value.trim();
+                    const end = inputs[1]?.value.trim();
+                    if (!start || !end) return null;
+                    return [parseFloat(start), parseFloat(end)];
+                }
+                case 'date':
+                    return inputElement.value || null;
+                case 'date-range': {
+                    const inputs = valueContainer.querySelectorAll('input');
+                    const start = inputs[0]?.value;
+                    const end = inputs[1]?.value;
+                    if (!start || !end) return null;
+                    return [start, end];
+                }
+                default:
+                    return inputElement.value.trim() || null;
+            }
+        };
+
+        const describeRule = (rule) => {
+            const fieldMeta = fieldConfig[rule.field];
+            if (!fieldMeta) return '';
+            const operatorMeta = fieldMeta.operators?.[rule.operator];
+            const label = fieldMeta.label || rule.field;
+
+            switch (rule.field) {
+                case 'role': {
+                    const values = (Array.isArray(rule.value) ? rule.value : [rule.value])
+                        .map((value) => config.roleLabels?.[value] || value)
+                        .join(', ');
+                    return `${label} ${rule.operator === 'notIn' ? 'não inclui' : 'inclui'} ${values}`;
+                }
+                case 'active':
+                    return rule.value ? 'Somente usuários ativos' : 'Incluir usuários inativos';
+                case 'creditBalance':
+                    if (Array.isArray(rule.value)) {
+                        return `${label} entre ${currencyFormatter.format(rule.value[0] || 0)} e ${currencyFormatter.format(rule.value[1] || 0)}`;
+                    }
+                    return `${label} ${operatorMeta?.label.toLowerCase() || ''} ${currencyFormatter.format(rule.value || 0)}`;
+                case 'createdAt':
+                    if (Array.isArray(rule.value)) {
+                        return `${label} entre ${rule.value[0]} e ${rule.value[1]}`;
+                    }
+                    return `${label} ${operatorMeta?.label.toLowerCase() || ''} ${rule.value}`;
+                case 'emailDomain':
+                    return `${label} ${operatorMeta?.label.toLowerCase() || ''} @${rule.value}`;
+                default:
+                    return `${label}`;
+            }
+        };
+
+        const syncHiddenInput = () => {
+            hiddenInput.value = JSON.stringify(state);
+        };
+
+        const renderSummary = () => {
+            summaryList.innerHTML = '';
+            const activeRule = state.rules.some((rule) => rule.field === 'active');
+            if (!activeRule) {
+                const item = document.createElement('li');
+                item.textContent = 'Somente usuários ativos';
+                summaryList.appendChild(item);
+            }
+
+            if (!state.rules.length) {
+                const item = document.createElement('li');
+                item.className = 'text-muted';
+                item.textContent = 'Nenhum filtro definido. Todos os usuários ativos com e-mail válido serão considerados.';
+                summaryList.appendChild(item);
+            } else {
+                state.rules.forEach((rule, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'd-flex justify-content-between align-items-center gap-2 mb-1';
+                    const description = document.createElement('span');
+                    description.textContent = describeRule(rule);
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'btn btn-sm btn-outline-danger';
+                    removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    removeBtn.addEventListener('click', () => {
+                        state.rules.splice(index, 1);
+                        renderSummary();
+                        syncHiddenInput();
+                    });
+                    item.appendChild(description);
+                    item.appendChild(removeBtn);
+                    summaryList.appendChild(item);
+                });
+            }
+
+            logicBadge.textContent = state.logic === 'OR' ? 'Combinação OR' : 'Combinação AND';
+            logicBadge.className = state.logic === 'OR' ? 'badge bg-soft-warning' : 'badge bg-soft-primary';
+        };
+
+        addRuleButton.addEventListener('click', () => {
+            const field = fieldSelect.value;
+            const operator = operatorSelect.value;
+            const value = collectValue();
+            if (value === null || value === undefined || (Array.isArray(value) && !value.length)) {
+                valueContainer.classList.add('border', 'border-danger');
+                setTimeout(() => valueContainer.classList.remove('border', 'border-danger'), 2000);
+                return;
+            }
+            valueContainer.classList.remove('border', 'border-danger');
+            state.rules.push({ field, operator, value });
+            renderSummary();
+            syncHiddenInput();
+        });
+
+        logicRadios.forEach((radio) => {
+            radio.checked = radio.value === state.logic;
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    state.logic = radio.value;
+                    syncHiddenInput();
+                    renderSummary();
+                }
+            });
+        });
+
+        fieldSelect.addEventListener('change', renderOperatorOptions);
+        operatorSelect.addEventListener('change', renderValueInput);
+
+        renderOperatorOptions();
+        syncHiddenInput();
+        renderSummary();
+
+        const subjectInput = form.querySelector('input[name="title"]');
+        const previewInput = form.querySelector('input[name="previewText"]');
+        const accentInput = form.querySelector('input[name="accentColor"]');
+        const messageInput = form.querySelector('textarea[name="message"]');
+        const messageHtmlInput = form.querySelector('textarea[name="messageHtml"]');
+
+        const updatePreview = () => {
+            const subject = subjectInput.value.trim() || 'Assunto da campanha';
+            const previewText = previewInput.value.trim() || 'Prévia exibida na caixa de entrada';
+            const accent = accentInput.value || '#0d6efd';
+            const htmlContent = messageHtmlInput.value.trim();
+            const textContent = messageInput.value.trim();
+            const body = htmlContent || (textContent ? textContent.replace(/\n/g, '<br />') : '');
+
+            previewSubject.textContent = subject;
+            previewPreview.textContent = previewText;
+            previewHeader.style.borderLeft = `4px solid ${accent}`;
+            if (body) {
+                previewBody.innerHTML = body;
+            } else {
+                previewBody.innerHTML = '<em>Escreva uma mensagem para visualizar como seus usuários receberão.</em>';
+            }
+        };
+
+        subjectInput.addEventListener('input', updatePreview);
+        previewInput.addEventListener('input', updatePreview);
+        accentInput.addEventListener('input', updatePreview);
+        messageInput.addEventListener('input', updatePreview);
+        messageHtmlInput.addEventListener('input', updatePreview);
+
+        if (config.storedPreview) {
+            subjectInput.value = config.storedPreview.title || subjectInput.value;
+            previewInput.value = config.storedPreview.preview || previewInput.value;
+            accentInput.value = config.storedPreview.accentColor || accentInput.value;
+            messageInput.value = config.storedPreview.message || messageInput.value;
+            messageHtmlInput.value = config.storedPreview.messageHtml || messageHtmlInput.value;
+        }
+
+        updatePreview();
+    });
+</script>
+
+<%- include('../partials/footer') %>

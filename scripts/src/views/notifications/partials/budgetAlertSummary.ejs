@@ -1,0 +1,126 @@
+<% const mode = displayMode === 'email' ? 'email' : 'in-app'; %>
+<% const tone = budget.statusTone || {}; %>
+<% const accentColor = budget.accentColor || tone.barColor || '#4f46e5'; %>
+<% const usagePercent = Number.isFinite(budget.usagePercent)
+    ? Math.min(130, Math.max(0, Number(budget.usagePercent)))
+    : 0; %>
+<div
+    class="<%= mode === 'in-app' ? 'budget-alert-summary card-soft border-0' : 'budget-alert-summary-email' %>"
+    style="<%= mode === 'email'
+        ? 'border:1px solid #e2e8f0;border-radius:18px;padding:24px;background:#ffffff;box-shadow:0 18px 36px rgba(15,23,42,0.08);'
+        : '' %>"
+    data-budget-alert-summary
+>
+    <div class="<%= mode === 'in-app' ? 'd-flex flex-column flex-lg-row align-items-lg-center gap-4 mb-3' : 'budget-alert-summary-header' %>">
+        <div class="<%= mode === 'in-app' ? 'flex-grow-1' : '' %>">
+            <span
+                class="<%= mode === 'in-app' ? `badge ${tone.badgeClass || 'bg-primary-subtle text-primary'}` : '' %>"
+                style="<%= mode === 'email'
+                    ? `display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding:6px 12px;border-radius:999px;background:${tone.badgeBackground || '#e0e7ff'};color:${tone.textColor || '#0f172a'};`
+                    : '' %>"
+            >
+                <%= budget.statusLabel %>
+            </span>
+            <h3
+                class="<%= mode === 'in-app' ? 'h5 fw-semibold mt-3 mb-1 text-dark' : '' %>"
+                style="<%= mode === 'email' ? 'margin:16px 0 4px;font-size:20px;font-weight:600;color:#0f172a;' : '' %>"
+            >
+                Orçamento de <%= budget.categoryName %>
+            </h3>
+            <% if (budget.monthLabel) { %>
+                <p
+                    class="<%= mode === 'in-app' ? 'text-muted mb-2' : '' %>"
+                    style="<%= mode === 'email' ? 'margin:0 0 12px;font-size:14px;color:#475569;' : '' %>"
+                >
+                    Referência: <strong><%= budget.monthLabel %></strong>
+                </p>
+            <% } %>
+            <p
+                class="<%= mode === 'in-app' ? 'text-muted mb-0' : '' %>"
+                style="<%= mode === 'email' ? 'margin:0;color:#475569;font-size:14px;' : '' %>"
+            >
+                <%= budget.usageLabel %>
+            </p>
+        </div>
+        <div
+            class="<%= mode === 'in-app' ? 'text-lg-end w-100' : '' %>"
+            style="<%= mode === 'email' ? 'margin-top:20px;width:100%;' : '' %>"
+        >
+            <div
+                class="<%= mode === 'in-app' ? 'progress bg-light rounded-pill mb-2' : '' %>"
+                style="<%= mode === 'email' ? 'width:100%;height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-bottom:12px;' : '' %>"
+            >
+                <div
+                    class="<%= mode === 'in-app' ? 'progress-bar' : '' %>"
+                    style="<%= mode === 'email'
+                        ? `height:100%;width:${usagePercent.toFixed(1)}%;background:${accentColor};`
+                        : `width:${usagePercent.toFixed(1)}%;background:${accentColor};` %>"
+                    role="progressbar"
+                    aria-valuenow="<%= Number(budget.usagePercent || 0).toFixed(1) %>"
+                    aria-valuemin="0"
+                    aria-valuemax="150"
+                ></div>
+            </div>
+            <span
+                class="<%= mode === 'in-app' ? 'fw-semibold text-dark small' : '' %>"
+                style="<%= mode === 'email' ? 'display:block;font-weight:600;color:#0f172a;font-size:14px;' : '' %>"
+            >
+                <%= budget.consumptionLabel %> consumidos
+            </span>
+        </div>
+    </div>
+
+    <div
+        class="<%= mode === 'in-app' ? 'row g-3 mt-3' : '' %>"
+        style="<%= mode === 'email' ? 'margin-top:20px;display:flex;gap:16px;flex-wrap:wrap;' : '' %>"
+    >
+        <% (budget.metrics || []).forEach((metric) => { %>
+            <div class="<%= mode === 'in-app' ? 'col-12 col-sm-4' : '' %>" style="<%= mode === 'email' ? 'flex:1 1 160px;' : '' %>">
+                <div
+                    class="<%= mode === 'in-app' ? 'border rounded-4 px-3 py-3 bg-light-subtle h-100' : '' %>"
+                    style="<%= mode === 'email' ? 'border:1px solid #e2e8f0;border-radius:14px;padding:16px;background:#f8fafc;height:100%;' : '' %>"
+                >
+                    <span
+                        class="<%= mode === 'in-app' ? 'text-muted text-uppercase small fw-semibold d-block mb-1' : '' %>"
+                        style="<%= mode === 'email' ? 'display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:8px;' : '' %>"
+                    >
+                        <%= metric.label %>
+                    </span>
+                    <span
+                        class="<%= mode === 'in-app'
+                            ? `fw-semibold ${metric.tone === 'negative' ? 'text-danger' : metric.tone === 'positive' ? 'text-success' : 'text-dark'} fs-5`
+                            : '' %>"
+                        style="<%= mode === 'email'
+                            ? `display:block;font-size:18px;font-weight:600;color:${metric.tone === 'negative' ? '#b91c1c' : metric.tone === 'positive' ? '#047857' : '#0f172a'};`
+                            : '' %>"
+                    >
+                        <%= metric.value %>
+                    </span>
+                    <% if (metric.helperText) { %>
+                        <span
+                            class="<%= mode === 'in-app' ? 'text-muted small d-block mt-1' : '' %>"
+                            style="<%= mode === 'email' ? 'display:block;margin-top:8px;font-size:13px;color:#64748b;line-height:1.5;' : '' %>"
+                        >
+                            <%= metric.helperText %>
+                        </span>
+                    <% } %>
+                </div>
+            </div>
+        <% }) %>
+    </div>
+
+    <% if (budget.thresholdAlert) { %>
+        <div
+            class="<%= mode === 'in-app' ? 'alert alert-warning border-0 shadow-sm mt-4 mb-0' : '' %>"
+            style="<%= mode === 'email' ? 'margin-top:24px;padding:16px 20px;border-radius:14px;background:#fffbeb;border:1px solid #facc15;color:#92400e;font-size:14px;line-height:1.5;' : '' %>"
+        >
+            <% if (mode === 'in-app') { %>
+                <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+            <% } %>
+            Limite de atenção configurado em <strong><%= budget.thresholdAlert.valueLabel %></strong>
+            <% if (typeof budget.thresholdAlert.percentage === 'number') { %>
+                (<%= budget.thresholdAlert.percentage.toFixed(1).replace('.', ',') %>% do limite).
+            <% } %>
+        </div>
+    <% } %>
+</div>

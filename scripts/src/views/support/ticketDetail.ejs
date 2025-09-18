@@ -1,0 +1,103 @@
+<%- include('../partials/header') %>
+
+<% const ticketSafe = ticket || {}; %>
+<% const attachmentsSafe = Array.isArray(ticketSafe.attachments) ? ticketSafe.attachments : []; %>
+<% const statusBadgeClasses = {
+    open: 'bg-primary-subtle text-primary',
+    'in-progress': 'bg-warning-subtle text-warning',
+    closed: 'bg-success-subtle text-success'
+}; %>
+<% const priorityDotClasses = {
+    low: 'bg-success',
+    medium: 'bg-warning',
+    high: 'bg-danger'
+}; %>
+
+<section class="container py-4 py-lg-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-9">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                <div>
+                    <a href="/support/tickets" class="btn btn-link px-0 text-decoration-none mb-2">
+                        <i class="bi bi-arrow-left"></i>
+                        Voltar para meus chamados
+                    </a>
+                    <h1 class="display-6 fw-semibold text-gradient mb-1">Chamado #<%= ticketSafe.id %></h1>
+                    <p class="text-muted mb-0">Aberto em <%= ticketSafe.createdAtFormatted %> · Última atualização <%= ticketSafe.updatedAtFormatted %></p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <% const badgeClass = statusBadgeClasses[ticketSafe.status] || 'bg-secondary-subtle text-secondary'; %>
+                    <span class="badge rounded-pill <%= badgeClass %> px-3 py-2 fw-semibold">
+                        <i class="bi bi-lightning-charge me-1"></i>
+                        <%= ticketSafe.statusLabel %>
+                    </span>
+                    <span class="badge rounded-pill bg-body-secondary text-dark px-3 py-2 d-inline-flex align-items-center gap-2">
+                        <span class="rounded-circle <%= priorityDotClasses[ticketSafe.priority] || 'bg-secondary' %>" style="width: 0.65rem; height: 0.65rem;"></span>
+                        <%= ticketSafe.priorityLabel %>
+                    </span>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4 p-lg-5">
+                    <h2 class="h4 fw-semibold mb-3">Detalhes do chamado</h2>
+                    <p class="lead text-body-secondary mb-4"><%= ticketSafe.subject %></p>
+                    <% const descriptionText = ticketSafe.description || ticketSafe.initialMessage || ''; %>
+                    <% if (descriptionText) { %>
+                        <article class="prose">
+                            <% descriptionText.split(/\n+/).forEach((paragraph) => { %>
+                                <% if (paragraph.trim()) { %>
+                                    <p class="text-body"><%= paragraph %></p>
+                                <% } %>
+                            <% }); %>
+                        </article>
+                    <% } else { %>
+                        <div class="alert alert-info mt-3" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Nenhum detalhamento inicial disponível. Consulte o histórico de mensagens para mais informações.
+                        </div>
+                    <% } %>
+
+                    <% const ticketOwner = ticketSafe.creator || ticketSafe.requester; %>
+                    <% if (ticketOwner && isAdmin) { %>
+                        <div class="mt-4 p-3 rounded-4 bg-body-tertiary">
+                            <h3 class="h6 text-uppercase text-muted mb-2">Solicitante</h3>
+                            <div class="fw-semibold"><%= ticketOwner.name || 'Usuário' %></div>
+                            <div class="text-muted small"><%= ticketOwner.email %></div>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h4 fw-semibold mb-0">Anexos compartilhados</h2>
+                        <span class="badge bg-dark-subtle text-dark fw-semibold"><%= attachmentsSafe.length %></span>
+                    </div>
+
+                    <% if (!attachmentsSafe.length) { %>
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-folder-x display-6 mb-3"></i>
+                            <p class="mb-0">Nenhum arquivo foi anexado a este chamado.</p>
+                        </div>
+                    <% } else { %>
+                        <ul class="list-group list-group-flush">
+                            <% attachmentsSafe.forEach((attachment) => { %>
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                    <div>
+                                        <div class="fw-semibold"><%= attachment.fileName %></div>
+                                        <small class="text-muted"><%= attachment.mimeType %> · <%= attachment.sizeFormatted %></small>
+                                    </div>
+                                    <span class="badge bg-body-secondary text-muted"><%= attachment.createdAt ? new Date(attachment.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '' %></span>
+                                </li>
+                            <% }); %>
+                        </ul>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,106 @@
+<%- include('../partials/header') %>
+
+<% const safeTickets = Array.isArray(tickets) ? tickets : []; %>
+<% const statusBadgeClasses = {
+    open: 'bg-primary-subtle text-primary',
+    'in-progress': 'bg-warning-subtle text-warning',
+    closed: 'bg-success-subtle text-success'
+}; %>
+<% const priorityDotClasses = {
+    low: 'bg-success',
+    medium: 'bg-warning',
+    high: 'bg-danger'
+}; %>
+
+<section class="container py-4 py-lg-5">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="display-6 fw-semibold text-gradient">Central de suporte</h1>
+            <p class="text-muted mb-0">Visualize seus chamados e acompanhe o status de atendimento em tempo real.</p>
+        </div>
+        <a href="/support/tickets/new" class="btn btn-gradient btn-lg shadow-sm">
+            <i class="bi bi-plus-circle me-2"></i>
+            Abrir chamado
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <% if (!safeTickets.length) { %>
+                <div class="p-5 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-life-preserver display-5 text-primary"></i>
+                    </div>
+                    <h2 class="h4 fw-semibold mb-2">Nenhum chamado por aqui</h2>
+                    <p class="text-muted mb-4">Inicie um atendimento com nossa equipe e acompanhe tudo por este painel.</p>
+                    <a href="/support/tickets/new" class="btn btn-outline-primary btn-lg">
+                        Começar novo chamado
+                    </a>
+                </div>
+            <% } else { %>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-body-tertiary text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Chamado</th>
+                                <th>Prioridade</th>
+                                <th>Status</th>
+                                <th>Atualizado</th>
+                                <th class="text-center">Anexos</th>
+                                <% if (isAdmin) { %>
+                                    <th>Solicitante</th>
+                                <% } %>
+                                <th class="text-end pe-4">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% safeTickets.forEach((ticket) => { %>
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-semibold mb-1">#<%= ticket.id %> · <%= ticket.subject %></div>
+                                        <small class="text-muted">Aberto em <%= ticket.createdAtFormatted %></small>
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill bg-opacity-25 text-dark d-inline-flex align-items-center gap-2">
+                                            <span class="d-inline-flex rounded-circle <%= priorityDotClasses[ticket.priority] || 'bg-secondary' %>" style="width: 0.65rem; height: 0.65rem;"></span>
+                                            <%= ticket.priorityLabel %>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <% const badgeClass = statusBadgeClasses[ticket.status] || 'bg-secondary-subtle text-secondary'; %>
+                                        <span class="badge rounded-pill <%= badgeClass %>"><%= ticket.statusLabel %></span>
+                                    </td>
+                                    <td><span class="text-muted"><%= ticket.updatedAtFormatted %></span></td>
+                                    <td class="text-center">
+                                        <span class="badge rounded-pill bg-dark-subtle text-dark fw-semibold">
+                                            <%= ticket.attachmentCount %>
+                                        </span>
+                                    </td>
+                                    <% if (isAdmin) { %>
+                                        <td>
+                                            <% const ticketOwner = ticket.creator || ticket.requester; %>
+                                            <% if (ticketOwner) { %>
+                                                <div class="fw-semibold"><%= ticketOwner.name || 'Usuário' %></div>
+                                                <small class="text-muted"><%= ticketOwner.email %></small>
+                                            <% } else { %>
+                                                <span class="text-muted">Não informado</span>
+                                            <% } %>
+                                        </td>
+                                    <% } %>
+                                    <td class="text-end pe-4">
+                                        <a href="/support/tickets/<%= ticket.id %>" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-eye"></i>
+                                            Detalhes
+                                        </a>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</section>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,174 @@
+<%- include('../partials/header') %>
+
+<div class="row justify-content-center fade-in">
+    <div class="col-lg-7">
+        <div class="card card-soft-static p-4">
+            <div class="mb-4 text-center">
+                <h2 class="fw-semibold mb-1">Crie sua conta</h2>
+                <p class="text-muted mb-0">Personalize seu perfil e comece a otimizar sua operação.</p>
+            </div>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } %>
+
+            <% if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <form action="/register" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Nome completo</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="name"
+                            id="name"
+                            required
+                            minlength="3"
+                            placeholder="Seu nome"
+                        />
+                        <div class="invalid-feedback">Informe um nome com pelo menos 3 caracteres.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">E-mail</label>
+                        <input
+                            type="email"
+                            class="form-control"
+                            name="email"
+                            id="email"
+                            required
+                            placeholder="seuemail@empresa.com"
+                        />
+                        <div class="invalid-feedback">Informe um e-mail válido.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="password" class="form-label">Senha</label>
+                        <input
+                            type="password"
+                            class="form-control"
+                            name="password"
+                            id="password"
+                            required
+                            minlength="6"
+                            placeholder="Defina uma senha segura"
+                        />
+                        <div class="invalid-feedback">A senha precisa ter ao menos 6 caracteres.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">Telefone</label>
+                        <input
+                            type="tel"
+                            class="form-control"
+                            name="phone"
+                            id="phone"
+                            placeholder="(XX) XXXXX-XXXX"
+                        />
+                    </div>
+                    <div class="col-md-8">
+                        <label for="address" class="form-label">Endereço</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="address"
+                            id="address"
+                            placeholder="Rua, número, cidade"
+                        />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="dateOfBirth" class="form-label">Data de nascimento</label>
+                        <input
+                            type="date"
+                            class="form-control"
+                            name="dateOfBirth"
+                            id="dateOfBirth"
+                        />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="profileImage" class="form-label">Foto de perfil (até 5MB)</label>
+                        <input
+                            type="file"
+                            class="form-control"
+                            name="profileImage"
+                            id="profileImage"
+                            accept="image/*"
+                        />
+                        <div class="form-text">Formatos aceitos: PNG ou JPEG.</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="p-3 bg-light rounded-3 border border-light-subtle">
+                            <div class="d-flex align-items-start justify-content-between mb-2">
+                                <div>
+                                    <h6 class="fw-semibold mb-1">Proteção adicional</h6>
+                                    <p class="text-muted small mb-0">Ative a autenticação em duas etapas e defina um código alfanumérico exclusivo.</p>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="twoFactorEnabled" name="twoFactorEnabled" value="on" />
+                                    <label class="form-check-label" for="twoFactorEnabled">Ativar 2FA</label>
+                                </div>
+                            </div>
+                            <div class="row g-3 align-items-end two-factor-code-field d-none">
+                                <div class="col-md-6">
+                                    <label for="twoFactorCode" class="form-label">Código de verificação</label>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        name="twoFactorCode"
+                                        id="twoFactorCode"
+                                        pattern="[A-Za-z0-9]{6,32}"
+                                        placeholder="Defina um código seguro"
+                                        inputmode="latin"
+                                        autocomplete="off"
+                                    />
+                                    <div class="form-text">Use entre 6 e 32 caracteres misturando letras e números.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-gradient mt-4 w-100">Criar conta com segurança</button>
+            </form>
+
+            <script>
+                (() => {
+                    const toggle = document.getElementById('twoFactorEnabled');
+                    const codeWrapper = document.querySelector('.two-factor-code-field');
+                    if (!toggle || !codeWrapper) {
+                        return;
+                    }
+
+                    const input = codeWrapper.querySelector('input');
+
+                    const updateVisibility = () => {
+                        const isChecked = toggle.checked;
+                        codeWrapper.classList.toggle('d-none', !isChecked);
+                        if (input) {
+                            if (isChecked) {
+                                input.setAttribute('required', 'required');
+                                input.focus();
+                            } else {
+                                input.removeAttribute('required');
+                                input.value = '';
+                            }
+                        }
+                    };
+
+                    toggle.addEventListener('change', updateVisibility);
+                    updateVisibility();
+                })();
+            </script>
+
+            <p class="text-center text-muted mt-4 mb-0">
+                Já possui credenciais? <a href="/login">Faça login</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

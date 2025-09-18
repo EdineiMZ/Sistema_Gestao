@@ -1,0 +1,380 @@
+<%- include('../partials/header') %>
+
+<div class="row justify-content-center fade-in">
+    <div class="col-lg-5 col-md-7">
+        <div class="card card-soft-static p-4">
+            <div class="mb-4 text-center">
+                <h2 class="fw-semibold mb-1">Bem-vindo de volta</h2>
+                <p class="text-muted mb-0">Acesse sua conta com segurança reforçada.</p>
+            </div>
+
+            <% if (success_msg) { %>
+                <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+                </div>
+            <% } %>
+
+            <% if (error_msg) { %>
+                <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                    <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+                </div>
+            <% } %>
+
+            <div id="loginAlertContainer"></div>
+
+            <form action="/login" method="POST" class="needs-validation" id="loginForm" novalidate>
+                <div class="mb-3">
+                    <label for="email" class="form-label">E-mail corporativo</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                        <input
+                            required
+                            type="email"
+                            class="form-control"
+                            name="email"
+                            id="email"
+                            placeholder="usuario@empresa.com"
+                        />
+                        <div class="invalid-feedback">Informe um e-mail válido.</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input
+                            required
+                            type="password"
+                            class="form-control"
+                            name="password"
+                            id="password"
+                            placeholder="Digite sua senha"
+                            minlength="6"
+                        />
+                            <div class="invalid-feedback">A senha deve conter pelo menos 6 caracteres.</div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-gradient w-100" id="loginSubmitButton">
+                    <span class="spinner-border spinner-border-sm me-2 d-none" id="loginSpinner" role="status" aria-hidden="true"></span>
+                    <span class="btn-label">Entrar com segurança</span>
+                </button>
+            </form>
+
+            <p class="text-center text-muted mt-4 mb-0">
+                Novo por aqui? <a href="/register">Crie uma conta</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<div
+    class="modal fade"
+    id="twoFactorModal"
+    tabindex="-1"
+    aria-labelledby="twoFactorModalLabel"
+    aria-hidden="true"
+    data-bs-backdrop="static"
+    data-bs-keyboard="false"
+>
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content rounded-4 shadow-lg border-0">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-semibold" id="twoFactorModalLabel">
+                        Confirme sua identidade
+                    </h5>
+                    <p class="text-muted mb-0 small">
+                        Insira o código de acesso enviado para <span class="fw-semibold" id="twoFactorEmailHint">seu e-mail</span>.
+                    </p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <div id="twoFactorAlert" class="alert d-none" role="alert"></div>
+                <form class="needs-validation" id="twoFactorForm" novalidate>
+                    <div class="mb-3">
+                        <label for="twoFactorCodeInput" class="form-label">Código de verificação</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                            <input
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9A-Za-z]{6,32}"
+                                minlength="6"
+                                maxlength="32"
+                                autocomplete="one-time-code"
+                                class="form-control text-uppercase text-center"
+                                id="twoFactorCodeInput"
+                                required
+                                placeholder="000000"
+                            />
+                            <div class="invalid-feedback">Informe o código recebido por e-mail.</div>
+                        </div>
+                        <div class="form-text">
+                            O código expira em poucos minutos e só pode ser utilizado uma vez.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-gradient w-100" id="twoFactorSubmitButton">
+                        <span class="spinner-border spinner-border-sm me-2 d-none" id="twoFactorSpinner" role="status" aria-hidden="true"></span>
+                        <span class="btn-label">Validar e concluir acesso</span>
+                    </button>
+                </form>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <p class="text-muted small mb-0">
+                    Não recebeu o código? Verifique a caixa de spam ou tente novamente em instantes.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('load', () => {
+        const loginForm = document.getElementById('loginForm');
+        if (!loginForm) {
+            return;
+        }
+
+        const loginAlertContainer = document.getElementById('loginAlertContainer');
+        const loginButton = document.getElementById('loginSubmitButton');
+        const loginSpinner = document.getElementById('loginSpinner');
+        const loginEndpoint = loginForm.getAttribute('action') || '/login';
+
+        const twoFactorModalElement = document.getElementById('twoFactorModal');
+        const twoFactorForm = document.getElementById('twoFactorForm');
+        const twoFactorInput = document.getElementById('twoFactorCodeInput');
+        const twoFactorAlert = document.getElementById('twoFactorAlert');
+        const twoFactorButton = document.getElementById('twoFactorSubmitButton');
+        const twoFactorSpinner = document.getElementById('twoFactorSpinner');
+        const twoFactorEmailHint = document.getElementById('twoFactorEmailHint');
+        const verifyEndpoint = '/login/verify-2fa';
+
+        const bootstrapNamespace = window.bootstrap || window.Bootstrap || null;
+        const twoFactorModal =
+            twoFactorModalElement && bootstrapNamespace && typeof bootstrapNamespace.Modal === 'function'
+                ? new bootstrapNamespace.Modal(twoFactorModalElement)
+                : null;
+
+        const toggleButtonLoading = (button, spinner, isLoading) => {
+            if (!button) {
+                return;
+            }
+
+            const label = button.querySelector('.btn-label');
+            if (spinner) {
+                spinner.classList.toggle('d-none', !isLoading);
+            }
+
+            button.disabled = Boolean(isLoading);
+            if (label) {
+                label.classList.toggle('opacity-75', Boolean(isLoading));
+            }
+        };
+
+        const renderAlert = (container, type, message) => {
+            if (!container) {
+                return;
+            }
+
+            if (!message) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi ${type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            `;
+        };
+
+        const renderTwoFactorAlert = (type, message) => {
+            if (!twoFactorAlert) {
+                return;
+            }
+
+            if (!message) {
+                twoFactorAlert.classList.add('d-none');
+                twoFactorAlert.textContent = '';
+                return;
+            }
+
+            twoFactorAlert.className = `alert alert-${type}`;
+            twoFactorAlert.textContent = message;
+            twoFactorAlert.classList.remove('d-none');
+        };
+
+        const maskEmail = (email) => {
+            if (typeof email !== 'string') {
+                return 'seu e-mail';
+            }
+
+            const [localPart = '', domainPart = ''] = email.split('@');
+            if (!domainPart) {
+                return email;
+            }
+
+            const sanitizedLocal = localPart.trim();
+            if (sanitizedLocal.length <= 3) {
+                return `${sanitizedLocal.charAt(0)}***@${domainPart}`;
+            }
+
+            return `${sanitizedLocal.slice(0, 2)}***${sanitizedLocal.slice(-1)}@${domainPart}`;
+        };
+
+        if (twoFactorModalElement && twoFactorModal) {
+            twoFactorModalElement.addEventListener('hidden.bs.modal', () => {
+                renderTwoFactorAlert(null, null);
+                if (twoFactorForm) {
+                    twoFactorForm.reset();
+                    twoFactorForm.classList.remove('was-validated');
+                }
+            });
+
+            twoFactorModalElement.addEventListener('shown.bs.modal', () => {
+                if (twoFactorInput) {
+                    twoFactorInput.focus();
+                    twoFactorInput.select();
+                }
+            });
+        }
+
+        const parseResponse = async (response) => {
+            try {
+                return await response.json();
+            } catch (error) {
+                return null;
+            }
+        };
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            loginForm.classList.add('was-validated');
+            if (!loginForm.checkValidity()) {
+                return;
+            }
+
+            const formData = new FormData(loginForm);
+            const email = (formData.get('email') || '').toString().trim();
+            const password = (formData.get('password') || '').toString();
+
+            renderAlert(loginAlertContainer, null, null);
+            toggleButtonLoading(loginButton, loginSpinner, true);
+
+            try {
+                const response = await fetch(loginEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ email, password })
+                });
+
+                const payload = await parseResponse(response);
+
+                if (!response.ok) {
+                    const message = payload?.error || 'Não foi possível processar o login. Verifique suas credenciais.';
+                    renderAlert(loginAlertContainer, 'danger', message);
+                    return;
+                }
+
+                if (payload?.requiresTwoFactor) {
+                    renderAlert(
+                        loginAlertContainer,
+                        'success',
+                        payload.message || 'Enviamos um código de verificação para o seu e-mail corporativo.'
+                    );
+
+                    if (twoFactorEmailHint) {
+                        twoFactorEmailHint.textContent = maskEmail(email);
+                    }
+
+                    if (twoFactorModal) {
+                        twoFactorModal.show();
+                    }
+
+                    return;
+                }
+
+                const redirectUrl = payload?.redirectUrl || '/';
+                window.location.assign(redirectUrl);
+            } catch (error) {
+                console.error('Falha ao enviar solicitação de login:', error);
+                renderAlert(
+                    loginAlertContainer,
+                    'danger',
+                    'Falha de conexão ao tentar autenticar. Verifique sua rede e tente novamente.'
+                );
+            } finally {
+                toggleButtonLoading(loginButton, loginSpinner, false);
+            }
+        });
+
+        if (twoFactorForm) {
+            twoFactorForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                twoFactorForm.classList.add('was-validated');
+                if (!twoFactorForm.checkValidity()) {
+                    return;
+                }
+
+                const code = (twoFactorInput?.value || '').toString().trim();
+
+                renderTwoFactorAlert(null, null);
+                toggleButtonLoading(twoFactorButton, twoFactorSpinner, true);
+
+                try {
+                    const response = await fetch(verifyEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ code })
+                    });
+
+                    const payload = await parseResponse(response);
+
+                    if (!response.ok) {
+                        const message = payload?.error || 'Código inválido ou expirado.';
+                        renderTwoFactorAlert('danger', message);
+                        if (payload?.remainingAttempts === 0) {
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                        }
+                        return;
+                    }
+
+                    if (payload?.redirectUrl) {
+                        window.location.assign(payload.redirectUrl);
+                        return;
+                    }
+
+                    renderTwoFactorAlert('success', payload?.message || 'Código validado com sucesso.');
+                    window.location.assign('/');
+                } catch (error) {
+                    console.error('Falha ao validar código de duas etapas:', error);
+                    renderTwoFactorAlert(
+                        'danger',
+                        'Não foi possível validar o código devido a uma falha de conexão. Tente novamente.'
+                    );
+                } finally {
+                    toggleButtonLoading(twoFactorButton, twoFactorSpinner, false);
+                }
+            });
+        }
+    });
+</script>
+
+<%- include('../partials/footer') %>

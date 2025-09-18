@@ -1,0 +1,414 @@
+<%- include('../partials/header') %>
+
+<% const availableRoles = roleOptions || []; %>
+
+<% const currentFilters = filters || {}; %>
+
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Gestão de usuários</h2>
+                <p class="text-muted mb-0">Atualize perfis, revise acessos e mantenha os dados sempre consistentes.</p>
+            </div>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <div class="card card-soft p-4 mb-4">
+            <form
+                action="/users/manage"
+                method="GET"
+                class="row g-3 align-items-end"
+                data-filter-form
+            >
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">Palavra-chave</label>
+                    <div class="input-group input-group-flat">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control border-start-0"
+                            name="keyword"
+                            maxlength="120"
+                            placeholder="Busque por nome, e-mail ou ID"
+                            value="<%= currentFilters.keyword || '' %>"
+                        />
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" name="status">
+                        <option value="active" <%= (currentFilters.status || 'active') === 'active' ? 'selected' : '' %>>Ativos</option>
+                        <option value="inactive" <%= currentFilters.status === 'inactive' ? 'selected' : '' %>>Inativos</option>
+                        <option value="all" <%= currentFilters.status === 'all' ? 'selected' : '' %>>Todos</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Início</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="startDate"
+                        value="<%= currentFilters.startDate || '' %>"
+                        max="<%= currentFilters.endDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Encerramento</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        name="endDate"
+                        value="<%= currentFilters.endDate || '' %>"
+                        min="<%= currentFilters.startDate || '' %>"
+                    />
+                </div>
+                <div class="col-lg-1 col-md-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-gradient flex-grow-1" data-submit-filters>
+                        <i class="bi bi-funnel me-2"></i>Filtrar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-reset-filters>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card card-soft p-4 mb-4">
+            <div class="table-responsive table-modern">
+                <table class="table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>E-mail</th>
+                        <th>Telefone</th>
+                        <th>Endereço</th>
+                        <th>Nível</th>
+                        <th>Crédito</th>
+                        <th>Status</th>
+                        <th>Notificações</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <% users.forEach(userItem => { %>
+                        <tr>
+                            <% const prefInstance = userItem.notificationPreference; %>
+                            <% const prefData = prefInstance && typeof prefInstance.get === 'function' ? prefInstance.get({ plain: true }) : (prefInstance || {}); %>
+                            <% const emailOptIn = prefData.emailEnabled !== false; %>
+                            <% const scheduledOptIn = prefData.scheduledEnabled !== false; %>
+                            <td class="fw-semibold"><%= userItem.id %></td>
+                            <td><%= userItem.name %></td>
+                            <td><%= userItem.email %></td>
+                            <td><%= userItem.phone || '—' %></td>
+                            <td><%= userItem.address || '—' %></td>
+                            <td>
+                                <span class="badge-soft badge-soft-warning">
+                                    <%= roleLabels && userItem.role ? (roleLabels[userItem.role] || 'Usuário') : 'Usuário' %>
+                                </span>
+                            </td>
+                            <td>R$ <%= Number(userItem.creditBalance || 0).toFixed(2) %></td>
+                            <td>
+                                <span class="badge-soft <%= userItem.active ? 'badge-soft-success' : 'badge-soft-danger' %>">
+                                    <%= userItem.active ? 'Ativo' : 'Inativo' %>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    <span class="badge-soft <%= emailOptIn ? 'badge-soft-success' : 'badge-soft-secondary' %>">
+                                        <i class="bi <%= emailOptIn ? 'bi-envelope-check' : 'bi-envelope-slash' %> me-1"></i>E-mail
+                                        <small class="ms-1 text-muted fw-normal"><%= emailOptIn ? 'Ativo' : 'Desativado' %></small>
+                                    </span>
+                                    <span class="badge-soft <%= scheduledOptIn ? 'badge-soft-success' : 'badge-soft-secondary' %>">
+                                        <i class="bi <%= scheduledOptIn ? 'bi-calendar-check' : 'bi-calendar-x' %> me-1"></i>Agenda
+                                        <small class="ms-1 text-muted fw-normal"><%= scheduledOptIn ? 'Ativo' : 'Desativado' %></small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <form
+                                    action="/users/delete/<%= userItem.id %>?_method=DELETE"
+                                    method="POST"
+                                    class="d-inline"
+                                >
+                                    <button class="btn btn-sm btn-outline-danger" type="submit" data-bs-toggle="tooltip" title="Desativar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary ms-2"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editModal<%= userItem.id %>"
+                                >
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <% users.forEach(userItem => { %>
+            <% const prefInstance = userItem.notificationPreference; %>
+            <% const prefData = prefInstance && typeof prefInstance.get === 'function' ? prefInstance.get({ plain: true }) : (prefInstance || {}); %>
+            <% const emailOptIn = prefData.emailEnabled !== false; %>
+            <% const scheduledOptIn = prefData.scheduledEnabled !== false; %>
+
+            <div class="modal fade" id="editModal<%= userItem.id %>" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <form
+                        action="/users/update/<%= userItem.id %>?_method=PUT"
+                        method="POST"
+                        class="modal-content needs-validation"
+                        enctype="multipart/form-data"
+                        novalidate
+                    >
+                        <div class="modal-header">
+                            <h5 class="modal-title">Editar usuário #<%= userItem.id %></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Nome</label>
+                                    <input type="text" class="form-control" name="name" value="<%= userItem.name %>" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">E-mail</label>
+                                    <input type="email" class="form-control" name="email" value="<%= userItem.email %>" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Nova senha (opcional)</label>
+                                    <input type="password" class="form-control" name="password" minlength="6" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Telefone</label>
+                                    <input type="text" class="form-control" name="phone" value="<%= userItem.phone || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Endereço</label>
+                                    <input type="text" class="form-control" name="address" value="<%= userItem.address || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Data de nascimento</label>
+                                    <input type="date" class="form-control" name="dateOfBirth" value="<%= userItem.dateOfBirth || '' %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Nível</label>
+                                    <select class="form-select" name="role">
+                                        <% availableRoles.forEach((option) => { %>
+                                            <option value="<%= option.value %>" <%= option.value === userItem.role ? 'selected' : '' %>>
+                                                <%= option.label %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Crédito</label>
+                                    <input type="number" step="0.01" class="form-control" name="creditBalance" value="<%= userItem.creditBalance || 0 %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="active">
+                                        <option value="true" <%= userItem.active ? 'selected' : '' %>>Ativo</option>
+                                        <option value="false" <%= !userItem.active ? 'selected' : '' %>>Inativo</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label d-block">Notificações por e-mail</label>
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            id="editEmailPreference-<%= userItem.id %>"
+                                            name="notificationEmailEnabled"
+                                            value="true"
+                                            <%= emailOptIn ? 'checked' : '' %>
+                                        />
+                                        <label class="form-check-label" for="editEmailPreference-<%= userItem.id %>">
+                                            Receber comunicados e novidades
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label d-block">Alertas de agendamento</label>
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            id="editScheduledPreference-<%= userItem.id %>"
+                                            name="notificationScheduledEnabled"
+                                            value="true"
+                                            <%= scheduledOptIn ? 'checked' : '' %>
+                                        />
+                                        <label class="form-check-label" for="editScheduledPreference-<%= userItem.id %>">
+                                            Receber lembretes de agenda e confirmações
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Atualizar foto de perfil</label>
+                                    <input type="file" class="form-control" name="profileImage" accept="image/*" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-gradient">Salvar alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <% }) %>
+    </div>
+
+    <div class="col-12 fade-in">
+        <div class="card card-soft p-4">
+            <h3 class="fw-semibold mb-3">Criar novo usuário</h3>
+            <form action="/users/create" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Nome</label>
+                        <input required type="text" class="form-control" name="name" minlength="3" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">E-mail</label>
+                        <input required type="email" class="form-control" name="email" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Senha</label>
+                        <input required type="password" class="form-control" name="password" minlength="6" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" class="form-control" name="phone" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" class="form-control" name="address" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Nascimento</label>
+                        <input type="date" class="form-control" name="dateOfBirth" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Nível</label>
+                        <select class="form-select" name="role">
+                            <% availableRoles.forEach((option) => { %>
+                                <option value="<%= option.value %>"><%= option.label %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Crédito inicial</label>
+                        <input type="number" class="form-control" name="creditBalance" step="0.01" value="0" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label d-block">Notificações por e-mail</label>
+                        <div class="form-check form-switch">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="createEmailPreference"
+                                name="notificationEmailEnabled"
+                                value="true"
+                                checked
+                            />
+                            <label class="form-check-label" for="createEmailPreference">
+                                Receber comunicados e novidades
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label d-block">Alertas de agendamento</label>
+                        <div class="form-check form-switch">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="createScheduledPreference"
+                                name="notificationScheduledEnabled"
+                                value="true"
+                                checked
+                            />
+                            <label class="form-check-label" for="createScheduledPreference">
+                                Receber lembretes de agenda e confirmações
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Foto de perfil (até 5MB)</label>
+                        <input type="file" class="form-control" name="profileImage" accept="image/*" />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-gradient mt-4">Cadastrar usuário</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const filterForms = document.querySelectorAll('[data-filter-form]');
+
+        const buildQueryFromForm = (form) => {
+            const params = new URLSearchParams();
+            const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+            fields.forEach((field) => {
+                const value = typeof field.value === 'string' ? field.value.trim() : field.value;
+                if (value) {
+                    params.append(field.name, value);
+                }
+            });
+            return params.toString();
+        };
+
+        filterForms.forEach((form) => {
+            const action = form.getAttribute('action');
+
+            const submitFilters = () => {
+                const queryString = buildQueryFromForm(form);
+                const targetUrl = queryString ? `${action}?${queryString}` : action;
+                window.location.assign(targetUrl);
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitFilters();
+            });
+
+            const submitButton = form.querySelector('[data-submit-filters]');
+            if (submitButton) {
+                submitButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    submitFilters();
+                });
+            }
+
+            const resetButton = form.querySelector('[data-reset-filters]');
+            if (resetButton) {
+                resetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    form.reset();
+                    window.location.assign(action);
+                });
+            }
+        });
+    });
+</script>
+
+<%- include('../partials/footer') %>
