@@ -439,7 +439,13 @@ const deleteBudget = async ({ id, userId } = {}, options = {}) => {
 };
 
 const getBudgetOverview = async (filters = {}, options = {}) => {
-    const response = await financeReportingService.getBudgetSummaries(filters, {
+    const normalizedFilters = { ...filters };
+    const userId = parseIntegerId(filters?.userId ?? options?.userId);
+    if (userId !== null) {
+        normalizedFilters.userId = userId;
+    }
+
+    const response = await financeReportingService.getBudgetSummaries(normalizedFilters, {
         ...(options || {}),
         includeCategoryConsumption: true
     });

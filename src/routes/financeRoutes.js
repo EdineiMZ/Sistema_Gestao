@@ -7,29 +7,57 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
 const financeImportUpload = require('../middlewares/financeImportUpload');
-const { USER_ROLES } = require('../constants/roles');
+const { USER_ROLES, parseRole, sortRolesByHierarchy } = require('../constants/roles');
 const { uploadAttachments } = require('../middlewares/financeAttachmentUpload');
 
-// Apenas administradores podem gerenciar finanças
-router.get('/', authMiddleware, permissionMiddleware(USER_ROLES.ADMIN), financeController.listFinanceEntries);
+const parseFinanceAllowedRoles = (value) => {
+    const fallback = [USER_ROLES.CLIENT];
+
+    if (value === undefined || value === null || value === '') {
+        return [...fallback];
+    }
+
+    const tokens = Array.isArray(value)
+        ? value
+        : String(value)
+            .split(/[,;|\s]+/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+    const resolved = tokens
+        .map((token) => parseRole(token))
+        .filter(Boolean);
+
+    if (!resolved.length) {
+        return [...fallback];
+    }
+
+    return sortRolesByHierarchy(resolved);
+};
+
+const FINANCE_ALLOWED_ROLES = parseFinanceAllowedRoles(process.env.FINANCE_ALLOWED_ROLES);
+const requireFinanceAccess = permissionMiddleware(FINANCE_ALLOWED_ROLES);
+
+// As rotas financeiras exigem autenticação e os perfis configurados
+router.get('/', authMiddleware, requireFinanceAccess, financeController.listFinanceEntries);
 router.post(
     '/import/preview',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     financeImportUpload.single('importFile'),
     financeController.previewFinanceImport
 );
 router.post(
     '/import/commit',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeEntry.import', (req) => req.importAuditResource || 'FinanceImport'),
     financeController.commitFinanceImport
 );
 router.post(
     '/create',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     uploadAttachments,
     audit('financeEntry.create', (req) => `FinanceEntry:${req.body?.description || 'novo'}`),
     financeController.createFinanceEntry
@@ -37,7 +65,7 @@ router.post(
 router.put(
     '/update/:id',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     uploadAttachments,
     audit('financeEntry.update', (req) => `FinanceEntry:${req.params.id}`),
     financeController.updateFinanceEntry
@@ -45,7 +73,7 @@ router.put(
 router.delete(
     '/delete/:id',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeEntry.delete', (req) => `FinanceEntry:${req.params.id}`),
     financeController.deleteFinanceEntry
 );
@@ -150,7 +178,7 @@ const ensureValidBudgetThresholds = (req, { required } = {}) => {
 router.post(
     '/budgets',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeBudget.save', (req) => {
         const categoryId = req.body?.financeCategoryId || 'new';
         return `FinanceBudget:${categoryId}`;
@@ -165,7 +193,7 @@ router.post(
 router.put(
     '/budgets/:id',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeBudget.save', (req) => `FinanceBudget:${req.params.id}`),
     adaptBudgetJsonResponse(budgetController.save, {
         prepare: async (req) => {
@@ -190,7 +218,7 @@ router.put(
 router.delete(
     '/budgets/:id',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeBudget.delete', (req) => `FinanceBudget:${req.params.id}`),
     adaptBudgetJsonResponse(budgetController.delete, {
         prepare: (req) => {
@@ -208,7 +236,7 @@ router.delete(
 router.patch(
     '/budgets/:id/thresholds',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeBudget.updateThresholds', (req) => `FinanceBudget:${req.params.id}`),
     financeController.updateBudgetThresholds
 );
@@ -216,7 +244,7 @@ router.patch(
 router.post(
     '/goals',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeGoal.save', (req) => {
         const month = req.body?.month || req.body?.goalMonth || 'unknown';
         return `FinanceGoal:save:${month}`;
@@ -227,7 +255,7 @@ router.post(
 router.delete(
     '/goals/:id',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeGoal.delete', (req) => `FinanceGoal:${req.params.id}`),
     financeController.deleteFinanceGoal
 );
@@ -235,7 +263,7 @@ router.delete(
 router.get(
     '/export/pdf',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeEntry.exportPdf', (req) => {
         const start = req.query?.startDate || 'all';
         const end = req.query?.endDate || 'all';
@@ -247,7 +275,7 @@ router.get(
 router.get(
     '/export/excel',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeEntry.exportExcel', (req) => {
         const start = req.query?.startDate || 'all';
         const end = req.query?.endDate || 'all';
@@ -259,7 +287,7 @@ router.get(
 router.get(
     '/attachments/:attachmentId/download',
     authMiddleware,
-    permissionMiddleware(USER_ROLES.ADMIN),
+    requireFinanceAccess,
     audit('financeAttachment.download', (req) => `FinanceAttachment:${req.params.attachmentId}`),
     financeController.downloadAttachment
 );

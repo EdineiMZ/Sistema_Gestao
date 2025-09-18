@@ -74,7 +74,8 @@ describe('Finance routes filtering', () => {
             order: expect.any(Array),
             where: expect.objectContaining({
                 type: 'receivable',
-                status: 'paid'
+                status: 'paid',
+                userId: 1000
             })
         });
 
@@ -87,7 +88,8 @@ describe('Finance routes filtering', () => {
                 startDate: '2024-03-01',
                 endDate: '2024-03-31',
                 type: 'receivable',
-                status: 'paid'
+                status: 'paid',
+                userId: 1000
             },
             expect.objectContaining({ entries: filteredEntries })
         );
