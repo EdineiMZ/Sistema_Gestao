@@ -21,7 +21,10 @@
     startDate: '2024-05-01',
     endDate: '2024-05-31',
     type: 'receivable',
-    status: 'paid'
+    status: 'paid',
+    investmentPeriodMonths: 12,
+    investmentContribution: 0,
+    investmentContributionFrequency: 'monthly'
 }; %>
 <% const rawFilters = (typeof filters !== 'undefined' && filters && typeof filters === 'object') ? filters : {}; %>
 <% const filterValues = { ...defaultFilters, ...rawFilters }; %>
@@ -78,6 +81,12 @@
 <% const typeLabels = {
     receivable: 'Receber',
     payable: 'Pagar'
+}; %>
+<% const contributionFrequencyLabels = {
+    monthly: 'Mensal',
+    quarterly: 'Trimestral',
+    yearly: 'Anual',
+    weekly: 'Semanal'
 }; %>
 <% const safeProjectionList =
     (typeof projectionList !== 'undefined' && Array.isArray(projectionList))
@@ -207,6 +216,28 @@
         label: statusStyle.label
     };
 }; %>
+<% const investmentSimulationData =
+    (typeof investmentSimulation !== 'undefined' && investmentSimulation)
+        ? investmentSimulation
+        : ((typeof locals !== 'undefined' && locals && locals.investmentSimulation)
+            ? locals.investmentSimulation
+            : null); %>
+<% const investmentSimulationItems = (typeof investmentSimulationCategories !== 'undefined'
+        && Array.isArray(investmentSimulationCategories))
+    ? investmentSimulationCategories
+    : (Array.isArray(investmentSimulationData?.categories) ? investmentSimulationData.categories : []); %>
+<% const investmentSimulationTotalsData = (typeof investmentSimulationTotals !== 'undefined'
+        && investmentSimulationTotals)
+    ? investmentSimulationTotals
+    : ((investmentSimulationData && investmentSimulationData.totals) || null); %>
+<% const investmentSimulationOptions = investmentSimulationData?.options || {}; %>
+<% let investmentSimulationGeneratedAt = investmentSimulationData?.generatedAt
+    ? new Date(investmentSimulationData.generatedAt)
+    : new Date(); %>
+<% if (!Number.isFinite(investmentSimulationGeneratedAt.getTime())) { investmentSimulationGeneratedAt = new Date(); } %>
+<% const investmentSimulationHorizon = investmentSimulationOptions.defaultPeriodMonths
+    || (investmentSimulationItems.length ? investmentSimulationItems[0].periodMonths : filterValues.investmentPeriodMonths)
+    || 0; %>
 <% const globalThresholdDefaults = {
     overdueDays: 0,
     spendingAlertPercent: 0,
@@ -1081,7 +1112,7 @@
                             </p>
                         </div>
                         <div class="text-muted small">
-                            Ajuste o período, o tipo e o status para refinar a análise e exportações.
+                            Ajuste período, aportes e filtros de lançamentos para refinar a análise e exportações.
                         </div>
                     </div>
                     <form
@@ -1137,6 +1168,46 @@
                                 <option value="paid" <%= filterValues.status === 'paid' ? 'selected' : '' %>>Pago</option>
                                 <option value="overdue" <%= filterValues.status === 'overdue' ? 'selected' : '' %>>Atrasado</option>
                                 <option value="cancelled" <%= filterValues.status === 'cancelled' ? 'selected' : '' %>>Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="investmentPeriodMonths">Período (meses)</label>
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                class="form-control"
+                                id="investmentPeriodMonths"
+                                name="investmentPeriodMonths"
+                                value="<%= filterValues.investmentPeriodMonths || '' %>"
+                                data-auto-submit="true"
+                            />
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="investmentContribution">Aporte mensal (R$)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                class="form-control"
+                                id="investmentContribution"
+                                name="investmentContribution"
+                                value="<%= filterValues.investmentContribution || '' %>"
+                            />
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3 col-xxl-2">
+                            <label class="form-label" for="investmentContributionFrequency">Freq. de aporte</label>
+                            <select
+                                class="form-select"
+                                id="investmentContributionFrequency"
+                                name="investmentContributionFrequency"
+                            >
+                                <% Object.entries(contributionFrequencyLabels).forEach(([key, label]) => { %>
+                                    <option value="<%= key %>" <%= filterValues.investmentContributionFrequency === key ? 'selected' : '' %>>
+                                        <%= label %>
+                                    </option>
+                                <% }) %>
                             </select>
                         </div>
                         <div class="col-12 col-xl-4 col-xxl-4 ms-auto">
@@ -1200,6 +1271,84 @@
                                 <p class="text-muted small mb-0">Pagamentos em atraso demandando atenção imediata.</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <h4 class="fw-semibold mb-1">Simulação de investimentos</h4>
+                                <p class="text-muted small mb-0">Projeções de juros simples e compostos por categoria financeira.</p>
+                            </div>
+                            <div class="text-muted small text-end">
+                                <div>Horizonte: <span class="fw-semibold"><%= investmentSimulationHorizon || '—' %></span> meses</div>
+                                <div>Atualizado em <%= investmentSimulationGeneratedAt.toLocaleString('pt-BR') %></div>
+                            </div>
+                        </div>
+
+                        <% if (investmentSimulationItems.length) { %>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th scope="col">Categoria</th>
+                                            <th scope="col" class="text-end">Principal</th>
+                                            <th scope="col" class="text-end">Aporte mensal</th>
+                                            <th scope="col" class="text-end">Futuro (simples)</th>
+                                            <th scope="col" class="text-end">Futuro (composto)</th>
+                                            <th scope="col" class="text-end">Diferença</th>
+                                            <th scope="col" class="text-center">Origem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% investmentSimulationItems.forEach((item) => { %>
+                                            <% const delta = (item.compound?.futureValue || 0) - (item.simple?.futureValue || 0); %>
+                                            <tr>
+                                                <td class="fw-semibold"><%= item.categoryName %></td>
+                                                <td class="text-end"><%= formatCurrency(item.principal || 0) %></td>
+                                                <td class="text-end"><%= formatCurrency(item.monthlyContribution || 0) %></td>
+                                                <td class="text-end"><%= formatCurrency(item.simple?.futureValue || 0) %></td>
+                                                <td class="text-end"><%= formatCurrency(item.compound?.futureValue || 0) %></td>
+                                                <td class="text-end <%= delta >= 0 ? 'text-success' : 'text-danger' %>"><%= formatCurrency(delta) %></td>
+                                                <td class="text-center">
+                                                    <% if (item.rateSource === 'user') { %>
+                                                        <span class="badge text-bg-primary">Personalizada</span>
+                                                    <% } else { %>
+                                                        <span class="badge text-bg-secondary">Padrão</span>
+                                                    <% } %>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <div class="bg-light rounded-3 p-3 h-100">
+                                        <div class="text-muted small">Investimento inicial</div>
+                                        <div class="fw-semibold fs-5"><%= formatCurrency(investmentSimulationTotalsData?.principal || 0) %></div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="bg-light rounded-3 p-3 h-100">
+                                        <div class="text-muted small">Aportes acumulados</div>
+                                        <div class="fw-semibold fs-5"><%= formatCurrency(investmentSimulationTotalsData?.contributions || 0) %></div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="bg-light rounded-3 p-3 h-100">
+                                        <div class="text-muted small">Ganho adicional estimado</div>
+                                        <div class="fw-semibold fs-5 text-primary"><%= formatCurrency(investmentSimulationTotalsData?.interestDelta || 0) %></div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% } else { %>
+                            <p class="text-muted small mb-0">
+                                Cadastre taxas de juros nas categorias financeiras para visualizar projeções de investimento personalizadas.
+                            </p>
+                        <% } %>
                     </div>
                 </div>
 

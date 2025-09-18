@@ -18,6 +18,10 @@ jest.mock('../../src/middlewares/permissionMiddleware', () => () => (req, res, n
 
 jest.mock('../../src/middlewares/audit', () => () => (req, res, next) => next());
 
+jest.mock('../../src/services/investmentSimulationService', () => ({
+    simulateInvestmentProjections: jest.fn()
+}));
+
 jest.mock('pdfkit', () => {
     const instances = [];
 
@@ -71,6 +75,8 @@ jest.mock('exceljs', () => {
             this.rows = [];
             this.images = [];
             this._cells = new Map();
+            this._rowCells = new Map();
+            this._rowConfigs = new Map();
             this.mergeCells = jest.fn();
             this.addImage = jest.fn((imageId, rangeOrOptions) => {
                 this.images.push({ imageId, rangeOrOptions });
@@ -79,8 +85,21 @@ jest.mock('exceljs', () => {
         }
 
         addRow(data) {
+            const rowNumber = this.rows.length + 1;
             this.rows.push(data);
-            return { number: this.rows.length, values: data };
+            const cellMap = new Map();
+            this._rowCells.set(rowNumber, cellMap);
+
+            return {
+                number: rowNumber,
+                values: data,
+                getCell: (key) => {
+                    if (!cellMap.has(key)) {
+                        cellMap.set(key, {});
+                    }
+                    return cellMap.get(key);
+                }
+            };
         }
 
         get rowCount() {
@@ -96,6 +115,13 @@ jest.mock('exceljs', () => {
                 });
             }
             return this._cells.get(address);
+        }
+
+        getRow(index) {
+            if (!this._rowConfigs.has(index)) {
+                this._rowConfigs.set(index, { font: undefined, alignment: undefined });
+            }
+            return this._rowConfigs.get(index);
         }
     }
 
@@ -150,6 +176,7 @@ jest.mock('../../src/services/reportChartService', () => ({
 const financeRoutes = require('../../src/routes/financeRoutes');
 const financeReportingService = require('../../src/services/financeReportingService');
 const reportChartService = require('../../src/services/reportChartService');
+const investmentSimulationService = require('../../src/services/investmentSimulationService');
 const PDFDocumentMock = require('pdfkit');
 const ExcelJSMock = require('exceljs');
 const { FinanceEntry, sequelize } = require('../../database/models');
@@ -215,6 +242,29 @@ describe('FinanceController export endpoints', () => {
         PDFDocumentMock.__mockInstances.length = 0;
         ExcelJSMock.__mockInstances.length = 0;
         reportChartService.generateFinanceReportChart.mockResolvedValue(chartImageMock);
+        investmentSimulationService.simulateInvestmentProjections.mockResolvedValue({
+            categories: [
+                {
+                    categoryId: 1,
+                    categoryName: 'Consultorias',
+                    principal: 1500,
+                    monthlyContribution: 200,
+                    periodMonths: 6,
+                    rateSource: 'user',
+                    simple: { futureValue: 1800, totalContributions: 1200 },
+                    compound: { futureValue: 1850 }
+                }
+            ],
+            totals: {
+                principal: 1500,
+                contributions: 1200,
+                simpleFutureValue: 1800,
+                compoundFutureValue: 1850,
+                interestDelta: 50
+            },
+            options: { defaultPeriodMonths: 6 },
+            generatedAt: new Date().toISOString()
+        });
         app = buildTestApp();
         findAllSpy = jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(sampleEntries);
         summarySpy = jest.spyOn(financeReportingService, 'getFinanceSummary').mockResolvedValue(summaryResponse);
@@ -224,6 +274,7 @@ describe('FinanceController export endpoints', () => {
         findAllSpy.mockRestore();
         summarySpy.mockRestore();
         reportChartService.generateFinanceReportChart.mockReset();
+        investmentSimulationService.simulateInvestmentProjections.mockReset();
     });
 
     afterAll(async () => {
@@ -257,6 +308,9 @@ describe('FinanceController export endpoints', () => {
             expect.objectContaining({ entries: sampleEntries })
         );
         expect(reportChartService.generateFinanceReportChart).toHaveBeenCalledWith(summaryResponse);
+        expect(investmentSimulationService.simulateInvestmentProjections).toHaveBeenCalledWith(expect.objectContaining({
+            entries: expect.arrayContaining([expect.objectContaining({ id: 1 })])
+        }));
 
         const pdfInstance = PDFDocumentMock.__mockInstances[0];
         expect(pdfInstance).toBeDefined();
@@ -299,6 +353,9 @@ describe('FinanceController export endpoints', () => {
             width: 720,
             height: 360
         });
+        expect(investmentSimulationService.simulateInvestmentProjections).toHaveBeenCalledWith(expect.objectContaining({
+            entries: expect.arrayContaining([expect.objectContaining({ id: 1 })])
+        }));
 
         const workbookInstance = ExcelJSMock.__mockInstances[0];
         expect(workbookInstance).toBeDefined();
@@ -306,6 +363,10 @@ describe('FinanceController export endpoints', () => {
             buffer: chartImageMock.buffer,
             extension: 'png'
         }));
+
+        const simulationSheet = workbookInstance.worksheets.find((sheet) => sheet.name === 'Simulação');
+        expect(simulationSheet).toBeDefined();
+        expect(simulationSheet.rows.length).toBeGreaterThan(0);
 
         const summarySheet = workbookInstance.worksheets[0];
         expect(summarySheet.addImage).toHaveBeenCalledWith(

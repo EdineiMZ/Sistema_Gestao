@@ -7,6 +7,7 @@ const financeReportingService = require('../services/financeReportingService');
 const budgetService = require('../services/budgetService');
 const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
+const investmentSimulationService = require('../services/investmentSimulationService');
 const fileStorageService = require('../services/fileStorageService');
 const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
@@ -120,15 +121,40 @@ const normalizeAmountInput = (value) => {
     return null;
 };
 
+const CONTRIBUTION_FREQUENCIES = ['monthly', 'quarterly', 'yearly', 'weekly'];
+
 const resolveCurrentUserId = (req) => req?.user?.id ?? req?.session?.user?.id ?? null;
 
-const normalizeUserId = (value) => {
-    if (value === null || value === undefined || value === '') {
+const parsePositiveInteger = (value) => {
+    const numeric = Number.parseInt(value, 10);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return null;
+    }
+    return numeric;
+};
+
+const parseNonNegativeNumber = (value) => {
+    if (value === undefined || value === null || value === '') {
         return null;
     }
 
-    const numeric = Number(value);
-    return Number.isInteger(numeric) ? numeric : null;
+    const numeric = Number.parseFloat(
+        typeof value === 'string' ? value.replace(',', '.') : value
+    );
+
+    if (!Number.isFinite(numeric) || numeric < 0) {
+        return null;
+    }
+
+    return numeric;
+};
+
+const normalizeContributionFrequency = (value) => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    return CONTRIBUTION_FREQUENCIES.includes(normalized) ? normalized : null;
 };
 
 const createCategoryResolver = async (userId) => {
@@ -313,6 +339,11 @@ const serializeEntryForView = (entry) => {
         || plain.categoryName
         || categoryData.name
         || '';
+    const categoryName = sanitizeText(categoryLabelSource);
+    const categoryColor = (() => {
+        const candidate = sanitizeText(categoryData.color);
+        return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
+    })();
 
     const attachments = Array.isArray(plain.attachments)
         ? plain.attachments.map(serializeAttachmentForView)
@@ -327,7 +358,12 @@ const serializeEntryForView = (entry) => {
         paymentDate: plain.paymentDate || null,
         status: normalizedStatus,
         categoryId,
-        categoryLabel: sanitizeText(categoryLabelSource),
+        categoryLabel: categoryName,
+        category: categoryId ? {
+            id: categoryId,
+            name: categoryName,
+            color: categoryColor
+        } : null,
         attachments,
         recurring: Boolean(plain.recurring),
         recurringInterval: normalizeRecurringInterval
@@ -493,6 +529,29 @@ const buildFiltersFromQuery = (query = {}) => {
     const statusFilter = normalizeFilterValue(query.status);
     if (statusFilter && FINANCE_STATUSES.includes(statusFilter)) {
         filters.status = statusFilter;
+    }
+
+    const investmentPeriodInput = (
+        query.investmentPeriodMonths
+        ?? query.investmentPeriod
+        ?? query.projectionMonths
+        ?? query.projectionPeriod
+    );
+    const normalizedInvestmentPeriod = parsePositiveInteger(investmentPeriodInput);
+    if (normalizedInvestmentPeriod) {
+        filters.investmentPeriodMonths = normalizedInvestmentPeriod;
+    }
+
+    const contributionInput = query.investmentContribution ?? query.contributionAmount ?? query.aporteMensal;
+    const normalizedContribution = parseNonNegativeNumber(contributionInput);
+    if (normalizedContribution !== null) {
+        filters.investmentContribution = normalizedContribution;
+    }
+
+    const contributionFrequencyInput = query.investmentContributionFrequency ?? query.contributionFrequency;
+    const normalizedFrequency = normalizeContributionFrequency(contributionFrequencyInput);
+    if (normalizedFrequency) {
+        filters.investmentContributionFrequency = normalizedFrequency;
     }
 
     return filters;
@@ -842,6 +901,8 @@ module.exports = {
                 budgetOverviewPromise
             ]);
 
+            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+
             const normalizedBudgetOverview = (
                 budgetOverview && typeof budgetOverview === 'object'
                     ? budgetOverview
@@ -869,6 +930,45 @@ module.exports = {
             const projectionAlerts = projections.filter((item) => item.needsAttention);
             const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
 
+            const simulationOptions = {};
+            if (filters.investmentPeriodMonths) {
+                simulationOptions.defaultPeriodMonths = filters.investmentPeriodMonths;
+            }
+            if (filters.investmentContribution !== null && filters.investmentContribution !== undefined) {
+                simulationOptions.defaultContribution = filters.investmentContribution;
+            }
+            if (filters.investmentContributionFrequency) {
+                simulationOptions.defaultContributionFrequency = filters.investmentContributionFrequency;
+            }
+
+            let investmentSimulation;
+            try {
+                investmentSimulation = await investmentSimulationService.simulateInvestmentProjections({
+                    entries: safeEntries,
+                    userId,
+                    categories,
+                    filters,
+                    options: simulationOptions
+                });
+            } catch (simulationError) {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.error('Erro ao calcular simulação de investimentos:', simulationError);
+                }
+                investmentSimulation = {
+                    categories: [],
+                    totals: {
+                        principal: 0,
+                        contributions: 0,
+                        simpleFutureValue: 0,
+                        compoundFutureValue: 0,
+                        interestDelta: 0
+                    },
+                    options: simulationOptions,
+                    generatedAt: new Date().toISOString(),
+                    filters
+                };
+            }
+
             const importPreview = req.session?.financeImportPreview || null;
             if (importPreview) {
                 res.locals.importPreview = importPreview;
@@ -878,7 +978,7 @@ module.exports = {
             res.render(
                 'finance/manageFinance',
                 {
-                    entries,
+                    entries: safeEntries,
                     filters,
                     formatCurrency,
                     periodLabel: formatPeriodLabel(filters),
@@ -892,7 +992,10 @@ module.exports = {
                     importPreview,
                     recurringIntervalOptions,
                     budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null,
-                    budgetStatusPalette: statusPalette
+                    budgetStatusPalette: statusPalette,
+                    investmentSimulation,
+                    investmentSimulationTotals: investmentSimulation?.totals || null,
+                    investmentSimulationCategories: investmentSimulation?.categories || []
 
                 },
                 (renderError, html) => {
@@ -1632,6 +1735,32 @@ module.exports = {
                 budgetOverviewPromise
             ]);
             const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+            const userId = resolveCurrentUserId(req);
+            let investmentSimulation;
+            try {
+                investmentSimulation = await investmentSimulationService.simulateInvestmentProjections({
+                    entries: safeEntries,
+                    userId,
+                    filters
+                });
+            } catch (simulationError) {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.error('Erro ao calcular simulação de investimentos para PDF:', simulationError);
+                }
+                investmentSimulation = {
+                    categories: [],
+                    totals: {
+                        principal: 0,
+                        contributions: 0,
+                        simpleFutureValue: 0,
+                        compoundFutureValue: 0,
+                        interestDelta: 0
+                    },
+                    options: {},
+                    generatedAt: new Date().toISOString(),
+                    filters
+                };
+            }
             const chartImage = await reportChartService.generateFinanceReportChart(summary);
             const budgetSummaries = Array.isArray(budgetOverview?.summaries)
                 ? budgetOverview.summaries
@@ -1755,6 +1884,60 @@ module.exports = {
                 });
             }
 
+            const simulationItems = Array.isArray(investmentSimulation?.categories)
+                ? investmentSimulation.categories
+                : [];
+            if (simulationItems.length) {
+                document.moveDown();
+                document.fontSize(14).fillColor('#000000').text('Simulação de investimentos', { underline: true });
+                document.moveDown(0.4);
+
+                const horizon = investmentSimulation?.options?.defaultPeriodMonths
+                    || simulationItems[0]?.periodMonths
+                    || null;
+                const generatedAtLabel = (() => {
+                    const generated = investmentSimulation?.generatedAt
+                        ? new Date(investmentSimulation.generatedAt)
+                        : null;
+                    if (generated && Number.isFinite(generated.getTime())) {
+                        return generated.toLocaleString('pt-BR');
+                    }
+                    return new Date().toLocaleString('pt-BR');
+                })();
+
+                document.fontSize(10).fillColor('#4b5563').text(
+                    `Horizonte: ${horizon || '—'} meses | Gerado em: ${generatedAtLabel}`
+                );
+                document.moveDown(0.3);
+
+                simulationItems.forEach((item) => {
+                    const delta = item.compound.futureValue - item.simple.futureValue;
+                    document.fontSize(11).fillColor('#111827').text(item.categoryName);
+                    document.fontSize(10).fillColor('#4b5563').text(
+                        `Principal: ${formatCurrency(item.principal)} | Aporte mensal: ${formatCurrency(item.monthlyContribution)}`
+                    );
+                    document.fontSize(10).fillColor('#1f2937').text(
+                        `Futuro (simples): ${formatCurrency(item.simple.futureValue)} | Futuro (composto): ${formatCurrency(item.compound.futureValue)}`
+                    );
+                    document.fontSize(10).fillColor(delta >= 0 ? '#047857' : '#b91c1c').text(
+                        `Diferença projetada: ${formatCurrency(delta)}`
+                    );
+                    document.moveDown(0.2);
+                });
+
+                const totals = investmentSimulation?.totals || {};
+                document.moveDown(0.2);
+                document.fontSize(10).fillColor('#1f2937').text(
+                    `Total investido: ${formatCurrency(totals.principal || 0)} | Aportes acumulados: ${formatCurrency(totals.contributions || 0)}`
+                );
+                document.fontSize(10).fillColor('#1f2937').text(
+                    `Projeção final (simples): ${formatCurrency(totals.simpleFutureValue || 0)} | Projeção final (composta): ${formatCurrency(totals.compoundFutureValue || 0)}`
+                );
+                document.fontSize(10).fillColor('#2563eb').text(
+                    `Ganho adicional estimado: ${formatCurrency(totals.interestDelta || 0)}`
+                );
+            }
+
             document.end();
         } catch (err) {
             console.error('Erro ao exportar PDF:', err);
@@ -1787,6 +1970,32 @@ module.exports = {
                 budgetOverviewPromise
             ]);
             const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+            const userId = resolveCurrentUserId(req);
+            let investmentSimulation;
+            try {
+                investmentSimulation = await investmentSimulationService.simulateInvestmentProjections({
+                    entries: safeEntries,
+                    userId,
+                    filters
+                });
+            } catch (simulationError) {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.error('Erro ao calcular simulação de investimentos para Excel:', simulationError);
+                }
+                investmentSimulation = {
+                    categories: [],
+                    totals: {
+                        principal: 0,
+                        contributions: 0,
+                        simpleFutureValue: 0,
+                        compoundFutureValue: 0,
+                        interestDelta: 0
+                    },
+                    options: {},
+                    generatedAt: new Date().toISOString(),
+                    filters
+                };
+            }
             const chartImage = await reportChartService.generateFinanceReportChart(summary, {
                 width: 720,
                 height: 360
@@ -1812,6 +2021,22 @@ module.exports = {
             summarySheet.addRow(['Pagamentos em Atraso', parseAmount(summary.totals.overdue)]);
             summarySheet.addRow(['Pagamentos Pendentes', parseAmount(summary.totals.pending)]);
             summarySheet.addRow(['Pagamentos Concluídos', parseAmount(summary.totals.paid)]);
+
+            const simulationItems = Array.isArray(investmentSimulation?.categories)
+                ? investmentSimulation.categories
+                : [];
+            if (simulationItems.length) {
+                const horizon = investmentSimulation?.options?.defaultPeriodMonths
+                    || simulationItems[0]?.periodMonths
+                    || null;
+                const totals = investmentSimulation?.totals || {};
+                summarySheet.addRow(['Horizonte da simulação (meses)', horizon || '—']);
+                summarySheet.addRow(['Total investido', parseAmount(totals.principal || 0)]);
+                summarySheet.addRow(['Aportes acumulados', parseAmount(totals.contributions || 0)]);
+                summarySheet.addRow(['Futuro - Juros simples', parseAmount(totals.simpleFutureValue || 0)]);
+                summarySheet.addRow(['Futuro - Juros compostos', parseAmount(totals.compoundFutureValue || 0)]);
+                summarySheet.addRow(['Ganho adicional estimado', parseAmount(totals.interestDelta || 0)]);
+            }
 
             if (chartImage?.buffer instanceof Buffer) {
                 const imageId = workbook.addImage({
@@ -1956,6 +2181,46 @@ module.exports = {
 
                 categorySheet.getRow(1).font = { bold: true };
                 categorySheet.getRow(1).alignment = { horizontal: 'center' };
+            }
+
+            if (simulationItems.length) {
+                const simulationSheet = workbook.addWorksheet('Simulação');
+                simulationSheet.columns = [
+                    { header: 'Categoria', key: 'category', width: 28 },
+                    { header: 'Principal (R$)', key: 'principal', width: 20 },
+                    { header: 'Aporte mensal (R$)', key: 'contribution', width: 22 },
+                    { header: 'Futuro simples (R$)', key: 'simpleFuture', width: 22 },
+                    { header: 'Futuro composto (R$)', key: 'compoundFuture', width: 24 },
+                    { header: 'Diferença (R$)', key: 'delta', width: 20 },
+                    { header: 'Período (meses)', key: 'period', width: 18 },
+                    { header: 'Origem da taxa', key: 'source', width: 18 }
+                ];
+
+                simulationItems.forEach((item) => {
+                    simulationSheet.addRow({
+                        category: item.categoryName,
+                        principal: parseAmount(item.principal),
+                        contribution: parseAmount(item.monthlyContribution),
+                        simpleFuture: parseAmount(item.simple.futureValue),
+                        compoundFuture: parseAmount(item.compound.futureValue),
+                        delta: parseAmount(item.compound.futureValue - item.simple.futureValue),
+                        period: item.periodMonths,
+                        source: item.rateSource === 'user' ? 'Personalizado' : 'Padrão'
+                    });
+                });
+
+                simulationSheet.addRow([]);
+                simulationSheet.addRow({
+                    category: 'Totais',
+                    principal: parseAmount(investmentSimulation?.totals?.principal || 0),
+                    contribution: parseAmount(investmentSimulation?.totals?.contributions || 0),
+                    simpleFuture: parseAmount(investmentSimulation?.totals?.simpleFutureValue || 0),
+                    compoundFuture: parseAmount(investmentSimulation?.totals?.compoundFutureValue || 0),
+                    delta: parseAmount(investmentSimulation?.totals?.interestDelta || 0)
+                });
+
+                simulationSheet.getRow(1).font = { bold: true };
+                simulationSheet.getRow(1).alignment = { horizontal: 'center' };
             }
 
             res.setHeader(
