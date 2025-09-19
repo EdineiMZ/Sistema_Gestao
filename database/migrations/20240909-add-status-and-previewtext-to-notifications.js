@@ -13,37 +13,64 @@ const getDialect = (queryInterface) => {
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('Notifications', 'status', {
-      type: Sequelize.STRING,
-      allowNull: false,
-      defaultValue: STATUS_DEFAULT,
-    });
+    const tableDefinition = await queryInterface.describeTable('Notifications');
+
+    if (!tableDefinition.status) {
+      await queryInterface.addColumn('Notifications', 'status', {
+        type: Sequelize.STRING,
+        allowNull: false,
+        defaultValue: STATUS_DEFAULT,
+      });
+    }
 
     const dialect = getDialect(queryInterface);
     if (dialect === 'postgres' || dialect === 'postgresql') {
-      const allowedStatuses = STATUS_VALUES.map((status) => `'${status}'`).join(', ');
-      await queryInterface.sequelize.query(`
-        ALTER TABLE "Notifications"
-        ADD CONSTRAINT "${STATUS_CHECK_CONSTRAINT_NAME}"
-        CHECK ("status" IN (${allowedStatuses}));
-      `);
+      const [[constraint]] = await queryInterface.sequelize.query(
+        `SELECT conname FROM pg_constraint WHERE conname = :constraintName LIMIT 1;`,
+        { replacements: { constraintName: STATUS_CHECK_CONSTRAINT_NAME } },
+      );
+
+      if (!constraint) {
+        const allowedStatuses = STATUS_VALUES.map((status) => `'${status}'`).join(', ');
+        await queryInterface.sequelize.query(`
+          ALTER TABLE "Notifications"
+          ADD CONSTRAINT "${STATUS_CHECK_CONSTRAINT_NAME}"
+          CHECK ("status" IN (${allowedStatuses}));
+        `);
+      }
     }
 
-    await queryInterface.addColumn('Notifications', 'previewText', {
-      type: Sequelize.STRING(120),
-      allowNull: true,
-    });
+    if (!tableDefinition.previewText) {
+      await queryInterface.addColumn('Notifications', 'previewText', {
+        type: Sequelize.STRING(120),
+        allowNull: true,
+      });
+    }
   },
 
   async down(queryInterface) {
     const dialect = getDialect(queryInterface);
+    const tableDefinition = await queryInterface.describeTable('Notifications');
+
     if (dialect === 'postgres' || dialect === 'postgresql') {
-      await queryInterface.sequelize.query(`
-        ALTER TABLE "Notifications" DROP CONSTRAINT IF EXISTS "${STATUS_CHECK_CONSTRAINT_NAME}";
-      `);
+      const [[constraint]] = await queryInterface.sequelize.query(
+        `SELECT conname FROM pg_constraint WHERE conname = :constraintName LIMIT 1;`,
+        { replacements: { constraintName: STATUS_CHECK_CONSTRAINT_NAME } },
+      );
+
+      if (constraint) {
+        await queryInterface.sequelize.query(`
+          ALTER TABLE "Notifications" DROP CONSTRAINT "${STATUS_CHECK_CONSTRAINT_NAME}";
+        `);
+      }
     }
 
-    await queryInterface.removeColumn('Notifications', 'previewText');
-    await queryInterface.removeColumn('Notifications', 'status');
+    if (tableDefinition.previewText) {
+      await queryInterface.removeColumn('Notifications', 'previewText');
+    }
+
+    if (tableDefinition.status) {
+      await queryInterface.removeColumn('Notifications', 'status');
+    }
   },
 };
