@@ -26,8 +26,13 @@ module.exports = {
         }
 
         await queryInterface.sequelize.transaction(async (transaction) => {
-            const typeExists = await doesTypeExist(queryInterface, transaction, OLD_ENUM_NAME);
-            if (!typeExists) {
+            const newTypeExists = await doesTypeExist(queryInterface, transaction, NEW_ENUM_NAME);
+            if (newTypeExists) {
+                return;
+            }
+
+            const oldTypeExists = await doesTypeExist(queryInterface, transaction, OLD_ENUM_NAME);
+            if (!oldTypeExists) {
                 return;
             }
 
