@@ -3,20 +3,37 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
-        await queryInterface.addColumn('Users', 'twoFactorEnabled', {
-            type: Sequelize.BOOLEAN,
-            allowNull: false,
-            defaultValue: false
-        });
+        await queryInterface.sequelize.transaction(async (transaction) => {
+            const tableDefinition = await queryInterface.describeTable('Users', { transaction });
 
-        await queryInterface.addColumn('Users', 'twoFactorCodeHash', {
-            type: Sequelize.STRING(128),
-            allowNull: true
+            if (!tableDefinition.twoFactorEnabled) {
+                await queryInterface.addColumn('Users', 'twoFactorEnabled', {
+                    type: Sequelize.BOOLEAN,
+                    allowNull: false,
+                    defaultValue: false
+                }, { transaction });
+            }
+
+            if (!tableDefinition.twoFactorCodeHash) {
+                await queryInterface.addColumn('Users', 'twoFactorCodeHash', {
+                    type: Sequelize.STRING(128),
+                    allowNull: true
+                }, { transaction });
+            }
         });
     },
 
     async down(queryInterface) {
-        await queryInterface.removeColumn('Users', 'twoFactorCodeHash');
-        await queryInterface.removeColumn('Users', 'twoFactorEnabled');
+        await queryInterface.sequelize.transaction(async (transaction) => {
+            const tableDefinition = await queryInterface.describeTable('Users', { transaction });
+
+            if (tableDefinition.twoFactorCodeHash) {
+                await queryInterface.removeColumn('Users', 'twoFactorCodeHash', { transaction });
+            }
+
+            if (tableDefinition.twoFactorEnabled) {
+                await queryInterface.removeColumn('Users', 'twoFactorEnabled', { transaction });
+            }
+        });
     }
 };
