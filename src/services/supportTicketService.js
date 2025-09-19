@@ -135,6 +135,154 @@ const ensureAgentUser = async (userId, transaction) => {
     return user;
 };
 
+const mapTicketPayload = (ticketInstance) => {
+    if (!ticketInstance) {
+        return null;
+    }
+
+    const plain = typeof ticketInstance.get === 'function'
+        ? ticketInstance.get({ plain: true })
+        : ticketInstance;
+
+    const attachments = Array.isArray(plain.attachments)
+        ? plain.attachments.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        : [];
+
+    const attachmentsByMessageId = attachments.reduce((accumulator, attachment) => {
+        if (!attachment || !attachment.messageId) {
+            return accumulator;
+        }
+
+        if (!accumulator.has(attachment.messageId)) {
+            accumulator.set(attachment.messageId, []);
+        }
+
+        accumulator.get(attachment.messageId).push({
+            id: attachment.id,
+            fileName: attachment.fileName,
+            fileSize: attachment.fileSize || null,
+            createdAt: attachment.createdAt
+        });
+
+        return accumulator;
+    }, new Map());
+
+    const normalizedMessages = Array.isArray(plain.messages)
+        ? plain.messages
+            .slice()
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+            .map((message) => ({
+                id: message.id,
+                ticketId: message.ticketId,
+                senderId: message.senderId,
+                body: message.body,
+                isFromAgent: Boolean(message.isFromAgent),
+                isSystem: Boolean(message.isSystem),
+                createdAt: message.createdAt,
+                sender: message.sender
+                    ? {
+                        id: message.sender.id,
+                        name: message.sender.name,
+                        role: message.sender.role
+                    }
+                    : null,
+                attachments: attachmentsByMessageId.get(message.id) || []
+            }))
+        : [];
+
+    return {
+        id: plain.id,
+        subject: plain.subject,
+        status: plain.status,
+        creatorId: plain.creatorId,
+        assignedToId: plain.assignedToId,
+        createdAt: plain.createdAt,
+        updatedAt: plain.updatedAt,
+        lastMessageAt: plain.lastMessageAt,
+        firstResponseAt: plain.firstResponseAt,
+        resolvedAt: plain.resolvedAt,
+        creator: plain.creator
+            ? {
+                id: plain.creator.id,
+                name: plain.creator.name,
+                email: plain.creator.email || null,
+                role: plain.creator.role
+            }
+            : null,
+        assignee: plain.assignee
+            ? {
+                id: plain.assignee.id,
+                name: plain.assignee.name,
+                email: plain.assignee.email || null,
+                role: plain.assignee.role
+            }
+            : null,
+        messages: normalizedMessages
+    };
+};
+
+const listTicketsForUser = async ({ user, statusFilter = null }) => {
+    if (!user || !user.id) {
+        throw new Error('Usuário inválido.');
+    }
+
+    const where = {};
+
+    if (!isSupportAgentRole(user.role)) {
+        where.creatorId = user.id;
+    } else if (statusFilter) {
+        const normalizedStatuses = Array.isArray(statusFilter)
+            ? statusFilter
+                .map((status) => (typeof status === 'string' ? status.trim().toLowerCase() : null))
+                .filter((status) => TICKET_STATUS_VALUES.includes(status))
+            : typeof statusFilter === 'string'
+                ? [statusFilter.trim().toLowerCase()]
+                : [];
+
+        if (normalizedStatuses.length) {
+            where.status = normalizedStatuses;
+        }
+    }
+
+    const tickets = await SupportTicket.findAll({
+        where,
+        include: [
+            {
+                model: User,
+                as: 'creator',
+                attributes: ['id', 'name', 'email', 'role']
+            },
+            {
+                model: User,
+                as: 'assignee',
+                attributes: ['id', 'name', 'email', 'role']
+            },
+            {
+                model: SupportMessage,
+                as: 'messages',
+                include: [
+                    {
+                        model: User,
+                        as: 'sender',
+                        attributes: ['id', 'name', 'role']
+                    }
+                ]
+            },
+            {
+                model: SupportAttachment,
+                as: 'attachments',
+                attributes: ['id', 'messageId', 'fileName', 'fileSize', 'createdAt']
+            }
+        ],
+        order: [
+            ['lastMessageAt', 'DESC'],
+            ['createdAt', 'DESC']
+        ]
+    });
+
+    return tickets.map(mapTicketPayload).filter(Boolean);
+};
+
 const createTicket = async ({
     subject,
     description,
@@ -379,6 +527,7 @@ const assignTicket = async ({
 };
 
 module.exports = {
+    listTicketsForUser,
     createTicket,
     addMessage,
     updateTicketStatus,

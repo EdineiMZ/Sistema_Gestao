@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 
 const supportController = require('../controllers/supportController');
+const supportTicketController = require('../controllers/supportTicketController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const { constants: chatConstants } = require('../services/supportChatService');
 
@@ -14,6 +15,10 @@ const upload = multer({
     }
 });
 
+router.get('/tickets', authMiddleware, supportTicketController.listTickets);
+router.post('/tickets', authMiddleware, supportTicketController.createTicket);
+router.post('/tickets/:ticketId/messages', authMiddleware, supportTicketController.addMessage);
+router.post('/tickets/:ticketId/status', authMiddleware, supportTicketController.updateStatus);
 router.get('/tickets/:ticketId/chat', authMiddleware, supportController.renderChat);
 router.get('/tickets/:ticketId/history', authMiddleware, supportController.fetchHistory);
 router.post(
