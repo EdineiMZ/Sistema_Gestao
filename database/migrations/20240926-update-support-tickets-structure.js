@@ -129,7 +129,7 @@ module.exports = {
             if (!await columnExists(queryInterface, tableName, 'creatorId')) {
                 await queryInterface.addColumn(tableName, 'creatorId', {
                     type: Sequelize.INTEGER,
-                    allowNull: dialect === 'sqlite'
+                    allowNull: true
                 }, { transaction });
             }
 
