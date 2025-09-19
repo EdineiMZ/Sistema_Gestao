@@ -69,7 +69,10 @@ module.exports = {
         try {
             const dialect = queryInterface.sequelize.getDialect();
 
-            if (await tableExists(PASCAL_TICKET_TABLE)) {
+            const pascalTicketExists = await tableExists(PASCAL_TICKET_TABLE);
+            const camelTicketExists = await tableExists(CAMEL_TICKET_TABLE);
+
+            if (pascalTicketExists && !camelTicketExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     PASCAL_TICKET_TABLE,
                     CAMEL_TICKET_TABLE,
@@ -83,7 +86,10 @@ module.exports = {
                 }
             }
 
-            if (await tableExists(PASCAL_MESSAGE_TABLE)) {
+            const pascalMessageExists = await tableExists(PASCAL_MESSAGE_TABLE);
+            const camelMessageExists = await tableExists(CAMEL_MESSAGE_TABLE);
+
+            if (pascalMessageExists && !camelMessageExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     PASCAL_MESSAGE_TABLE,
                     CAMEL_MESSAGE_TABLE,
@@ -91,7 +97,10 @@ module.exports = {
                 ));
             }
 
-            if (await tableExists(PASCAL_ATTACHMENT_TABLE)) {
+            const pascalAttachmentExists = await tableExists(PASCAL_ATTACHMENT_TABLE);
+            const camelAttachmentExists = await tableExists(CAMEL_ATTACHMENT_TABLE);
+
+            if (pascalAttachmentExists && !camelAttachmentExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     PASCAL_ATTACHMENT_TABLE,
                     CAMEL_ATTACHMENT_TABLE,
@@ -190,7 +199,10 @@ module.exports = {
         try {
             const dialect = queryInterface.sequelize.getDialect();
 
-            if (await tableExists(CAMEL_ATTACHMENT_TABLE)) {
+            const camelAttachmentExists = await tableExists(CAMEL_ATTACHMENT_TABLE);
+            const pascalAttachmentExists = await tableExists(PASCAL_ATTACHMENT_TABLE);
+
+            if (camelAttachmentExists && !pascalAttachmentExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     CAMEL_ATTACHMENT_TABLE,
                     PASCAL_ATTACHMENT_TABLE,
@@ -198,7 +210,10 @@ module.exports = {
                 ));
             }
 
-            if (await tableExists(CAMEL_MESSAGE_TABLE)) {
+            const camelMessageExists = await tableExists(CAMEL_MESSAGE_TABLE);
+            const pascalMessageExists = await tableExists(PASCAL_MESSAGE_TABLE);
+
+            if (camelMessageExists && !pascalMessageExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     CAMEL_MESSAGE_TABLE,
                     PASCAL_MESSAGE_TABLE,
@@ -206,7 +221,10 @@ module.exports = {
                 ));
             }
 
-            if (await tableExists(CAMEL_TICKET_TABLE)) {
+            const camelTicketExists = await tableExists(CAMEL_TICKET_TABLE);
+            const pascalTicketExists = await tableExists(PASCAL_TICKET_TABLE);
+
+            if (camelTicketExists && !pascalTicketExists) {
                 await ignoreIfTableMissing(() => queryInterface.renameTable(
                     CAMEL_TICKET_TABLE,
                     PASCAL_TICKET_TABLE,
