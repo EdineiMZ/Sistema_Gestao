@@ -4,6 +4,11 @@ const DEFAULT_TABLE_NAME = 'supportTickets';
 const CANDIDATE_TABLE_NAMES = Object.freeze(['supportTickets', 'SupportTickets']);
 const SUPPORT_TICKETS_USER_STATUS_INDEX = 'supportTickets_userId_status';
 
+const COLUMN_NAME_CANDIDATES = Object.freeze({
+    userId: ['userId', 'userid', 'user_id', 'userID'],
+    status: ['status', 'Status']
+});
+
 const isTableMissingError = (error) => {
     const driverCode = error?.original?.code || error?.parent?.code;
     const message = [
@@ -38,6 +43,32 @@ const resolveExistingTableName = async (queryInterface, candidates) => {
     for (const name of candidates) {
         if (await tableExists(queryInterface, name)) {
             return name;
+        }
+    }
+
+    return null;
+};
+
+const resolveColumnName = async (queryInterface, tableName, candidates) => {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+        return null;
+    }
+
+    let description;
+
+    try {
+        description = await queryInterface.describeTable(tableName);
+    } catch (error) {
+        if (isTableMissingError(error)) {
+            return null;
+        }
+
+        throw error;
+    }
+
+    for (const candidate of candidates) {
+        if (candidate && Object.prototype.hasOwnProperty.call(description, candidate)) {
+            return candidate;
         }
     }
 
@@ -180,10 +211,24 @@ module.exports = {
         });
         }
 
-        await ensureIndex(queryInterface, targetTableName, {
-            name: SUPPORT_TICKETS_USER_STATUS_INDEX,
-            fields: ['userId', 'status']
-        });
+        const userIdColumn = await resolveColumnName(
+            queryInterface,
+            targetTableName,
+            COLUMN_NAME_CANDIDATES.userId
+        );
+
+        const statusColumn = await resolveColumnName(
+            queryInterface,
+            targetTableName,
+            COLUMN_NAME_CANDIDATES.status
+        );
+
+        if (userIdColumn && statusColumn) {
+            await ensureIndex(queryInterface, targetTableName, {
+                name: SUPPORT_TICKETS_USER_STATUS_INDEX,
+                fields: [userIdColumn, statusColumn]
+            });
+        }
     },
 
     down: async (queryInterface) => {
