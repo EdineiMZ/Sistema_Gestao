@@ -94,7 +94,7 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         role: {
-            type: DataTypes.ENUM({ values: ROLE_ORDER, name: 'user_role_enum' }),
+            type: DataTypes.ENUM({ values: ROLE_ORDER, name: 'enum_Users_role' }),
             defaultValue: USER_ROLES.CLIENT,
             allowNull: false,
             set(value) {
