@@ -174,8 +174,24 @@ const budgetController = {
                 userId,
                 financeCategoryId: req.query?.financeCategoryId ? parseIntegerId(req.query.financeCategoryId, 'Categoria financeira inválida.') : undefined
             };
-            const budgets = await budgetService.listBudgets(filters);
-            return sendSuccess(res, { data: budgets });
+            const result = await budgetService.listBudgets(filters);
+
+            const data = Array.isArray(result?.data)
+                ? result.data
+                : Array.isArray(result)
+                    ? result
+                    : [];
+
+            const pagination = result && typeof result === 'object' && !Array.isArray(result) && result.pagination
+                ? result.pagination
+                : {
+                    page: 1,
+                    pageSize: Array.isArray(data) ? data.length : 0,
+                    totalItems: Array.isArray(data) ? data.length : 0,
+                    totalPages: Array.isArray(data) && data.length > 0 ? 1 : 0
+                };
+
+            return sendSuccess(res, { data: { data, pagination } });
         } catch (error) {
             return handleError(res, error, 'Erro ao listar orçamentos.');
         }

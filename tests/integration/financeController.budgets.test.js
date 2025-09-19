@@ -165,4 +165,34 @@ describe('FinanceController budgets endpoints', () => {
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ message: 'Cada limite de alerta deve ser um número maior que zero.' });
     });
+
+    it('lista os orçamentos existentes com paginação padrão', async () => {
+        await Budget.create({
+            userId: user.id,
+            financeCategoryId: category.id,
+            monthlyLimit: 500.75,
+            thresholds: [0.5, 0.8],
+            referenceMonth: '2024-09-01'
+        });
+
+        const response = await request(app)
+            .get('/finance/budgets');
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.data).toHaveLength(1);
+        expect(response.body.data[0]).toMatchObject({
+            userId: user.id,
+            financeCategoryId: category.id,
+            referenceMonth: '2024-09-01'
+        });
+        expect(response.body.data[0].monthlyLimit).toBeCloseTo(500.75);
+        expect(response.body.data[0].thresholds).toEqual([0.5, 0.8]);
+        expect(response.body.pagination).toEqual({
+            page: 1,
+            pageSize: 25,
+            totalItems: 1,
+            totalPages: 1
+        });
+    });
 });
