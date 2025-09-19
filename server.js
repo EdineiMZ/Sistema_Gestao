@@ -11,6 +11,7 @@ const methodOverride = require('method-override');
 const path = require('path');
 const { sequelize, User } = require('./database/models');
 const { initializeSupportChat } = require('./src/services/supportChatService');
+const { ensureFinanceEntriesUserId } = require('./src/services/ensureFinanceEntriesUserId');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
 const { getNavigationShortcuts, getMenuItems, getQuickActions } = require('./src/utils/navigation');
 
@@ -275,12 +276,13 @@ app.use('/support', supportRoutes);
 
 // Conexão DB
 initializeSupportChat({ io, sessionMiddleware });
+const bootstrap = async () => {
+    try {
+        await ensureFinanceEntriesUserId({ logger: console });
 
-
-Promise.all([sequelize.sync(), sessionStoreSyncPromise])
-    .then(() => {
+        await Promise.all([sequelize.sync(), sessionStoreSyncPromise]);
         console.log('Banco de dados sincronizado com sucesso!');
-        // Sobe o servidor
+
         server.listen(PORT, () => {
             console.log(`Servidor rodando em http://127.0.0.1:${PORT}`);
         });
@@ -295,8 +297,10 @@ Promise.all([sequelize.sync(), sessionStoreSyncPromise])
         } else {
             console.log('Worker de notificações inline desativado via NOTIFICATION_WORKER_INLINE.');
         }
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('Erro ao sincronizar dependências iniciais:', err);
         process.exit(1);
-    });
+    }
+};
+
+bootstrap();
