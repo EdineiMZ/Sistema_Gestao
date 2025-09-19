@@ -21,7 +21,8 @@ const isTableMissingError = (error) => {
         /does not exist/i.test(message) ||
         /no such table/i.test(message) ||
         /unknown table/i.test(message) ||
-        /não existe/i.test(message);
+        /não existe/i.test(message) ||
+        /no description found/i.test(message);
 };
 
 const tableExists = async (queryInterface, tableName) => {
