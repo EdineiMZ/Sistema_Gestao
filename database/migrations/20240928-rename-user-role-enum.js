@@ -19,6 +19,26 @@ const doesTypeExist = async (queryInterface, transaction, typeName) => {
     return Boolean(results?.[0]?.exists);
 };
 
+const getColumnUdtName = async (queryInterface, transaction, tableName, columnName) => {
+    const [results] = await queryInterface.sequelize.query(
+        `SELECT udt_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = :tableName
+          AND column_name = :columnName
+        LIMIT 1;`,
+        {
+            transaction,
+            replacements: {
+                tableName,
+                columnName
+            }
+        }
+    );
+
+    return results?.[0]?.udt_name ?? null;
+};
+
 module.exports = {
     async up(queryInterface) {
         if (queryInterface.sequelize.getDialect() !== 'postgres') {
@@ -26,14 +46,31 @@ module.exports = {
         }
 
         await queryInterface.sequelize.transaction(async (transaction) => {
-            const newTypeExists = await doesTypeExist(queryInterface, transaction, NEW_ENUM_NAME);
-            if (newTypeExists) {
+            const columnUdtName = await getColumnUdtName(queryInterface, transaction, 'Users', 'role');
+
+            if (!columnUdtName) {
+                return;
+            }
+
+            if (columnUdtName === NEW_ENUM_NAME) {
+                return;
+            }
+
+            if (columnUdtName !== OLD_ENUM_NAME) {
                 return;
             }
 
             const oldTypeExists = await doesTypeExist(queryInterface, transaction, OLD_ENUM_NAME);
             if (!oldTypeExists) {
                 return;
+            }
+
+            const newTypeExists = await doesTypeExist(queryInterface, transaction, NEW_ENUM_NAME);
+            if (newTypeExists) {
+                await queryInterface.sequelize.query(
+                    `DROP TYPE "${NEW_ENUM_NAME}";`,
+                    { transaction }
+                );
             }
 
             await queryInterface.sequelize.query(
