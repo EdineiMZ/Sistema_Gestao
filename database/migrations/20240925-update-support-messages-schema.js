@@ -15,14 +15,19 @@ const AGENT_ROLE_HINTS = Object.freeze([
 ]);
 
 const isTableMissingError = (error) => {
-    const driverCode = error?.original?.code;
-    const message = error?.message ?? '';
+    const driverCode = error?.original?.code || error?.parent?.code;
+    const message = [
+        error?.message,
+        error?.original?.message,
+        error?.parent?.message
+    ].filter(Boolean).join(' ') || '';
 
     return driverCode === 'ER_NO_SUCH_TABLE' ||
         driverCode === 'SQLITE_ERROR' ||
         /does not exist/i.test(message) ||
         /no such table/i.test(message) ||
-        /unknown table/i.test(message);
+        /unknown table/i.test(message) ||
+        /no description found/i.test(message);
 };
 
 const tableExists = async (queryInterface, tableName, options = {}) => {
