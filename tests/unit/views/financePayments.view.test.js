@@ -4,7 +4,7 @@ const ejs = require('ejs');
 const { USER_ROLES, ROLE_LABELS, getRoleLevel } = require('../../../src/constants/roles');
 const { FINANCE_RECURRING_INTERVALS } = require('../../../src/constants/financeRecurringIntervals');
 
-const viewPath = path.join(__dirname, '../../../src/views/finance/manageFinance.ejs');
+const viewPath = path.join(__dirname, '../../../src/views/finance/payments.ejs');
 
 const buildViewContext = () => ({
     pageTitle: 'Gestão financeira',
@@ -28,6 +28,8 @@ const buildViewContext = () => ({
             status: 'paid',
             recurring: true,
             recurringInterval: 'Mensal',
+            financeCategoryId: 11,
+            category: { id: 11, name: 'Consultorias', color: '#2563eb' },
             attachments: [
                 {
                     id: 701,
@@ -37,11 +39,6 @@ const buildViewContext = () => ({
             ]
         }
     ],
-    financeProjections: [],
-    projectionHighlight: null,
-    projectionAlerts: [],
-    financeGoals: [],
-    goalSummary: { total: 0, alerts: 0 },
     financeTotals: {
         receivable: 3200.75,
         payable: 1850.25,
@@ -50,45 +47,39 @@ const buildViewContext = () => ({
         paid: 2200.55,
         pending: 980.35
     },
+    summaryStatus: {
+        receivable: { pending: 1200.4, paid: 1600.35, overdue: 400, cancelled: 0 },
+        payable: { pending: 900.2, paid: 750.05, overdue: 200, cancelled: 0 }
+    },
     monthlySummary: [
         { month: '2024-04', receivable: 1600.5, payable: 920.15 },
         { month: '2024-05', receivable: 1600.25, payable: 930.1 }
     ],
-    statusSummary: {
-        receivable: { pending: 1200.4, paid: 1600.35, overdue: 400, cancelled: 0 },
-        payable: { pending: 900.2, paid: 750.05, overdue: 200, cancelled: 0 }
-    },
     filters: {
         startDate: '2024-05-01',
         endDate: '2024-05-31',
         type: 'receivable',
-        status: 'paid',
-        investmentPeriodMonths: 6,
-        investmentContribution: 200,
-        investmentContributionFrequency: 'monthly'
+        status: 'paid'
     },
-    investmentSimulation: {
-        categories: [
+    categories: [
+        { id: 11, name: 'Consultorias', color: '#2563eb' },
+        { id: 12, name: 'Marketing', color: '#9333ea' }
+    ],
+    recurringIntervalOptions: FINANCE_RECURRING_INTERVALS,
+    importPreview: {
+        entries: [
             {
-                categoryId: 11,
-                categoryName: 'Consultorias',
-                principal: 1500,
-                monthlyContribution: 200,
-                periodMonths: 6,
-                rateSource: 'user',
-                simple: { futureValue: 1800 },
-                compound: { futureValue: 1850 }
+                description: 'Pagamento fornecedor',
+                type: 'payable',
+                value: '800.00',
+                dueDate: '2024-06-10',
+                paymentDate: null,
+                status: 'pending',
+                conflicts: []
             }
         ],
-        totals: {
-            principal: 1500,
-            contributions: 1200,
-            simpleFutureValue: 1800,
-            compoundFutureValue: 1850,
-            interestDelta: 50
-        },
-        options: { defaultPeriodMonths: 6 },
-        generatedAt: new Date().toISOString()
+        totals: { new: 1, conflicting: 0, total: 1 },
+        uploadedAt: new Date().toISOString()
     },
     success_msg: null,
     error_msg: null,
@@ -96,19 +87,20 @@ const buildViewContext = () => ({
     notifications: []
 });
 
-describe('views/finance/manageFinance', () => {
+describe('views/finance/payments', () => {
     it('renders export buttons pointing to PDF and Excel routes', async () => {
         const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
 
         expect(html).toContain('href="/finance/export/pdf"');
         expect(html).toContain('data-export-target="/finance/export/pdf"');
         expect(html).toContain('Exportar PDF');
-        expect(html).toContain('aria-label="Exportar lançamentos filtrados em PDF"');
 
         expect(html).toContain('href="/finance/export/excel"');
         expect(html).toContain('data-export-target="/finance/export/excel"');
         expect(html).toContain('Exportar Excel');
-        expect(html).toContain('aria-label="Exportar lançamentos filtrados em Excel"');
+
+        expect(html).toContain('role="group"');
+        expect(html).toContain('aria-label="Exportar lançamentos financeiros"');
 
         expect(html).toContain('option value="monthly"');
         expect(html).toContain('>Mensal<');
@@ -124,9 +116,6 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('value="2024-05-31"');
         expect(html).toContain('<option value="receivable" selected>');
         expect(html).toContain('<option value="paid" selected>');
-        expect(html).toContain('name="investmentPeriodMonths"');
-        expect(html).toContain('name="investmentContribution"');
-        expect(html).toContain('name="investmentContributionFrequency"');
         expect(html).toContain('data-auto-submit="true"');
     });
 
@@ -134,18 +123,12 @@ describe('views/finance/manageFinance', () => {
         const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
         const normalizedHtml = html.replace(/\u00a0/g, ' ');
 
-        expect(normalizedHtml).toContain('Visão consolidada');
         expect(normalizedHtml).toContain('Performance mensal');
         expect(normalizedHtml).toContain('Status por categoria');
         expect(normalizedHtml).toContain('R$ 3.200,75');
         expect(normalizedHtml).toContain('R$ 1.850,25');
-        expect(normalizedHtml).toContain('abril de 2024');
-        expect(normalizedHtml).toContain('maio de 2024');
         expect(normalizedHtml).toContain('financePerformanceChart');
         expect(normalizedHtml).toContain('chart.umd.min.js');
-        expect(normalizedHtml).toContain('Simulação de investimentos');
-        expect(normalizedHtml).toContain('Consultorias');
-        expect(normalizedHtml).toContain('Ganho adicional estimado');
     });
 
     it('exibe controles de upload e anexos vinculados aos lançamentos', async () => {
@@ -158,5 +141,13 @@ describe('views/finance/manageFinance', () => {
         expect(html).toContain('comprovante.pdf');
         expect(html).toContain('bi bi-paperclip');
     });
-});
 
+    it('renders import preview with selection controls', async () => {
+        const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
+
+        expect(html).toContain('Prévia de importação');
+        expect(html).toContain('data-import-select-all');
+        expect(html).toContain('name="entries[0][enabled]"');
+        expect(html).toContain('Importar lançamentos selecionados');
+    });
+});

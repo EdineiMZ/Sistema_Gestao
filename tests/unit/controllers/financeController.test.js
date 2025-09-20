@@ -55,7 +55,7 @@ describe('financeController', () => {
             })
         );
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
-        expect(res.redirect).toHaveBeenCalledWith('/finance');
+        expect(res.redirect).toHaveBeenCalledWith('/finance/payments');
     });
 
     it('mapeia rótulos traduzidos para intervalos aceitos ao atualizar um lançamento', async () => {
@@ -102,6 +102,6 @@ describe('financeController', () => {
         expect(entry.status).toBe('paid');
         expect(save).toHaveBeenCalledTimes(1);
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
-        expect(res.redirect).toHaveBeenCalledWith('/finance');
+        expect(res.redirect).toHaveBeenCalledWith('/finance/payments');
     });
 });

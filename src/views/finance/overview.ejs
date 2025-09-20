@@ -1,0 +1,497 @@
+<%- include('../partials/header') %>
+
+<%
+    const ejsLocals = typeof locals !== 'undefined' && locals ? locals : {};
+    const intlCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+    const formatCurrencyFn = typeof formatCurrency === 'function'
+        ? formatCurrency
+        : (value) => intlCurrencyFormatter.format(Number(value) || 0);
+    const totalsSource = financeTotals && typeof financeTotals === 'object' ? financeTotals : {};
+    const summaryTotals = {
+        receivable: Number(totalsSource.receivable || 0),
+        payable: Number(totalsSource.payable || 0),
+        overdue: Number(totalsSource.overdue || 0),
+        paid: Number(totalsSource.paid || 0),
+        pending: Number(totalsSource.pending || 0)
+    };
+    let netAmount = Number(totalsSource.net);
+    if (!Number.isFinite(netAmount)) {
+        netAmount = summaryTotals.receivable - summaryTotals.payable;
+    }
+    const netClass = netAmount > 0 ? 'text-success' : netAmount < 0 ? 'text-danger' : 'text-muted';
+    const projectionsList = Array.isArray(projections) ? projections : [];
+    const alertsList = Array.isArray(projectionAlerts) ? projectionAlerts : [];
+    const goalsList = Array.isArray(financeGoals) ? financeGoals : [];
+    const goalSummarySource = typeof res !== 'undefined' && res && typeof res.locals === 'object'
+        && typeof res.locals.financeGoalSummary === 'object'
+        ? res.locals.financeGoalSummary
+        : (typeof financeGoalSummary === 'object' ? financeGoalSummary : null);
+    const goalSummary = goalSummarySource;
+    const thresholdsDefaults = { overdueDays: 0, spendingAlertPercent: 0, netGoalFloor: 0 };
+    const thresholdSource = financeThresholds && typeof financeThresholds === 'object'
+        ? financeThresholds
+        : (ejsLocals.financeThresholds && typeof ejsLocals.financeThresholds === 'object'
+            ? ejsLocals.financeThresholds
+            : thresholdsDefaults);
+    const resolvedThresholds = {
+        overdueDays: Number.isFinite(Number(thresholdSource.overdueDays)) ? Number(thresholdSource.overdueDays) : thresholdsDefaults.overdueDays,
+        spendingAlertPercent: Number.isFinite(Number(thresholdSource.spendingAlertPercent))
+            ? Number(thresholdSource.spendingAlertPercent)
+            : thresholdsDefaults.spendingAlertPercent,
+        netGoalFloor: Number.isFinite(Number(thresholdSource.netGoalFloor)) ? Number(thresholdSource.netGoalFloor) : thresholdsDefaults.netGoalFloor
+    };
+    const thresholdsJson = typeof thresholdValuesJson === 'string'
+        ? thresholdValuesJson
+        : JSON.stringify(resolvedThresholds);
+    const thresholdsEndpoint = typeof financeThresholdsEndpoint === 'string' && financeThresholdsEndpoint.trim()
+        ? financeThresholdsEndpoint.trim()
+        : '/finance/thresholds';
+    const resolvedCsrfToken = typeof csrfToken === 'string' && csrfToken
+        ? csrfToken
+        : (typeof ejsLocals.csrfToken === 'string' ? ejsLocals.csrfToken : '');
+    const highlight = typeof highlightProjection !== 'undefined' ? highlightProjection : null;
+    const periodText = typeof periodLabel === 'string' && periodLabel.trim() ? periodLabel.trim() : 'Todo o período';
+    const categoriesSource = typeof categories !== 'undefined' ? categories : ejsLocals.categories;
+    const categoriesList = Array.isArray(categoriesSource) ? categoriesSource : [];
+    const budgetStatusPaletteSource = typeof budgetStatusPalette !== 'undefined'
+        ? budgetStatusPalette
+        : ejsLocals.budgetStatusPalette;
+    const budgetStatusPaletteData = budgetStatusPaletteSource && typeof budgetStatusPaletteSource === 'object'
+        ? budgetStatusPaletteSource
+        : null;
+    const budgetStateJson = typeof budgetState === 'string'
+        ? budgetState
+        : (typeof ejsLocals.budgetState === 'string' ? ejsLocals.budgetState : null);
+%>
+
+<%- include('./partials/pageHeader', {
+    chip: { label: 'Saúde financeira', icon: 'bi-cash-stack' },
+    title: 'Gerenciar finanças estratégicas',
+    description: 'Visão consolidada de limites, metas e projeções para decisões rápidas.',
+    breadcrumbs: [
+        { label: 'Início', href: '/' },
+        { label: 'Financeiro', href: '/finance/overview' }
+    ],
+    meta: [
+        { label: 'Lançamentos', value: typeof entriesCount === 'number' ? entriesCount : 0 },
+        { label: 'Período analisado', value: periodText }
+    ],
+    actions: [
+        { label: 'Gerenciar lançamentos', href: '/finance/payments', variant: 'primary', icon: 'bi-list-check' },
+        { label: 'Abrir orçamentos', href: '/finance/budgets', variant: 'outline-primary', icon: 'bi-kanban' }
+    ]
+}) %>
+
+<div class="row fade-in responsive-page-row gy-4">
+    <div class="col-12">
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-check-circle me-2"></i>
+                <%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="5000">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <%= error_msg %>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel" data-quick-metrics>
+            <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start align-items-xl-center gap-4">
+                <div>
+                    <h3 class="fw-semibold mb-2">Visão rápida de resultados</h3>
+                    <p class="text-muted mb-0">Indicadores consolidados para acompanhar recebimentos, pagamentos e saldo projetado.</p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-outline-primary" href="/finance/budgets">
+                        <i class="bi bi-kanban me-2" aria-hidden="true"></i>
+                        Abrir painel de orçamentos
+                    </a>
+                </div>
+            </div>
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3 mt-4">
+                <div class="col">
+                    <div class="border rounded-4 px-4 py-3 h-100 shadow-sm bg-light-subtle">
+                        <span class="text-muted small d-block">A receber</span>
+                        <span class="fs-4 fw-semibold d-block"><%= formatCurrencyFn(summaryTotals.receivable) %></span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="border rounded-4 px-4 py-3 h-100 shadow-sm bg-light-subtle">
+                        <span class="text-muted small d-block">A pagar</span>
+                        <span class="fs-4 fw-semibold d-block"><%= formatCurrencyFn(summaryTotals.payable) %></span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="border rounded-4 px-4 py-3 h-100 shadow-sm bg-light-subtle">
+                        <span class="text-muted small d-block">Saldo projetado</span>
+                        <span class="fs-4 fw-semibold d-block <%= netClass %>"><%= formatCurrencyFn(netAmount) %></span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="border rounded-4 px-4 py-3 h-100 shadow-sm bg-light-subtle">
+                        <span class="text-muted small d-block">Em atraso</span>
+                        <span class="fs-4 fw-semibold d-block text-warning"><%= formatCurrencyFn(summaryTotals.overdue) %></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel" data-thresholds-container>
+            <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start align-items-xl-center gap-4">
+                <div>
+                    <h3 class="fw-semibold mb-1">Limites e alertas globais</h3>
+                    <p class="text-muted mb-0">Configure limites de atraso, consumo e objetivo mínimo para antecipar riscos financeiros.</p>
+                </div>
+                <div class="text-muted small">
+                    Ajuste os indicadores para alinhar alertas automáticos com a estratégia da empresa.
+                </div>
+            </div>
+            <form
+                action="<%= thresholdsEndpoint %>"
+                method="POST"
+                class="mt-4"
+                data-thresholds-form
+                data-endpoint="<%= thresholdsEndpoint %>"
+                data-method="PATCH"
+                data-initial-thresholds="<%= thresholdsJson %>"
+                novalidate
+            >
+                <% if (resolvedCsrfToken) { %>
+                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                <% } %>
+                <div class="row g-4">
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Prazo máximo de atraso</h4>
+                                    <p class="text-muted small mb-0">Número de dias até que um lançamento seja considerado crítico.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-alarm" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-overdue-days">Dias até alerta</label>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-overdue-days"
+                                        name="overdueDays"
+                                        value="<%= resolvedThresholds.overdueDays %>"
+                                        min="0"
+                                        step="1"
+                                        required
+                                        data-threshold-input
+                                        data-threshold-field="overdueDays"
+                                    />
+                                    <span class="input-group-text">dias</span>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Alerta utilizado para destacar pendências com maior urgência.</p>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Alerta de consumo</h4>
+                                    <p class="text-muted small mb-0">Percentual que dispara avisos de gasto próximo do limite.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-graph-up" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-spending-percent">Percentual de alerta</label>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-spending-percent"
+                                        name="spendingAlertPercent"
+                                        value="<%= resolvedThresholds.spendingAlertPercent %>"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        required
+                                        data-threshold-input
+                                        data-threshold-field="spendingAlertPercent"
+                                    />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Recomenda-se manter entre 60% e 90% conforme risco tolerado.</p>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="border rounded-4 p-4 h-100 shadow-sm bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h4 class="h6 fw-semibold mb-1">Objetivo de saldo líquido</h4>
+                                    <p class="text-muted small mb-0">Valor mínimo projetado para garantir a saúde financeira.</p>
+                                </div>
+                                <span class="badge rounded-circle bg-light text-muted p-3 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-bullseye" aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small" for="threshold-net-goal">Saldo desejado</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="threshold-net-goal"
+                                        name="netGoalFloor"
+                                        value="<%= resolvedThresholds.netGoalFloor %>"
+                                        min="0"
+                                        step="0.01"
+                                        required
+                                        data-threshold-input
+                                        data-threshold-field="netGoalFloor"
+                                    />
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0">Utilizado para comparar com projeções mensais e metas cadastradas.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <button type="reset" class="btn btn-outline-secondary">Restaurar</button>
+                    <button type="submit" class="btn btn-gradient">Salvar configurações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <%- include('./components/budgetOverviewPanel', {
+            budgetCards,
+            categoryConsumption,
+            budgetMonths,
+            activeBudgetMonth,
+            activeBudgetConsumption,
+            activeBudgetLimit,
+            activeBudgetUsage,
+            budgetStatusPalette: budgetStatusPaletteData,
+            formatCurrency: formatCurrencyFn,
+            allowEditing: true,
+            manageLink: '/finance/budgets'
+        }) %>
+    </div>
+
+    <div class="col-12 col-xxl-8">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+                    <div>
+                        <h3 class="fw-semibold mb-1">Metas e projeções</h3>
+                        <p class="text-muted mb-0">Acompanhe se o saldo projetado atende as metas mensais configuradas.</p>
+                    </div>
+                    <div class="text-lg-end">
+                        <span class="badge rounded-pill bg-light text-muted me-2">
+                            <i class="bi bi-calendar-week me-1"></i>
+                            <%= projectionsList.length %> períodos monitorados
+                        </span>
+                        <span class="badge rounded-pill <%= goalSummary && goalSummary.alerts ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success' %>">
+                            <i class="bi bi-bullseye me-1"></i>
+                            <%= goalSummary && goalSummary.alerts ? `${goalSummary.alerts} meta(s) em atenção` : 'Metas sob controle' %>
+                        </span>
+                    </div>
+                </div>
+                <% if (alertsList.length) { %>
+                    <div class="alert alert-warning border-0 d-flex align-items-center gap-2" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>
+                            <strong><%= alertsList.length %></strong>
+                            <%= alertsList.length === 1 ? 'meta' : 'metas' %> com projeção abaixo do objetivo.
+                        </span>
+                    </div>
+                <% } %>
+                <div class="projection-highlight border rounded-3 p-3 bg-light-subtle mb-3">
+                    <% if (highlight) { %>
+                        <% const highlightGoal = highlight.goal || {}; %>
+                        <% const gapValue = typeof highlightGoal.gapToGoal === 'number' ? highlightGoal.gapToGoal : null; %>
+                        <% const gapLabel = gapValue !== null ? `${gapValue >= 0 ? '+' : '-'}${formatCurrencyFn(Math.abs(gapValue))}` : '—'; %>
+                        <% const gapClass = gapValue !== null ? (gapValue >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
+                        <% const statusClass = highlightGoal.achieved === true ? 'badge bg-success-subtle text-success' : highlightGoal.achieved === false ? 'badge bg-danger-subtle text-danger' : 'badge bg-secondary-subtle text-secondary'; %>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div>
+                                <p class="text-muted small mb-1">Próxima meta monitorada</p>
+                                <h4 class="fw-semibold mb-0"><%= highlight.label || highlight.month %></h4>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-semibold"><%= formatCurrencyFn(Number(highlight.projected?.net || 0)) %></div>
+                                <div class="text-muted small">
+                                    Meta: <span class="fw-semibold"><%= highlightGoal.targetNetAmount !== null && highlightGoal.targetNetAmount !== undefined ? formatCurrencyFn(highlightGoal.targetNetAmount) : '—' %></span>
+                                </div>
+                                <div class="text-muted small">
+                                    Diferença: <span class="fw-semibold <%= gapClass %>"><%= gapLabel %></span>
+                                </div>
+                                <span class="<%= statusClass %>">
+                                    <%= highlightGoal.achieved === true ? 'Meta atingida' : highlightGoal.achieved === false ? 'Meta em risco' : 'Meta registrada' %>
+                                </span>
+                            </div>
+                        </div>
+                    <% } else { %>
+                        <p class="text-muted small mb-0">Cadastre uma meta mensal para visualizar projeções detalhadas.</p>
+                    <% } %>
+                </div>
+                <div class="table-responsive table-modern responsive-table">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Mês</th>
+                                <th>Saldo projetado</th>
+                                <th>Meta líquida</th>
+                                <th>Diferença</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!projectionsList.length) { %>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted small">Nenhuma projeção disponível.</td>
+                                </tr>
+                            <% } else { %>
+                                <% projectionsList.forEach((item) => { %>
+                                    <% const goal = item.goal || {}; %>
+                                    <% const gapValue = typeof goal.gapToGoal === 'number' ? goal.gapToGoal : null; %>
+                                    <% const gapLabel = gapValue !== null ? `${gapValue >= 0 ? '+' : '-'}${formatCurrencyFn(Math.abs(gapValue))}` : '—'; %>
+                                    <% const gapClass = gapValue !== null ? (gapValue >= 0 ? 'text-success' : 'text-danger') : 'text-muted'; %>
+                                    <% const rowClass = item.needsAttention ? 'table-warning' : (item.isCurrent ? 'table-active' : ''); %>
+                                    <% const statusLabel = goal.achieved === true ? 'Meta atingida' : goal.achieved === false ? 'Meta em risco' : goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? 'Meta registrada' : 'Sem meta'; %>
+                                    <% const statusClass = goal.achieved === true ? 'badge bg-success-subtle text-success' : goal.achieved === false ? 'badge bg-danger-subtle text-danger' : goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? 'badge bg-secondary-subtle text-secondary' : 'badge bg-light text-muted'; %>
+                                    <tr class="<%= rowClass %>">
+                                        <td><%= item.label || item.month %></td>
+                                        <td><%= formatCurrencyFn(Number(item.projected?.net || 0)) %></td>
+                                        <td><%= goal.targetNetAmount !== null && goal.targetNetAmount !== undefined ? formatCurrencyFn(goal.targetNetAmount) : '—' %></td>
+                                        <td class="<%= gapClass %>"><%= gapLabel %></td>
+                                        <td class="text-center"><span class="<%= statusClass %>"><%= statusLabel %></span></td>
+                                    </tr>
+                                <% }); %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body">
+                <h4 class="fw-semibold mb-3">Configurar metas mensais</h4>
+                <form action="/finance/goals" method="POST" class="row g-3">
+                    <% if (resolvedCsrfToken) { %>
+                        <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                    <% } %>
+                    <div class="col-12">
+                        <label class="form-label">Mês da meta</label>
+                        <input type="month" class="form-control" name="month" value="<%= highlight ? highlight.month : '' %>" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Saldo líquido desejado (R$)</label>
+                        <input type="number" step="0.01" min="0" class="form-control" name="targetNetAmount" placeholder="Ex.: 15000" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Notas (opcional)</label>
+                        <textarea class="form-control" name="notes" rows="2" maxlength="255" placeholder="Reforços ou observações"></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end gap-2">
+                        <button type="reset" class="btn btn-outline-secondary btn-sm">Limpar</button>
+                        <button type="submit" class="btn btn-gradient btn-sm">Salvar meta</button>
+                    </div>
+                </form>
+                <hr class="my-4" />
+                <h5 class="fw-semibold mb-3">Metas cadastradas</h5>
+                <% if (!goalsList.length) { %>
+                    <p class="text-muted small mb-0">Nenhuma meta cadastrada até o momento.</p>
+                <% } else { %>
+                    <div class="list-group list-group-flush">
+                        <% goalsList.forEach((goal) => { %>
+                            <div class="list-group-item px-0">
+                                <div class="d-flex flex-column gap-2">
+                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                        <div>
+                                            <h6 class="fw-semibold mb-1"><%= goal.monthLabel %></h6>
+                                            <p class="text-muted small mb-1">Meta: <span class="fw-semibold"><%= goal.formattedAmount %></span></p>
+                                            <% if (goal.notes) { %>
+                                                <p class="text-muted small mb-0"><i class="bi bi-chat-left-text me-1"></i><%= goal.notes %></p>
+                                            <% } %>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#goalEdit<%= goal.id %>" aria-expanded="false" aria-controls="goalEdit<%= goal.id %>">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form action="/finance/goals/<%= goal.id %>?_method=DELETE" method="POST" class="d-inline">
+                                                <% if (resolvedCsrfToken) { %>
+                                                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                                                <% } %>
+                                                <button class="btn btn-outline-danger btn-sm" type="submit">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    <div class="collapse" id="goalEdit<%= goal.id %>">
+                                        <form action="/finance/goals" method="POST" class="row g-3 mt-2">
+                                            <% if (resolvedCsrfToken) { %>
+                                                <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                                            <% } %>
+                                            <input type="hidden" name="goalId" value="<%= goal.id %>" />
+                                            <div class="col-12">
+                                                <label class="form-label">Mês</label>
+                                                <input type="month" class="form-control" name="month" value="<%= goal.monthKey %>" required />
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Meta líquida (R$)</label>
+                                                <input type="number" step="0.01" min="0" class="form-control" name="targetNetAmount" value="<%= goal.targetNetAmountInput %>" required />
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Notas</label>
+                                                <textarea class="form-control" name="notes" rows="2" maxlength="255"><%= goal.notes %></textarea>
+                                            </div>
+                                            <div class="col-12 d-flex justify-content-end gap-2">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#goalEdit<%= goal.id %>">Cancelar</button>
+                                                <button type="submit" class="btn btn-gradient btn-sm">Atualizar meta</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    referrerpolicy="no-referrer"
+    defer
+></script>
+<script type="application/json" id="financeBudgetState">
+    <%- budgetStateJson || JSON.stringify({
+        budgets: Array.isArray(budgetCards) ? budgetCards : [],
+        categoryConsumption: Array.isArray(categoryConsumption) ? categoryConsumption : [],
+        budgetMonths: Array.isArray(budgetMonths) ? budgetMonths : [],
+        activeBudgetMonth,
+        budgetStatusMeta: budgetStatusPaletteData || {}
+    }) %>
+</script>
+<script defer src="/js/financeBudgets.js"></script>
+
+<%- include('../partials/footer') %>

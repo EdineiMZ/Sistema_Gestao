@@ -38,8 +38,28 @@ const parseFinanceAllowedRoles = (value) => {
 const FINANCE_ALLOWED_ROLES = parseFinanceAllowedRoles(process.env.FINANCE_ALLOWED_ROLES);
 const requireFinanceAccess = permissionMiddleware(FINANCE_ALLOWED_ROLES);
 
+const prefersJsonResponse = (req) => {
+    if (req.xhr) {
+        return true;
+    }
+
+    const acceptHeader = req.get('Accept');
+    if (acceptHeader && acceptHeader.includes('application/json')) {
+        return true;
+    }
+
+    if (req.query && (req.query.format === 'json' || req.query.format === 'JSON')) {
+        return true;
+    }
+
+    return false;
+};
+
 // As rotas financeiras exigem autenticação e os perfis configurados
-router.get('/', authMiddleware, requireFinanceAccess, financeController.listFinanceEntries);
+router.get('/', authMiddleware, requireFinanceAccess, financeController.redirectToOverview);
+router.get('/overview', authMiddleware, requireFinanceAccess, financeController.renderOverview);
+router.get('/payments', authMiddleware, requireFinanceAccess, financeController.renderPaymentsPage);
+router.get('/investments', authMiddleware, requireFinanceAccess, financeController.renderInvestmentsPage);
 router.post(
     '/import/preview',
     authMiddleware,
@@ -200,6 +220,12 @@ router.get(
     '/budgets',
     authMiddleware,
     requireFinanceAccess,
+    (req, res, next) => {
+        if (prefersJsonResponse(req)) {
+            return next();
+        }
+        return financeController.renderBudgetsPage(req, res, next);
+    },
     audit('financeBudget.list', (req) => {
         const categoryId = req.query?.financeCategoryId || 'all';
         return `FinanceBudget:list:${categoryId}`;

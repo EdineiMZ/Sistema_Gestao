@@ -1,0 +1,80 @@
+<%- include('../partials/header') %>
+
+<%
+    const intlCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+    const formatCurrencyFn = typeof formatCurrency === 'function'
+        ? formatCurrency
+        : (value) => intlCurrencyFormatter.format(Number(value) || 0);
+    const consumptionTotal = Number(activeBudgetConsumption || 0);
+    const limitTotal = Number(activeBudgetLimit || 0);
+    const usageTotal = limitTotal > 0 ? (consumptionTotal / limitTotal) * 100 : 0;
+%>
+
+<%- include('./partials/pageHeader', {
+    chip: { label: 'Planejamento', icon: 'bi-kanban' },
+    title: 'Painel de orçamentos',
+    description: 'Configure limites por categoria, monitore consumo e ajuste alertas em tempo real.',
+    breadcrumbs: [
+        { label: 'Início', href: '/' },
+        { label: 'Financeiro', href: '/finance/overview' },
+        { label: 'Orçamentos' }
+    ],
+    meta: [
+        { label: 'Consumo atual', value: formatCurrencyFn(consumptionTotal) },
+        { label: 'Limite agregado', value: formatCurrencyFn(limitTotal) },
+        { label: 'Utilização', value: `${usageTotal.toFixed(1)}%` }
+    ],
+    actions: [
+        { label: 'Importar limites', href: '/finance/payments#import', variant: 'outline-primary', icon: 'bi-upload' }
+    ]
+}) %>
+
+<div class="row fade-in responsive-page-row gy-4">
+    <div class="col-12">
+        <div class="alert alert-info border-0 shadow-sm mb-0" role="alert">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <i class="bi bi-lightbulb" aria-hidden="true"></i>
+                <div>
+                    <strong>Dica:</strong> utilize os botões em cada cartão para ajustar limites de alerta sem precisar sair da página.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <%- include('./components/budgetOverviewPanel', {
+            budgetCards,
+            categoryConsumption,
+            budgetMonths,
+            activeBudgetMonth,
+            activeBudgetConsumption,
+            activeBudgetLimit,
+            activeBudgetUsage,
+            budgetStatusPalette,
+            formatCurrency: formatCurrencyFn,
+            allowEditing: true,
+            manageLink: null
+        }) %>
+    </div>
+</div>
+
+<script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    referrerpolicy="no-referrer"
+    defer
+></script>
+<script type="application/json" id="financeBudgetState">
+    <%- budgetState || JSON.stringify({
+        budgets: Array.isArray(budgetCards) ? budgetCards : [],
+        categoryConsumption: Array.isArray(categoryConsumption) ? categoryConsumption : [],
+        budgetMonths: Array.isArray(budgetMonths) ? budgetMonths : [],
+        activeBudgetMonth,
+        budgetStatusMeta: budgetStatusPalette || {}
+    }) %>
+</script>
+<script defer src="/js/financeBudgets.js"></script>
+
+<%- include('../partials/footer') %>

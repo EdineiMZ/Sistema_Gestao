@@ -58,4 +58,4 @@ Quando a rota é chamada via `Accept: application/json` ou `fetch/ajax`, o paylo
 
 ## Integração com relatórios
 
-O serviço `financeReportingService` utiliza os percentuais configurados para classificar o status de consumo (saudável, atenção, alerta ou crítico). Os valores são expostos na view `manageFinance` através das variáveis `budgetThresholdDefaults` e `budgetAlertsEnabled`, permitindo ajustar a interface conforme a configuração atual.
+O serviço `financeReportingService` utiliza os percentuais configurados para classificar o status de consumo (saudável, atenção, alerta ou crítico). Os valores são expostos nas páginas `finance/overview` e `finance/budgets` por meio do estado serializado `financeBudgetState`, permitindo ajustar a interface e os alertas inline de acordo com a configuração atual.

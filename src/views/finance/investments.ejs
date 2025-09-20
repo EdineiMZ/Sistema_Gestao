@@ -1,0 +1,174 @@
+<%- include('../partials/header') %>
+
+<%
+    const intlCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+    const formatCurrencyFn = typeof formatCurrency === 'function'
+        ? formatCurrency
+        : (value) => intlCurrencyFormatter.format(Number(value) || 0);
+    const investmentFilters = filters && typeof filters === 'object' ? filters : {};
+    const periodValue = investmentFilters.investmentPeriodMonths || '';
+    const contributionValue = investmentFilters.investmentContribution !== undefined && investmentFilters.investmentContribution !== null
+        ? Number(investmentFilters.investmentContribution).toFixed(2)
+        : '';
+    const frequencyValue = investmentFilters.investmentContributionFrequency || '';
+    const frequencyLabels = contributionFrequencyLabels && typeof contributionFrequencyLabels === 'object'
+        ? contributionFrequencyLabels
+        : {
+            monthly: 'Mensal',
+            quarterly: 'Trimestral',
+            yearly: 'Anual',
+            weekly: 'Semanal'
+        };
+    const simulation = investmentSimulation && typeof investmentSimulation === 'object' ? investmentSimulation : null;
+    const simulationCategories = Array.isArray(investmentSimulationCategories) ? investmentSimulationCategories : (simulation?.categories || []);
+    const totals = investmentSimulationTotals && typeof investmentSimulationTotals === 'object'
+        ? investmentSimulationTotals
+        : (simulation?.totals || null);
+    const hasResults = simulationCategories.length > 0;
+    const resolvedCategories = Array.isArray(categories) ? categories : [];
+%>
+
+<%- include('./partials/pageHeader', {
+    chip: { label: 'Planejamento', icon: 'bi-graph-up-arrow' },
+    title: 'Simulação de investimentos',
+    description: 'Projete rentabilidade com base nos lançamentos cadastrados e parâmetros personalizados.',
+    breadcrumbs: [
+        { label: 'Início', href: '/' },
+        { label: 'Financeiro', href: '/finance/overview' },
+        { label: 'Investimentos' }
+    ],
+    actions: [
+        { label: 'Ver pagamentos', href: '/finance/payments', variant: 'outline-primary', icon: 'bi-list-check' }
+    ]
+}) %>
+
+<div class="row fade-in responsive-page-row gy-4">
+    <div class="col-12 col-xl-4">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body">
+                <h3 class="fw-semibold mb-3">Parâmetros da simulação</h3>
+                <form class="row g-3" method="GET" action="/finance/investments" data-filter-form>
+                    <div class="col-12">
+                        <label class="form-label" for="investment-period">Horizonte (meses)</label>
+                        <input type="number" class="form-control" id="investment-period" name="investmentPeriodMonths" min="1" step="1" value="<%= periodValue %>" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="investment-contribution">Aporte mensal (R$)</label>
+                        <input type="number" class="form-control" id="investment-contribution" name="investmentContribution" step="0.01" min="0" value="<%= contributionValue %>" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="investment-frequency">Frequência de aporte</label>
+                        <select class="form-select" id="investment-frequency" name="investmentContributionFrequency">
+                            <option value="">Automático</option>
+                            <% Object.entries(frequencyLabels).forEach(([key, label]) => { %>
+                                <option value="<%= key %>" <%= frequencyValue === key ? 'selected' : '' %>><%= label %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="investment-category">Categoria de referência (opcional)</label>
+                        <select class="form-select" id="investment-category" name="financeCategoryId">
+                            <option value="">Todas</option>
+                            <% resolvedCategories.forEach((category) => { %>
+                                <option value="<%= category.id %>" <%= Number(investmentFilters.financeCategoryId) === Number(category.id) ? 'selected' : '' %>>
+                                    <%= category.name %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-12 d-flex justify-content-between gap-2">
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1" data-filter-clear>Limpar</button>
+                        <button type="submit" class="btn btn-gradient flex-grow-1">Atualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body d-flex flex-column gap-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <h3 class="fw-semibold mb-1">Resultado da simulação</h3>
+                        <p class="text-muted mb-0">Considera taxas configuradas nas categorias financeiras e aportes informados.</p>
+                    </div>
+                    <div class="text-muted small text-end">
+                        <% if (simulation?.generatedAt) { %>
+                            <div>Gerado em <%= new Date(simulation.generatedAt).toLocaleString('pt-BR') %></div>
+                        <% } %>
+                        <div>Horizonte: <span class="fw-semibold"><%= periodValue || simulation?.options?.defaultPeriodMonths || '—' %></span> mês(es)</div>
+                    </div>
+                </div>
+
+                <% if (!hasResults) { %>
+                    <div class="alert alert-info" role="alert">
+                        Cadastre taxas de juros nas categorias financeiras ou ajuste os filtros para visualizar projeções personalizadas.
+                    </div>
+                <% } else { %>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Categoria</th>
+                                    <th scope="col" class="text-end">Principal</th>
+                                    <th scope="col" class="text-end">Aporte mensal</th>
+                                    <th scope="col" class="text-end">Futuro (simples)</th>
+                                    <th scope="col" class="text-end">Futuro (composto)</th>
+                                    <th scope="col" class="text-end">Diferença</th>
+                                    <th scope="col" class="text-center">Origem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% simulationCategories.forEach((item) => { %>
+                                    <% const delta = (item.compound?.futureValue || 0) - (item.simple?.futureValue || 0); %>
+                                    <tr>
+                                        <td class="fw-semibold"><%= item.categoryName %></td>
+                                        <td class="text-end"><%= formatCurrencyFn(item.principal || 0) %></td>
+                                        <td class="text-end"><%= formatCurrencyFn(item.monthlyContribution || 0) %></td>
+                                        <td class="text-end"><%= formatCurrencyFn(item.simple?.futureValue || 0) %></td>
+                                        <td class="text-end"><%= formatCurrencyFn(item.compound?.futureValue || 0) %></td>
+                                        <td class="text-end <%= delta >= 0 ? 'text-success' : 'text-danger' %>"><%= formatCurrencyFn(delta) %></td>
+                                        <td class="text-center">
+                                            <% if (item.rateSource === 'user') { %>
+                                                <span class="badge text-bg-primary">Personalizada</span>
+                                            <% } else { %>
+                                                <span class="badge text-bg-secondary">Padrão</span>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-3 mt-3">
+                        <div class="col-12 col-md-4">
+                            <div class="bg-light rounded-3 p-3 h-100">
+                                <div class="text-muted small">Investimento inicial</div>
+                                <div class="fw-semibold fs-5"><%= formatCurrencyFn(totals?.principal || 0) %></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="bg-light rounded-3 p-3 h-100">
+                                <div class="text-muted small">Aportes acumulados</div>
+                                <div class="fw-semibold fs-5"><%= formatCurrencyFn(totals?.contributions || 0) %></div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="bg-light rounded-3 p-3 h-100">
+                                <div class="text-muted small">Ganho adicional estimado</div>
+                                <div class="fw-semibold fs-5 text-primary"><%= formatCurrencyFn(totals?.interestDelta || 0) %></div>
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

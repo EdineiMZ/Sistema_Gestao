@@ -46,7 +46,19 @@
         { label: 'Salas', route: '/rooms', icon: 'bi-door-open', minimumRole: 'manager', groups: ['menu'] },
         { label: 'Administração', route: '/admin', icon: 'bi-shield-check', minimumRole: 'admin', groups: ['menu', 'quick'] },
         { label: 'Usuários', route: '/users/manage', icon: 'bi-people', minimumRole: 'admin', groups: ['menu'] },
-        { label: 'Financeiro', route: '/finance', icon: 'bi-cash-coin', minimumRole: 'admin', groups: ['menu', 'quick'] },
+        {
+            label: 'Financeiro',
+            icon: 'bi-cash-coin',
+            minimumRole: 'admin',
+            groups: ['menu'],
+            children: [
+                { label: 'Visão geral', route: '/finance/overview', icon: 'bi-speedometer' },
+                { label: 'Orçamentos', route: '/finance/budgets', icon: 'bi-kanban' },
+                { label: 'Pagamentos', route: '/finance/payments', icon: 'bi-wallet2' },
+                { label: 'Investimentos', route: '/finance/investments', icon: 'bi-graph-up-arrow' }
+            ]
+        },
+        { label: 'Financeiro', route: '/finance/overview', icon: 'bi-cash-coin', minimumRole: 'admin', groups: ['quick'] },
         { label: 'Notificações', route: '/notifications', icon: 'bi-bell', minimumRole: 'admin', groups: ['menu'] }
     ];
 
@@ -63,28 +75,42 @@
             return null;
         }
 
-        const normalizedRoute = typeof item.route === 'string' ? item.route : '#';
+        const normalizedRoute = typeof item.route === 'string' ? item.route : (Array.isArray(item.children) && item.children.length
+            ? (typeof item.children[0].route === 'string' ? item.children[0].route : '#')
+            : '#');
+        const children = Array.isArray(item.children)
+            ? item.children.map((child) => normalizeNavItem(child)).filter(Boolean)
+            : [];
 
         return {
             route: normalizedRoute,
             label: typeof item.label === 'string' ? item.label : '',
-            icon: typeof item.icon === 'string' ? item.icon : 'bi-circle'
+            icon: typeof item.icon === 'string' ? item.icon : 'bi-circle',
+            children
         };
     };
 
     const dedupeByRoute = (items) => {
-        const seenRoutes = new Set();
+        const seenKeys = new Set();
 
         return items.filter((item) => {
-            if (!item || typeof item.route !== 'string') {
+            if (!item) {
                 return false;
             }
 
-            if (seenRoutes.has(item.route)) {
+            const key = typeof item.route === 'string' && item.route.trim()
+                ? item.route.trim()
+                : (item.label ? `label:${item.label}` : null);
+
+            if (!key) {
+                return true;
+            }
+
+            if (seenKeys.has(key)) {
                 return false;
             }
 
-            seenRoutes.add(item.route);
+            seenKeys.add(key);
             return true;
         });
     };
@@ -161,6 +187,42 @@
                         </a>
                     </li>
                 <% } else { %>
+                    <% if (navMenuItems.length) { %>
+                        <% navMenuItems.forEach((item) => { %>
+                            <% if (Array.isArray(item.children) && item.children.length) { %>
+                                <li class="nav-item dropdown">
+                                    <a
+                                        class="nav-link dropdown-toggle d-flex align-items-center gap-2"
+                                        href="#"
+                                        id="navDropdown-<%= item.label.replace(/\s+/g, '-') %>"
+                                        role="button"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                    >
+                                        <i class="bi <%= item.icon %>" aria-hidden="true"></i>
+                                        <span><%= item.label %></span>
+                                    </a>
+                                    <ul class="dropdown-menu shadow" aria-labelledby="navDropdown-<%= item.label.replace(/\s+/g, '-') %>">
+                                        <% item.children.forEach((child) => { %>
+                                            <li>
+                                                <a class="dropdown-item d-flex align-items-center gap-2" href="<%= child.route %>" data-nav-close="true">
+                                                    <i class="bi <%= child.icon %>" aria-hidden="true"></i>
+                                                    <span><%= child.label %></span>
+                                                </a>
+                                            </li>
+                                        <% }); %>
+                                    </ul>
+                                </li>
+                            <% } else { %>
+                                <li class="nav-item">
+                                    <a class="nav-link d-flex align-items-center gap-2" href="<%= item.route %>" data-nav-close="true">
+                                        <i class="bi <%= item.icon %>" aria-hidden="true"></i>
+                                        <span><%= item.label %></span>
+                                    </a>
+                                </li>
+                            <% } %>
+                        <% }); %>
+                    <% } %>
                     <li class="nav-item dropdown user-menu-item">
                         <a
                             class="nav-link dropdown-toggle d-flex align-items-center"
@@ -215,16 +277,32 @@
                             <% if (navMenuItems.length) { %>
                                 <li class="dropdown-header text-muted text-uppercase small">Navegação principal</li>
                                 <% navMenuItems.forEach((item) => { %>
-                                    <li>
-                                        <a
-                                            class="dropdown-item user-menu-link d-flex align-items-center gap-2"
-                                            href="<%= item.route %>"
-                                            data-nav-close="true"
-                                        >
-                                            <i class="bi <%= item.icon %> me-2"></i>
-                                            <span><%= item.label %></span>
-                                        </a>
-                                    </li>
+                                    <% if (Array.isArray(item.children) && item.children.length) { %>
+                                        <li><span class="dropdown-item-text text-muted fw-semibold"><%= item.label %></span></li>
+                                        <% item.children.forEach((child) => { %>
+                                            <li>
+                                                <a
+                                                    class="dropdown-item user-menu-link d-flex align-items-center gap-2 ps-4"
+                                                    href="<%= child.route %>"
+                                                    data-nav-close="true"
+                                                >
+                                                    <i class="bi <%= child.icon %> me-2"></i>
+                                                    <span><%= child.label %></span>
+                                                </a>
+                                            </li>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <li>
+                                            <a
+                                                class="dropdown-item user-menu-link d-flex align-items-center gap-2"
+                                                href="<%= item.route %>"
+                                                data-nav-close="true"
+                                            >
+                                                <i class="bi <%= item.icon %> me-2"></i>
+                                                <span><%= item.label %></span>
+                                            </a>
+                                        </li>
+                                    <% } %>
                                 <% }); %>
                                 <li><hr class="dropdown-divider" /></li>
                             <% } %>

@@ -8,7 +8,11 @@ const buildFinanceRoutes = () => {
     jest.resetModules();
 
     jest.doMock('../../src/controllers/financeController', () => ({
-        listFinanceEntries: jest.fn((req, res) => res.json({ ok: true, route: 'finance.list' })),
+        redirectToOverview: jest.fn((req, res) => res.json({ redirect: '/finance/overview' })),
+        renderOverview: jest.fn((req, res) => res.send('overview')),
+        renderBudgetsPage: jest.fn((req, res) => res.send('budgets')),
+        renderPaymentsPage: jest.fn((req, res) => res.send('payments')),
+        renderInvestmentsPage: jest.fn((req, res) => res.send('investments')),
         previewFinanceImport: jest.fn((req, res) => res.json({ ok: true, route: 'finance.preview' })),
         commitFinanceImport: jest.fn((req, res) => res.status(201).json({ ok: true, route: 'finance.commit' })),
         createFinanceEntry: jest.fn((req, res) => res.status(201).json({ ok: true, route: 'finance.create' })),
@@ -58,7 +62,7 @@ describe('Finance routes permissions', () => {
             .set('Accept', 'application/json');
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({ ok: true, route: 'finance.list' });
+        expect(response.body).toMatchObject({ redirect: '/finance/overview' });
     });
 
     it('bloqueia usuários fora da lista configurada de perfis permitidos', async () => {
@@ -84,6 +88,6 @@ describe('Finance routes permissions', () => {
             .set('Accept', 'application/json');
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({ ok: true, route: 'finance.list' });
+        expect(response.body).toMatchObject({ redirect: '/finance/overview' });
     });
 });
