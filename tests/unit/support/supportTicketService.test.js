@@ -182,6 +182,47 @@ describe('supportTicketService', () => {
         }), expect.objectContaining({ transaction: mockTransaction }));
     });
 
+    it('permite que o criador conclua o próprio chamado em andamento', async () => {
+        const ticket = mockTicketInstance({ id: 45, status: 'in_progress', creatorId: 21 });
+
+        mockTicketFindByPk.mockResolvedValueOnce(ticket);
+
+        await updateTicketStatus({
+            ticketId: 45,
+            status: 'resolved',
+            actor: { id: 21, role: 'client' }
+        });
+
+        expect(ticket.update).toHaveBeenCalledWith(expect.objectContaining({
+            status: 'resolved',
+            resolvedAt: expect.any(Date)
+        }), expect.objectContaining({ transaction: mockTransaction }));
+    });
+
+    it('bloqueia alteração de status para valor restrito por clientes', async () => {
+        const ticket = mockTicketInstance({ id: 46, status: 'pending', creatorId: 22 });
+
+        mockTicketFindByPk.mockResolvedValueOnce(ticket);
+
+        await expect(updateTicketStatus({
+            ticketId: 46,
+            status: 'in_progress',
+            actor: { id: 22, role: 'client' }
+        })).rejects.toThrow('Apenas a equipe de suporte pode alterar o status para este valor.');
+    });
+
+    it('impede que usuário não relacionado conclua chamado', async () => {
+        const ticket = mockTicketInstance({ id: 47, status: 'in_progress', creatorId: 23 });
+
+        mockTicketFindByPk.mockResolvedValueOnce(ticket);
+
+        await expect(updateTicketStatus({
+            ticketId: 47,
+            status: 'resolved',
+            actor: { id: 99, role: 'client' }
+        })).rejects.toThrow('Você não possui permissão para alterar o status deste chamado.');
+    });
+
     it('exige que atribuição seja feita para atendente válido', async () => {
         const ticket = mockTicketInstance({ id: 50 });
 

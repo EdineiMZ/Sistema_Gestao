@@ -462,9 +462,16 @@ const updateTicketStatus = async ({
             throw new Error('Você não possui permissão para alterar o status deste chamado.');
         }
 
-        if (!isAgent && normalizedStatus !== TICKET_STATUSES.PENDING) {
+    if (!isAgent) {
+        const creatorAllowedStatuses = new Set([
+            TICKET_STATUSES.PENDING,
+            TICKET_STATUSES.RESOLVED
+        ]);
+
+        if (!creatorAllowedStatuses.has(normalizedStatus)) {
             throw new Error('Apenas a equipe de suporte pode alterar o status para este valor.');
         }
+    }
 
         const updatePayload = { status: normalizedStatus };
 
