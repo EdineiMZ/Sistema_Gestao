@@ -365,7 +365,11 @@ const bindSocketEvents = () => {
     }
 
     socket.on('connect', () => {
-        if (!state.isAdmin) {
+        if (state.isAdmin) {
+            if (state.asAdmin) {
+                joinChat(true);
+            }
+        } else {
             joinChat(false);
         }
     });
@@ -378,6 +382,15 @@ const bindSocketEvents = () => {
 
     socket.on('support:agent:online', () => {
         setAgentStatus('Administrador conectado', 'primary');
+    });
+
+    socket.on('disconnect', () => {
+        state.joined = false;
+        state.joining = false;
+
+        if (state.isAdmin && elements.adminEntryButton) {
+            elements.adminEntryButton.classList.remove('d-none');
+        }
     });
 };
 
