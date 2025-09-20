@@ -190,6 +190,17 @@ router.post(
     })
 );
 
+router.get(
+    '/budgets',
+    authMiddleware,
+    requireFinanceAccess,
+    audit('financeBudget.list', (req) => {
+        const categoryId = req.query?.financeCategoryId || 'all';
+        return `FinanceBudget:list:${categoryId}`;
+    }),
+    adaptBudgetJsonResponse(budgetController.list)
+);
+
 router.put(
     '/budgets/:id',
     authMiddleware,
