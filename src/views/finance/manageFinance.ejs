@@ -18,13 +18,13 @@
     ? periodLabel.trim()
     : 'Todo o período'; %>
 <% const defaultFilters = {
-    startDate: '2024-05-01',
-    endDate: '2024-05-31',
-    type: 'receivable',
-    status: 'paid',
-    investmentPeriodMonths: 12,
-    investmentContribution: 0,
-    investmentContributionFrequency: 'monthly'
+    startDate: '',
+    endDate: '',
+    type: '',
+    status: '',
+    investmentPeriodMonths: '',
+    investmentContribution: '',
+    investmentContributionFrequency: ''
 }; %>
 <% const rawFilters = (typeof filters !== 'undefined' && filters && typeof filters === 'object') ? filters : {}; %>
 <% const filterValues = { ...defaultFilters, ...rawFilters }; %>
@@ -34,12 +34,12 @@
     ? budgetPageUrl.trim()
     : defaultBudgetPageUrl; %>
 <% const defaultSummaryTotals = {
-    receivable: 3200.75,
-    payable: 1850.25,
+    receivable: 0,
+    payable: 0,
     net: 0,
-    overdue: 450.2,
-    paid: 2200.55,
-    pending: 980.35
+    overdue: 0,
+    paid: 0,
+    pending: 0
 }; %>
 <% const summaryTotalsSource = (typeof financeTotals === 'object' && financeTotals) ? financeTotals : {}; %>
 <% const summaryTotals = { ...defaultSummaryTotals, ...summaryTotalsSource }; %>
@@ -51,18 +51,15 @@
 <% const formatCurrency = formatCurrencyFn; %>
 <% const netAmount = Number(summaryTotals.net || 0); %>
 <% const netClass = netAmount > 0 ? 'text-success' : netAmount < 0 ? 'text-danger' : 'text-muted'; %>
-<% const defaultMonthlySummary = [
-    { month: '2024-04', receivable: 1600.50, payable: 920.15 },
-    { month: '2024-05', receivable: 1600.25, payable: 930.10 }
-]; %>
+<% const defaultMonthlySummary = []; %>
 <% const monthlySummaryList = (typeof monthlySummary !== 'undefined' && Array.isArray(monthlySummary) && monthlySummary.length)
     ? monthlySummary
     : defaultMonthlySummary; %>
 <% const hasMonthlySummary = monthlySummaryList.length > 0; %>
 <% const summaryMonthly = monthlySummaryList; %>
 <% const defaultStatusSummary = {
-    receivable: { pending: 1200.4, paid: 1600.35, overdue: 400.0, cancelled: 0 },
-    payable: { pending: 900.2, paid: 750.05, overdue: 200.0, cancelled: 0 }
+    receivable: {},
+    payable: {}
 }; %>
 <% const statusSummaryData = (typeof statusSummary !== 'undefined' && typeof statusSummary === 'object' && statusSummary)
     ? statusSummary
