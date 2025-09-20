@@ -84,6 +84,13 @@ const adaptBudgetJsonResponse = (handler, { prepare } = {}) => async (req, res, 
     res.json = (payload) => {
         if (payload && typeof payload === 'object') {
             if (payload.success === true && Object.prototype.hasOwnProperty.call(payload, 'data')) {
+                if (Object.prototype.hasOwnProperty.call(payload, 'pagination')) {
+                    return originalJson({
+                        data: payload.data,
+                        pagination: payload.pagination
+                    });
+                }
+
                 return originalJson(payload.data);
             }
 
