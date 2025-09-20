@@ -138,7 +138,13 @@
     const navQuickActions = dedupeByRoute(providedQuickActions || computedQuickActions);
     const quickActionRoutes = new Set(navQuickActions.map((item) => item.route));
     const navMenuItems = dedupeByRoute(
-        (providedMenuItems || computedMenuItems).filter((item) => !quickActionRoutes.has(item.route))
+        (providedMenuItems || computedMenuItems).filter((item) => {
+            if (Array.isArray(item.children) && item.children.length) {
+                return true;
+            }
+
+            return !quickActionRoutes.has(item.route);
+        })
     );
 %>
 

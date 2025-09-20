@@ -2,9 +2,9 @@
 
 <% const safeTickets = Array.isArray(tickets) ? tickets : []; %>
 <% const statusBadgeClasses = {
-    open: 'bg-primary-subtle text-primary',
-    'in-progress': 'bg-warning-subtle text-warning',
-    closed: 'bg-success-subtle text-success'
+    pending: 'bg-warning-subtle text-warning',
+    in_progress: 'bg-primary-subtle text-primary',
+    resolved: 'bg-success-subtle text-success'
 }; %>
 <% const priorityDotClasses = {
     low: 'bg-success',
