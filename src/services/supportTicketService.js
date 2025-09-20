@@ -146,7 +146,19 @@ const mapTicketPayload = (ticketInstance) => {
         : ticketInstance;
 
     const attachments = Array.isArray(plain.attachments)
-        ? plain.attachments.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        ? plain.attachments
+            .slice()
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+            .map((attachment) => ({
+                id: attachment.id,
+                ticketId: attachment.ticketId,
+                messageId: attachment.messageId || null,
+                uploadedById: attachment.uploadedById || null,
+                fileName: attachment.fileName,
+                fileSize: attachment.fileSize || null,
+                contentType: attachment.contentType || null,
+                createdAt: attachment.createdAt
+            }))
         : [];
 
     const normalizedAttachments = attachments.map((attachment) => ({
@@ -229,12 +241,72 @@ const mapTicketPayload = (ticketInstance) => {
             : null,
         attachments: normalizedAttachments,
         messages: normalizedMessages
+            .map((message) => ({
+                ...message,
+                attachments: (message.attachments || []).map((attachment) => ({
+                    ...attachment,
+                    contentType: attachment.contentType || null
+                }))
+            })),
+        attachments,
+        attachmentCount: attachments.length
     };
 
     return {
         ...ticketPayload,
         ...buildTicketPresentation(ticketPayload)
     };
+};
+
+const getTicketById = async ({ ticketId }) => {
+    const numericId = Number.parseInt(ticketId, 10);
+
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+        throw new Error('Identificador de chamado inválido.');
+    }
+
+    const ticket = await SupportTicket.findByPk(numericId, {
+        include: [
+            {
+                model: User,
+                as: 'creator',
+                attributes: ['id', 'name', 'email', 'role']
+            },
+            {
+                model: User,
+                as: 'assignee',
+                attributes: ['id', 'name', 'email', 'role']
+            },
+            {
+                model: SupportMessage,
+                as: 'messages',
+                include: [
+                    {
+                        model: User,
+                        as: 'sender',
+                        attributes: ['id', 'name', 'role']
+                    }
+                ]
+            },
+            {
+                model: SupportAttachment,
+                as: 'attachments',
+                attributes: ['id', 'ticketId', 'messageId', 'uploadedById', 'fileName', 'fileSize', 'contentType', 'createdAt']
+            }
+        ],
+        order: [
+            [{ model: SupportMessage, as: 'messages' }, 'createdAt', 'ASC'],
+            [{ model: SupportAttachment, as: 'attachments' }, 'createdAt', 'ASC']
+        ]
+    });
+
+    if (!ticket) {
+        const error = new Error('Chamado não encontrado.');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return mapTicketPayload(ticket);
 };
 
 const listTicketsForUser = async ({ user, statusFilter = null }) => {
@@ -551,6 +623,7 @@ const assignTicket = async ({
 
 module.exports = {
     listTicketsForUser,
+    getTicketById,
     createTicket,
     addMessage,
     updateTicketStatus,
