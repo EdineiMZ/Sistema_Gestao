@@ -3,7 +3,6 @@ const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const { Server } = require('socket.io');
-const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const SequelizeStore = require('connect-session-sequelize')(session.Store);
 const flash = require('connect-flash');
@@ -14,6 +13,7 @@ const { initializeSupportChat } = require('./src/services/supportChatService');
 const { ensureFinanceEntriesUserId } = require('./src/services/ensureFinanceEntriesUserId');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
 const { getNavigationShortcuts, getMenuItems, getQuickActions } = require('./src/utils/navigation');
+const { generalRateLimiter } = require('./src/middlewares/rateLimiters');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 
@@ -113,13 +113,6 @@ app.use(
         }
     })
 );
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15min
-    max: 100,
-    message: 'Muitas requisições deste IP, tente novamente mais tarde.'
-});
-app.use(limiter);
-
 // Middlewares básicos
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -142,6 +135,9 @@ const sessionMiddleware = session({
 
 app.use(sessionMiddleware);
 app.use(flash());
+
+// Rate limiting
+app.use(generalRateLimiter);
 
 // Variáveis locais
 const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));

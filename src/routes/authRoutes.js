@@ -4,6 +4,7 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { validateRegister } = require('../middlewares/validateMiddleware');
 const upload = require('../middlewares/uploadMiddleware'); // multer config
+const { loginRateLimiter } = require('../middlewares/rateLimiters');
 
 // Página inicial
 router.get('/', (req, res) => {
@@ -13,8 +14,8 @@ router.get('/', (req, res) => {
 
 // Rotas de login
 router.get('/login', authController.showLogin);
-router.post('/login', authController.login);
-router.post('/login/verify-2fa', authController.verifyTwoFactor);
+router.post('/login', loginRateLimiter, authController.login);
+router.post('/login/verify-2fa', loginRateLimiter, authController.verifyTwoFactor);
 
 // Rotas de registro (cadastro de usuário) com validação
 // Rota GET /register (renderiza form)
