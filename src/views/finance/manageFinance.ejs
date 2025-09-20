@@ -78,6 +78,72 @@
     cancelled: 'Cancelado'
 }; %>
 <% const statusKeys = Object.keys(statusLabels); %>
+<% const defaultCategoryOptions = [
+    { id: null, name: 'Sem categoria', color: '#6c757d' },
+    { id: 101, name: 'Operacional', color: '#0d6efd' },
+    { id: 102, name: 'Receitas', color: '#198754' }
+]; %>
+<% const hasCategoryProp = typeof categories !== 'undefined' && Array.isArray(categories) && categories.length; %>
+<% const rawCategorySource = hasCategoryProp
+    ? categories
+    : ((typeof locals !== 'undefined' && locals && Array.isArray(locals.categories) && locals.categories.length)
+        ? locals.categories
+        : defaultCategoryOptions);
+%>
+<% const sanitizeCategoryOption = (category) => {
+    if (!category || typeof category !== 'object') {
+        return null;
+    }
+
+    const rawId = category.id ?? category.value ?? category.key ?? null;
+    const numericId = (() => {
+        if (rawId === null || rawId === undefined || rawId === '') {
+            return null;
+        }
+        const parsed = Number.parseInt(rawId, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })();
+
+    const name = (() => {
+        if (typeof category.name === 'string' && category.name.trim()) {
+            return category.name.trim();
+        }
+        if (typeof category.label === 'string' && category.label.trim()) {
+            return category.label.trim();
+        }
+        return 'Categoria sem nome';
+    })();
+
+    const color = (typeof category.color === 'string' && category.color.trim())
+        ? category.color.trim()
+        : '#6c757d';
+
+    return { id: numericId, name, color };
+}; %>
+<% const financeCategoryOptions = (() => {
+    const seen = new Set();
+    const normalized = [];
+    const source = Array.isArray(rawCategorySource) ? rawCategorySource : [];
+
+    source.forEach((category) => {
+        const option = sanitizeCategoryOption(category);
+        if (!option) {
+            return;
+        }
+        const key = option.id === null ? 'null' : String(option.id);
+        if (seen.has(key)) {
+            return;
+        }
+        seen.add(key);
+        normalized.push(option);
+    });
+
+    if (!seen.has('null')) {
+        normalized.unshift({ id: null, name: 'Sem categoria', color: '#6c757d' });
+    }
+
+    return normalized;
+})(); %>
 <% const typeLabels = {
     receivable: 'Receber',
     payable: 'Pagar'
@@ -1737,56 +1803,115 @@
     <div class="col-12 col-xxl-10">
         <div class="card card-soft responsive-panel">
             <h3 class="fw-semibold mb-2">Novo lançamento</h3>
-            <p class="text-muted mb-4">Cadastre receitas ou despesas com recorrência opcional e acompanhe tudo no painel.</p>
+            <p class="text-muted mb-4">Cadastre receitas ou despesas, defina categoria, status e datas para manter o painel sempre atualizado.</p>
             <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid">
-                <div class="col-md-5">
-                    <label class="form-label">Descrição</label>
+                <div class="col-md-4">
+                    <label class="form-label" for="new-entry-description">Descrição</label>
                     <input
                         type="text"
                         class="form-control"
+                        id="new-entry-description"
                         name="description"
                         required
                         placeholder="Ex.: Pagamento fornecedor"
                     />
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Tipo</label>
-                    <select class="form-select" name="type" required>
+                <div class="col-md-2">
+                    <label class="form-label" for="new-entry-type">Tipo</label>
+                    <select class="form-select" id="new-entry-type" name="type" required>
                         <option value="payable">Pagar</option>
                         <option value="receivable">Receber</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-category">Categoria (opcional)</label>
+                    <select
+                        class="form-select"
+                        id="new-entry-category"
+                        name="financeCategoryId"
+                        aria-describedby="new-entry-category-help"
+                    >
+                        <% financeCategoryOptions.forEach((category) => { %>
+                            <option
+                                value="<%= category.id === null ? '' : category.id %>"
+                                <%= category.id === null ? 'selected' : '' %>
+                            >
+                                <%= category.name %>
+                            </option>
+                        <% }) %>
+                    </select>
+                    <div class="form-text" id="new-entry-category-help">
+                        Use categorias para organizar relatórios ou deixe "Sem categoria" para registrar depois.
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-status">Status inicial</label>
+                    <select
+                        class="form-select"
+                        id="new-entry-status"
+                        name="status"
+                        aria-describedby="new-entry-status-help"
+                        required
+                    >
+                        <% statusKeys.forEach((statusKey) => { %>
+                            <option value="<%= statusKey %>" <%= statusKey === 'pending' ? 'selected' : '' %>>
+                                <%= statusLabels[statusKey] %>
+                            </option>
+                        <% }) %>
+                    </select>
+                    <div class="form-text" id="new-entry-status-help">
+                        Se o pagamento já ocorreu, marque como "Pago" e informe a data correspondente.
+                    </div>
+                </div>
                 <div class="col-md-2">
-                    <label class="form-label">Valor (R$)</label>
+                    <label class="form-label" for="new-entry-value">Valor (R$)</label>
                     <input
                         type="number"
                         step="0.01"
                         class="form-control"
+                        id="new-entry-value"
                         name="value"
+                        min="0"
+                        inputmode="decimal"
+                        aria-describedby="new-entry-value-help"
                         required
                     />
+                    <div class="form-text" id="new-entry-value-help">Informe apenas números. Utilize ponto para separar centavos.</div>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Vencimento</label>
+                    <label class="form-label" for="new-entry-due-date">Vencimento</label>
                     <input
                         type="date"
                         class="form-control"
+                        id="new-entry-due-date"
                         name="dueDate"
                         required
                     />
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="new-entry-payment-date">Pagamento (opcional)</label>
+                    <input
+                        type="date"
+                        class="form-control"
+                        id="new-entry-payment-date"
+                        name="paymentDate"
+                        aria-describedby="new-entry-payment-help"
+                    />
+                    <div class="form-text" id="new-entry-payment-help">Preencha quando o valor já tiver sido quitado.</div>
+                </div>
                 <div class="col-md-3">
-                    <label class="form-label">Recorrência</label>
-                    <select class="form-select" name="recurring">
+                    <label class="form-label" for="new-entry-recurring">Recorrência</label>
+                    <select class="form-select" id="new-entry-recurring" name="recurring">
                         <option value="false">Não recorrente</option>
                         <option value="true">Recorrente</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Intervalo (opcional)</label>
+                    <label class="form-label" for="new-entry-interval">Intervalo (opcional)</label>
                     <input
                         type="text"
                         class="form-control"
+                        id="new-entry-interval"
                         name="recurringInterval"
                         list="recurring-interval-options"
                         placeholder="Ex.: mensal"
@@ -1803,7 +1928,7 @@
                         accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
                     />
                     <div class="form-text">
-                        Upload seguro com limite de 10MB por arquivo. Tipos aceitos: PDF, imagens e documentos do Office.
+                        Upload opcional (até 10MB por arquivo). Tipos aceitos: PDF, imagens e documentos do Office.
                     </div>
                 </div>
                 <div class="col-md-12">

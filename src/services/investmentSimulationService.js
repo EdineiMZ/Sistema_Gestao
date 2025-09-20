@@ -38,6 +38,56 @@ const sanitizeNumber = (value, fallback = 0) => {
     return numeric;
 };
 
+const sanitizePlainText = (value, fallback = '') => {
+    if (value === null || value === undefined) {
+        return fallback;
+    }
+
+    const normalized = String(value).trim();
+    return normalized ? normalized : fallback;
+};
+
+const normalizeCategoryId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const sanitizeCategoryList = (list) => {
+    if (!Array.isArray(list)) {
+        return [];
+    }
+
+    const seen = new Set();
+    return list.reduce((acc, item) => {
+        if (!item || typeof item !== 'object') {
+            return acc;
+        }
+
+        const normalizedId = normalizeCategoryId(item.id);
+        if (normalizedId === null || seen.has(normalizedId)) {
+            return acc;
+        }
+
+        seen.add(normalizedId);
+        acc.push({
+            ...item,
+            id: normalizedId,
+            name: sanitizePlainText(item.name, 'Categoria sem nome'),
+            color: sanitizePlainText(item.color, '#6c757d')
+        });
+
+        return acc;
+    }, []);
+};
+
 const normalizeMonthlyRate = (rate, period, { compound } = {}) => {
     const normalizedPeriod = typeof period === 'string' ? period.toLowerCase() : 'annual';
     const factor = RATE_PERIOD_TO_MONTH_FACTOR[normalizedPeriod] ?? RATE_PERIOD_TO_MONTH_FACTOR.annual;
@@ -307,8 +357,13 @@ const fetchCategoryMetadata = async (categoryIds = []) => {
 const aggregateEntriesByCategory = (entries = []) => {
     return entries.reduce((acc, entry) => {
         const plain = typeof entry?.get === 'function' ? entry.get({ plain: true }) : entry;
-        const categoryId = plain?.financeCategoryId || plain?.categoryId || plain?.category?.id;
-        if (!categoryId) {
+        const categoryId = normalizeCategoryId(
+            plain?.financeCategoryId
+                ?? plain?.categoryId
+                ?? plain?.category?.id
+        );
+
+        if (categoryId === null) {
             return acc;
         }
 
@@ -380,11 +435,10 @@ const simulateInvestmentProjections = async ({
     };
 
     const aggregatedEntries = aggregateEntriesByCategory(entries);
+    const sanitizedCategories = sanitizeCategoryList(categories);
     const categoryIds = Array.from(new Set([
         ...Array.from(aggregatedEntries.keys()),
-        ...categories
-            .map((category) => category?.id)
-            .filter((value) => Number.isFinite(value))
+        ...sanitizedCategories.map((category) => category.id)
     ]));
 
     if (!categoryIds.length) {
@@ -427,7 +481,9 @@ const simulateInvestmentProjections = async ({
         }
 
         const rateConfig = rateMap.get(categoryId) || null;
-        const categoryMeta = categoryMap.get(categoryId) || categories.find((item) => item.id === categoryId) || null;
+        const categoryMeta = categoryMap.get(categoryId)
+            || sanitizedCategories.find((item) => item.id === categoryId)
+            || null;
 
         const projection = buildCategoryProjection(
             categoryId,
