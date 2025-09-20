@@ -127,13 +127,21 @@
                                     <label class="form-label">Atualizar status</label>
                                     <select class="form-select" name="status">
                                         <% statusEntries.forEach(([key, value]) => { %>
-                                            <option value="<%= value %>" <%= ticket.status === value ? 'selected' : '' %>>
+                                            <option value="<%= value %>" <%= ticket.status === value ? 'selected' : '' %> <%= !isAgent && ![statuses.PENDING, statuses.RESOLVED].includes(value) ? 'disabled' : '' %>>
                                                 <%= statusLabels[value] || key %>
                                             </option>
                                         <% }); %>
                                     </select>
                                     <button type="submit" class="btn btn-outline-primary w-100 mt-2">Salvar</button>
                                 </form>
+                                <% if (!isAgent && ticket.status === statuses.IN_PROGRESS) { %>
+                                    <form method="POST" action="/support/tickets/<%= ticket.id %>/status" class="complete-form mt-3">
+                                        <input type="hidden" name="status" value="<%= statuses.RESOLVED %>">
+                                        <button type="submit" class="btn btn-success w-100">
+                                            <i class="bi bi-check2-circle me-2"></i>Concluir chamado
+                                        </button>
+                                    </form>
+                                <% } %>
                             </div>
                         </div>
                     </div>

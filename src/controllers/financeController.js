@@ -188,6 +188,15 @@ const FALLBACK_STATUS_META = {
     critical: { key: 'critical', label: 'Limite excedido', badgeClass: 'bg-danger-subtle text-danger', icon: 'bi-fire', barColor: '#ef4444' }
 };
 
+const EMPTY_SUMMARY_TOTALS = Object.freeze({
+    receivable: 0,
+    payable: 0,
+    net: 0,
+    overdue: 0,
+    paid: 0,
+    pending: 0
+});
+
 const buildStatusPalette = () => {
     const overrides = SERVICE_STATUS_META || {};
     const keys = new Set([
@@ -923,6 +932,28 @@ module.exports = {
 
             const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
 
+            const normalizedSummary = (summary && typeof summary === 'object') ? summary : {};
+            const summaryTotals = normalizedSummary.totals && typeof normalizedSummary.totals === 'object'
+                ? { ...EMPTY_SUMMARY_TOTALS, ...normalizedSummary.totals }
+                : { ...EMPTY_SUMMARY_TOTALS };
+            if (!Number.isFinite(Number(summaryTotals.net))) {
+                summaryTotals.net = Number(summaryTotals.receivable || 0) - Number(summaryTotals.payable || 0);
+            }
+
+            const summaryStatus = normalizedSummary.statusSummary && typeof normalizedSummary.statusSummary === 'object'
+                ? {
+                    receivable: normalizedSummary.statusSummary.receivable || {},
+                    payable: normalizedSummary.statusSummary.payable || {}
+                }
+                : {
+                    receivable: {},
+                    payable: {}
+                };
+
+            const summaryMonthly = Array.isArray(normalizedSummary.monthlySummary)
+                ? normalizedSummary.monthlySummary
+                : [];
+
             const normalizedBudgetOverview = (
                 budgetOverview && typeof budgetOverview === 'object'
                     ? budgetOverview
@@ -942,7 +973,7 @@ module.exports = {
             const statusPalette = buildStatusPalette();
             const budgetCards = buildBudgetCards(rawBudgetSummaries, statusPalette);
 
-            const projections = Array.isArray(summary.projections) ? summary.projections : [];
+            const projections = Array.isArray(normalizedSummary.projections) ? normalizedSummary.projections : [];
             const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
                 || projections.find((item) => item.isFuture)
                 || projections.find((item) => item.isCurrent)
@@ -1002,9 +1033,9 @@ module.exports = {
                     filters,
                     formatCurrency,
                     periodLabel: formatPeriodLabel(filters),
-                    statusSummary: summary.statusSummary,
-                    monthlySummary: summary.monthlySummary,
-                    financeTotals: summary.totals,
+                    statusSummary: summaryStatus,
+                    monthlySummary: summaryMonthly,
+                    financeTotals: summaryTotals,
                     budgetSummaries: rawBudgetSummaries,
                     budgetCards,
                     categoryConsumption,

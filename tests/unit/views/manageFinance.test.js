@@ -42,6 +42,22 @@ const buildViewContext = () => ({
     projectionAlerts: [],
     financeGoals: [],
     goalSummary: { total: 0, alerts: 0 },
+    financeTotals: {
+        receivable: 3200.75,
+        payable: 1850.25,
+        net: 1350.5,
+        overdue: 450.2,
+        paid: 2200.55,
+        pending: 980.35
+    },
+    monthlySummary: [
+        { month: '2024-04', receivable: 1600.5, payable: 920.15 },
+        { month: '2024-05', receivable: 1600.25, payable: 930.1 }
+    ],
+    statusSummary: {
+        receivable: { pending: 1200.4, paid: 1600.35, overdue: 400, cancelled: 0 },
+        payable: { pending: 900.2, paid: 750.05, overdue: 200, cancelled: 0 }
+    },
     filters: {
         startDate: '2024-05-01',
         endDate: '2024-05-31',
