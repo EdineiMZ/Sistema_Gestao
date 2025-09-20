@@ -14,25 +14,6 @@ const PRIORITY_LABELS = Object.freeze({
     high: 'Alta'
 });
 
-const formatDateTime = (value) => {
-    if (!value) {
-        return '—';
-    }
-
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return '—';
-    }
-
-    return new Intl.DateTimeFormat('pt-BR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }).format(date);
-};
-
 const formatFileSize = (sizeInBytes) => {
     const size = Number(sizeInBytes);
     if (!Number.isFinite(size) || size <= 0) {
