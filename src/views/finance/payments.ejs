@@ -1,0 +1,755 @@
+<%- include('../partials/header') %>
+
+<%
+    const intervalOptionsFallback = [
+        { value: 'weekly', label: 'Semanal' },
+        { value: 'biweekly', label: 'Quinzenal' },
+        { value: 'monthly', label: 'Mensal' },
+        { value: 'quarterly', label: 'Trimestral' },
+        { value: 'yearly', label: 'Anual' }
+    ];
+    const intervalOptionsSource = Array.isArray(recurringIntervalOptions) && recurringIntervalOptions.length
+        ? recurringIntervalOptions
+        : (Array.isArray(locals?.recurringIntervalOptions) && locals.recurringIntervalOptions.length
+            ? locals.recurringIntervalOptions
+            : intervalOptionsFallback);
+    const intervalOptions = intervalOptionsSource;
+    const defaultFilters = {
+        startDate: '',
+        endDate: '',
+        type: '',
+        status: ''
+    };
+    const filterValues = { ...defaultFilters, ...(filters && typeof filters === 'object' ? filters : {}) };
+    const intlCurrencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const formatCurrencyFn = typeof formatCurrency === 'function'
+        ? formatCurrency
+        : (value) => intlCurrencyFormatter.format(Number(value) || 0);
+    const summaryTotalsSource = financeTotals && typeof financeTotals === 'object' ? financeTotals : {};
+    const summaryTotals = {
+        receivable: Number(summaryTotalsSource.receivable || 0),
+        payable: Number(summaryTotalsSource.payable || 0),
+        overdue: Number(summaryTotalsSource.overdue || 0),
+        pending: Number(summaryTotalsSource.pending || 0),
+        paid: Number(summaryTotalsSource.paid || 0)
+    };
+    let netAmount = Number(summaryTotalsSource.net);
+    if (!Number.isFinite(netAmount)) {
+        netAmount = summaryTotals.receivable - summaryTotals.payable;
+    }
+    summaryTotals.net = netAmount;
+    const netClass = netAmount > 0 ? 'text-success' : netAmount < 0 ? 'text-danger' : 'text-muted';
+    const monthlySummaryList = Array.isArray(monthlySummary) ? monthlySummary : [];
+    const statusSummaryData = summaryStatus && typeof summaryStatus === 'object' ? summaryStatus : { receivable: {}, payable: {} };
+    const statusLabels = {
+        pending: 'Pendente',
+        paid: 'Pago',
+        overdue: 'Atrasado',
+        cancelled: 'Cancelado'
+    };
+    const statusKeys = Object.keys(statusLabels);
+    const typeLabels = {
+        receivable: 'Receber',
+        payable: 'Pagar'
+    };
+    const categoryOptionsSource = Array.isArray(categories) && categories.length
+        ? categories
+        : (Array.isArray(locals?.categories) ? locals.categories : []);
+    const financeCategoryOptions = (() => {
+        const seen = new Set();
+        const normalized = [];
+        categoryOptionsSource.forEach((category) => {
+            if (!category || typeof category !== 'object') {
+                return;
+            }
+            const rawId = category.id ?? category.value ?? category.key ?? null;
+            const numericId = Number.isFinite(Number.parseInt(rawId, 10)) ? Number.parseInt(rawId, 10) : null;
+            const name = typeof category.name === 'string' && category.name.trim()
+                ? category.name.trim()
+                : (typeof category.label === 'string' ? category.label.trim() : 'Categoria');
+            const color = typeof category.color === 'string' && category.color.trim() ? category.color.trim() : '#6c757d';
+            const key = numericId === null ? 'null' : String(numericId);
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            normalized.push({ id: numericId, name, color });
+        });
+        if (!seen.has('null')) {
+            normalized.unshift({ id: null, name: 'Sem categoria', color: '#6c757d' });
+        }
+        return normalized;
+    })();
+    const importPreviewData = importPreview && typeof importPreview === 'object' ? importPreview : (locals?.importPreview || null);
+    const previewEntries = Array.isArray(importPreviewData?.entries) ? importPreviewData.entries : [];
+    const previewTotals = importPreviewData?.totals && typeof importPreviewData.totals === 'object'
+        ? { new: Number(importPreviewData.totals.new || 0), conflicting: Number(importPreviewData.totals.conflicting || 0), total: Number(importPreviewData.totals.total || 0) }
+        : { new: 0, conflicting: 0, total: 0 };
+    const previewWarnings = Array.isArray(importPreviewData?.warnings) ? importPreviewData.warnings : [];
+    const previewUploadedAt = importPreviewData?.uploadedAt || new Date().toISOString();
+    const resolvedCsrfToken = typeof csrfToken === 'string' && csrfToken
+        ? csrfToken
+        : (typeof locals?.csrfToken === 'string' ? locals.csrfToken : '');
+    const periodText = typeof periodLabel === 'string' && periodLabel.trim() ? periodLabel.trim() : 'Todo o período';
+%>
+
+<%- include('./partials/pageHeader', {
+    chip: { label: 'Fluxo de caixa', icon: 'bi-wallet2' },
+    title: 'Pagamentos e lançamentos',
+    description: 'Controle entradas e saídas, acompanhe status e execute ajustes rápidos.',
+    breadcrumbs: [
+        { label: 'Início', href: '/' },
+        { label: 'Financeiro', href: '/finance/overview' },
+        { label: 'Pagamentos' }
+    ],
+    meta: [
+        { label: 'Período analisado', value: periodText },
+        { label: 'Receitas', value: formatCurrencyFn(summaryTotals.receivable) },
+        { label: 'Despesas', value: formatCurrencyFn(summaryTotals.payable) }
+    ],
+    actions: [
+        { label: 'Visão geral', href: '/finance/overview', variant: 'outline-primary', icon: 'bi-speedometer' },
+        { label: 'Exportar PDF', href: '/finance/export/pdf', variant: 'outline-danger', icon: 'bi-filetype-pdf', rel: 'noopener' }
+    ]
+}) %>
+
+<datalist id="recurring-interval-options">
+    <% intervalOptions.forEach((option) => { %>
+        <option value="<%= option.value %>"><%= option.label %></option>
+    <% }) %>
+</datalist>
+
+<div class="row fade-in responsive-page-row gy-4">
+    <div class="col-12 col-xl-4 col-xxl-3">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body">
+                <span class="app-chip mb-2"><i class="bi bi-funnel me-2"></i>Filtros</span>
+                <h3 class="fw-semibold mb-3">Refinar lançamentos</h3>
+                <form class="row g-3" data-filter-form action="/finance/payments" method="GET" novalidate>
+                    <div class="col-12">
+                        <label class="form-label" for="filterStartDate">Início</label>
+                        <input type="date" class="form-control" id="filterStartDate" name="startDate" value="<%= filterValues.startDate %>" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="filterEndDate">Fim</label>
+                        <input type="date" class="form-control" id="filterEndDate" name="endDate" value="<%= filterValues.endDate %>" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="filterType">Tipo</label>
+                        <select class="form-select" id="filterType" name="type" data-auto-submit="true">
+                            <option value="">Todos</option>
+                            <option value="receivable" <%= filterValues.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                            <option value="payable" <%= filterValues.type === 'payable' ? 'selected' : '' %>>Pagar</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="filterStatus">Status</label>
+                        <select class="form-select" id="filterStatus" name="status" data-auto-submit="true">
+                            <option value="">Todos</option>
+                            <% statusKeys.forEach((statusKey) => { %>
+                                <option value="<%= statusKey %>" <%= filterValues.status === statusKey ? 'selected' : '' %>>
+                                    <%= statusLabels[statusKey] %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-12 d-flex justify-content-between gap-2">
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1" data-filter-clear>Limpar</button>
+                        <button type="submit" class="btn btn-gradient flex-grow-1">Aplicar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-8 col-xxl-9">
+        <div class="card card-soft responsive-panel h-100">
+            <div class="card-body d-flex flex-column gap-4">
+                <div class="row g-4">
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-success-subtle text-success">Receitas</span>
+                                    <i class="bi bi-arrow-up-right-circle text-success fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1"><%= formatCurrencyFn(summaryTotals.receivable) %></h4>
+                                <p class="text-muted small mb-0">Entradas previstas no período selecionado.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-danger-subtle text-danger">Despesas</span>
+                                    <i class="bi bi-arrow-down-right-circle text-danger fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1"><%= formatCurrencyFn(summaryTotals.payable) %></h4>
+                                <p class="text-muted small mb-0">Saídas planejadas dentro do período.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-primary-subtle text-primary">Saldo</span>
+                                    <i class="bi bi-wallet2 text-primary fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1 <%= netClass %>"><%= formatCurrencyFn(summaryTotals.net) %></h4>
+                                <p class="text-muted small mb-0">Resultado projetado após receitas e despesas.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="badge rounded-pill bg-warning-subtle text-warning">Riscos</span>
+                                    <i class="bi bi-exclamation-octagon text-warning fs-4" aria-hidden="true"></i>
+                                </div>
+                                <h4 class="fw-semibold mb-1 text-warning"><%= formatCurrencyFn(summaryTotals.overdue) %></h4>
+                                <p class="text-muted small mb-0">Pagamentos em atraso demandando atenção imediata.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 align-items-stretch">
+                    <div class="col-12 col-lg-7">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <h4 class="fw-semibold mb-1">Performance mensal</h4>
+                                        <p class="text-muted small mb-0">Comparativo de entradas e saídas para decisões estratégicas.</p>
+                                    </div>
+                                    <span class="badge rounded-pill bg-light text-muted"><%= periodText %></span>
+                                </div>
+                                <div class="ratio ratio-16x9">
+                                    <canvas id="financePerformanceChart" aria-label="Gráfico de desempenho financeiro mensal" role="img"></canvas>
+                                </div>
+                                <% if (monthlySummaryList.length) { %>
+                                    <div class="table-responsive small mt-4">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Mês</th>
+                                                    <th scope="col" class="text-end">A receber</th>
+                                                    <th scope="col" class="text-end">A pagar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <% monthlySummaryList.forEach((item) => { %>
+                                                    <tr>
+                                                        <td><%= item.month %></td>
+                                                        <td class="text-end"><%= formatCurrencyFn(item.receivable) %></td>
+                                                        <td class="text-end"><%= formatCurrencyFn(item.payable) %></td>
+                                                    </tr>
+                                                <% }) %>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <% } else { %>
+                                    <p class="text-muted small mt-4 mb-0">Cadastre lançamentos ou ajuste os filtros para visualizar tendências históricas.</p>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <h4 class="fw-semibold mb-1">Status por categoria</h4>
+                                        <p class="text-muted small mb-0">Distribuição de valores em cada etapa.</p>
+                                    </div>
+                                    <span class="badge rounded-pill bg-light text-muted">Atualizado em tempo real</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-3">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Tipo</th>
+                                                <% statusKeys.forEach((statusKey) => { %>
+                                                    <th scope="col" class="text-end"><%= statusLabels[statusKey] %></th>
+                                                <% }) %>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% Object.keys(typeLabels).forEach((typeKey) => { %>
+                                                <tr>
+                                                    <td class="fw-semibold"><%= typeLabels[typeKey] %></td>
+                                                    <% statusKeys.forEach((statusKey) => { %>
+                                                        <% const statusValue = statusSummaryData[typeKey]?.[statusKey] || 0; %>
+                                                        <td class="text-end"><%= formatCurrencyFn(statusValue) %></td>
+                                                    <% }) %>
+                                                </tr>
+                                            <% }) %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="bg-light rounded-3 p-3 mt-auto">
+                                    <div class="d-flex flex-column gap-2 small">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Pagamentos liquidados</span>
+                                            <span class="fw-semibold text-success"><%= formatCurrencyFn(summaryTotals.paid) %></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Pendências</span>
+                                            <span class="fw-semibold text-primary"><%= formatCurrencyFn(summaryTotals.pending) %></span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">Atrasos</span>
+                                            <span class="fw-semibold text-warning"><%= formatCurrencyFn(summaryTotals.overdue) %></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card card-soft responsive-panel">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
+                    <p class="text-muted mb-0">Monitoramento contínuo de receitas, despesas e recorrências.</p>
+                </div>
+                <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-end gap-2 text-sm-end">
+                    <span class="badge rounded-pill bg-light text-muted">
+                        <i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Auditoria ativa
+                    </span>
+                    <div class="d-flex flex-wrap align-items-center justify-content-end gap-2" role="group" aria-label="Exportar lançamentos financeiros">
+                        <a
+                            class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
+                            href="/finance/export/pdf"
+                            data-export-target="/finance/export/pdf"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-filetype-pdf" aria-hidden="true"></i>
+                            <span>Exportar PDF</span>
+                        </a>
+                        <a
+                            class="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-2"
+                            href="/finance/export/excel"
+                            data-export-target="/finance/export/excel"
+                            rel="noopener"
+                        >
+                            <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+                            <span>Exportar Excel</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive table-modern responsive-table">
+                <table class="table align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Descrição</th>
+                            <th>Categoria</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            <th>Vencimento</th>
+                            <th>Pagamento</th>
+                            <th>Status</th>
+                            <th class="text-center" style="width: 200px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (!entries || !entries.length) { %>
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">Nenhum lançamento cadastrado para os filtros selecionados.</td>
+                            </tr>
+                        <% } else { %>
+                            <% entries.forEach((entry) => { %>
+                                <tr>
+                                    <td><%= entry.id %></td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-semibold"><%= entry.description %></span>
+                                            <% if (entry.attachments && entry.attachments.length) { %>
+                                                <span class="text-muted small">
+                                                    <i class="bi bi-paperclip me-1" aria-hidden="true"></i>
+                                                    <%= entry.attachments.length %> anexo<%= entry.attachments.length > 1 ? 's' : '' %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <% if (entry.category) { %>
+                                            <span class="badge rounded-pill" style="background-color: <%= entry.category.color || '#6c757d' %>;" aria-hidden="true"></span>
+                                            <span class="ms-2"><%= entry.category.name %></span>
+                                        <% } else { %>
+                                            <span class="text-muted">Sem categoria</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <span class="badge <%= entry.type === 'receivable' ? 'text-bg-success' : 'text-bg-danger' %>">
+                                            <%= entry.type === 'receivable' ? 'Receber' : 'Pagar' %>
+                                        </span>
+                                    </td>
+                                    <td><%= formatCurrencyFn(entry.value) %></td>
+                                    <td><%= entry.dueDate ? new Date(entry.dueDate).toLocaleDateString('pt-BR') : '—' %></td>
+                                    <td><%= entry.paymentDate ? new Date(entry.paymentDate).toLocaleDateString('pt-BR') : '—' %></td>
+                                    <td>
+                                        <span class="badge text-bg-<%= entry.status === 'paid' ? 'success' : entry.status === 'overdue' ? 'warning' : entry.status === 'cancelled' ? 'secondary' : 'primary' %>">
+                                            <%= statusLabels[entry.status] || entry.status %>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button
+                                                class="btn btn-outline-primary"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editEntryModal<%= entry.id %>"
+                                            >
+                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                            </button>
+                                            <form action="/finance/delete/<%= entry.id %>?_method=DELETE" method="POST" class="d-inline">
+                                                <% if (resolvedCsrfToken) { %>
+                                                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                                                <% } %>
+                                                <button class="btn btn-outline-danger" type="submit" onclick="return confirm('Confirmar exclusão do lançamento?');">
+                                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <% if (entries && entries.length) { %>
+        <% entries.forEach((entry) => { %>
+            <div class="modal fade" id="editEntryModal<%= entry.id %>" tabindex="-1" aria-labelledby="editEntryModalLabel<%= entry.id %>" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editEntryModalLabel<%= entry.id %>">Editar lançamento #<%= entry.id %></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <form action="/finance/update/<%= entry.id %>?_method=PUT" method="POST" enctype="multipart/form-data">
+                            <div class="modal-body row g-3">
+                                <% if (resolvedCsrfToken) { %>
+                                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                                <% } %>
+                                <div class="col-12">
+                                    <label class="form-label">Descrição</label>
+                                    <input type="text" class="form-control" name="description" value="<%= entry.description %>" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipo</label>
+                                    <select class="form-select" name="type" required>
+                                        <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
+                                        <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Categoria</label>
+                                    <select class="form-select" name="financeCategoryId">
+                                        <% financeCategoryOptions.forEach((category) => { %>
+                                            <option value="<%= category.id === null ? '' : category.id %>" <%= (entry.financeCategoryId || null) === category.id ? 'selected' : '' %>>
+                                                <%= category.name %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Valor</label>
+                                    <input type="number" class="form-control" name="value" value="<%= Number(entry.value || 0).toFixed(2) %>" step="0.01" min="0" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Data de vencimento</label>
+                                    <input type="date" class="form-control" name="dueDate" value="<%= entry.dueDate ? entry.dueDate : '' %>" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Data de pagamento</label>
+                                    <input type="date" class="form-control" name="paymentDate" value="<%= entry.paymentDate ? entry.paymentDate : '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="status">
+                                        <% statusKeys.forEach((statusKey) => { %>
+                                            <option value="<%= statusKey %>" <%= entry.status === statusKey ? 'selected' : '' %>>
+                                                <%= statusLabels[statusKey] %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Recorrência</label>
+                                    <select class="form-select" name="recurring">
+                                        <option value="true" <%= entry.recurring ? 'selected' : '' %>>Lançamento recorrente</option>
+                                        <option value="false" <%= !entry.recurring ? 'selected' : '' %>>Evento único</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Intervalo de recorrência</label>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        name="recurringInterval"
+                                        list="recurring-interval-options"
+                                        value="<%= entry.recurringInterval || '' %>"
+                                        placeholder="Ex.: mensal, trimestral"
+                                    />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Anexos cadastrados</label>
+                                    <% if (entry.attachments && entry.attachments.length) { %>
+                                        <ul class="list-group list-group-flush rounded shadow-sm">
+                                            <% entry.attachments.forEach((attachment) => { %>
+                                                <li class="list-group-item d-flex align-items-center justify-content-between gap-3">
+                                                    <div class="d-flex align-items-center gap-2 text-truncate">
+                                                        <i class="bi bi-paperclip text-primary" aria-hidden="true"></i>
+                                                        <span class="text-truncate" title="<%= attachment.fileName %>"><%= attachment.fileName %></span>
+                                                    </div>
+                                                    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2 text-sm-end">
+                                                        <span class="text-muted small"><%= Math.max(1, Math.round((attachment.size || 0) / 1024)) %> KB</span>
+                                                        <a class="btn btn-outline-primary btn-sm" href="/finance/attachments/<%= attachment.id %>/download">
+                                                            <i class="bi bi-download me-1" aria-hidden="true"></i>Baixar
+                                                        </a>
+                                                    </div>
+                                                </li>
+                                            <% }) %>
+                                        </ul>
+                                    <% } else { %>
+                                        <p class="text-muted small mb-0">Nenhum anexo disponível para este lançamento.</p>
+                                    <% } %>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Adicionar novos anexos</label>
+                                    <input
+                                        type="file"
+                                        class="form-control"
+                                        name="attachments"
+                                        multiple
+                                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                                    />
+                                    <div class="form-text">Anexe arquivos relevantes (até 10MB por arquivo).</div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-gradient">Salvar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        <% }); %>
+    <% } %>
+
+    <div class="col-12 col-xxl-10">
+        <div class="card card-soft responsive-panel">
+            <h3 class="fw-semibold mb-2">Novo lançamento</h3>
+            <p class="text-muted mb-4">Cadastre receitas ou despesas, defina categoria, status e datas para manter o painel sempre atualizado.</p>
+            <form action="/finance/create" method="POST" enctype="multipart/form-data" class="row g-3 responsive-filter-grid">
+                <% if (resolvedCsrfToken) { %>
+                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                <% } %>
+                <div class="col-md-4">
+                    <label class="form-label" for="new-entry-description">Descrição</label>
+                    <input type="text" class="form-control" id="new-entry-description" name="description" required placeholder="Ex.: Pagamento fornecedor" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="new-entry-type">Tipo</label>
+                    <select class="form-select" id="new-entry-type" name="type" required>
+                        <option value="payable">Pagar</option>
+                        <option value="receivable">Receber</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-category">Categoria</label>
+                    <select class="form-select" id="new-entry-category" name="financeCategoryId">
+                        <% financeCategoryOptions.forEach((category) => { %>
+                            <option value="<%= category.id === null ? '' : category.id %>" <%= category.id === null ? 'selected' : '' %>>
+                                <%= category.name %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-status">Status inicial</label>
+                    <select class="form-select" id="new-entry-status" name="status" required>
+                        <% statusKeys.forEach((statusKey) => { %>
+                            <option value="<%= statusKey %>" <%= statusKey === 'pending' ? 'selected' : '' %>>
+                                <%= statusLabels[statusKey] %>
+                            </option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-value">Valor</label>
+                    <input type="number" class="form-control" id="new-entry-value" name="value" step="0.01" min="0" placeholder="0,00" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-due-date">Data de vencimento</label>
+                    <input type="date" class="form-control" id="new-entry-due-date" name="dueDate" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-payment-date">Pagamento (opcional)</label>
+                    <input type="date" class="form-control" id="new-entry-payment-date" name="paymentDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-recurring">Recorrência</label>
+                    <select class="form-select" id="new-entry-recurring" name="recurring">
+                        <option value="false">Não recorrente</option>
+                        <option value="true">Recorrente</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="new-entry-interval">Intervalo (opcional)</label>
+                    <input type="text" class="form-control" id="new-entry-interval" name="recurringInterval" list="recurring-interval-options" placeholder="Ex.: mensal" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="new-entry-attachments">Anexar documentos</label>
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="new-entry-attachments"
+                        name="attachments"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                    />
+                    <div class="form-text">Upload opcional (até 10MB por arquivo).</div>
+                </div>
+                <div class="col-md-12">
+                    <div class="responsive-form-actions">
+                        <button type="reset" class="btn btn-outline-secondary">Limpar</button>
+                        <button type="submit" class="btn btn-gradient">Criar lançamento</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <% if (previewEntries.length) { %>
+        <div class="col-12">
+            <div class="card card-soft responsive-panel">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-start gap-3 mb-3">
+                        <div>
+                            <h3 class="fw-semibold mb-1">Prévia de importação</h3>
+                            <p class="text-muted mb-0">Revise os lançamentos identificados antes de concluir a importação.</p>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 text-muted small">
+                            <span class="badge bg-success-subtle text-success">Novos: <strong><%= previewTotals.new %></strong></span>
+                            <span class="badge bg-warning-subtle text-warning">Conflitos: <strong><%= previewTotals.conflicting %></strong></span>
+                            <span class="badge bg-secondary-subtle text-secondary">Total: <strong><%= previewTotals.total %></strong></span>
+                        </div>
+                    </div>
+                    <% if (previewWarnings.length) { %>
+                        <div class="alert alert-warning" role="alert">
+                            <strong>Atenção:</strong>
+                            <ul class="mb-0">
+                                <% previewWarnings.forEach((warning) => { %>
+                                    <li><%= warning %></li>
+                                <% }) %>
+                            </ul>
+                        </div>
+                    <% } %>
+                    <form action="/finance/import/commit" method="POST" class="d-flex flex-column gap-3">
+                        <% if (resolvedCsrfToken) { %>
+                            <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                        <% } %>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">
+                                            <input class="form-check-input" type="checkbox" id="import-select-all" data-import-select-all />
+                                        </th>
+                                        <th scope="col">Descrição</th>
+                                        <th scope="col">Valor</th>
+                                        <th scope="col">Vencimento</th>
+                                        <th scope="col">Pagamento</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col">Origem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% previewEntries.forEach((entry, index) => { %>
+                                        <% const conflictReasons = Array.isArray(entry.conflicts) ? entry.conflicts : []; %>
+                                        <tr class="<%= conflictReasons.length ? 'table-warning' : '' %>">
+                                            <td>
+                                                <input class="form-check-input" type="checkbox" name="entries[<%= index %>][enabled]" value="true" <%= conflictReasons.length ? '' : 'checked' %> />
+                                                <input type="hidden" name="entries[<%= index %>][description]" value="<%= entry.description %>" />
+                                                <input type="hidden" name="entries[<%= index %>][type]" value="<%= entry.type %>" />
+                                                <input type="hidden" name="entries[<%= index %>][value]" value="<%= entry.value %>" />
+                                                <input type="hidden" name="entries[<%= index %>][dueDate]" value="<%= entry.dueDate %>" />
+                                                <input type="hidden" name="entries[<%= index %>][paymentDate]" value="<%= entry.paymentDate || '' %>" />
+                                                <input type="hidden" name="entries[<%= index %>][status]" value="<%= entry.status %>" />
+                                            </td>
+                                            <td><%= entry.description %></td>
+                                            <td><%= formatCurrencyFn(entry.value) %></td>
+                                            <td><%= entry.dueDate ? new Date(entry.dueDate).toLocaleDateString('pt-BR') : '—' %></td>
+                                            <td><%= entry.paymentDate ? new Date(entry.paymentDate).toLocaleDateString('pt-BR') : '—' %></td>
+                                            <td><span class="badge text-bg-secondary"><%= statusLabels[entry.status] || entry.status %></span></td>
+                                            <td class="text-muted small">
+                                                <% if (entry.metadata && entry.metadata.source) { %>
+                                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis"><%= entry.metadata.source.toUpperCase() %></span>
+                                                <% } %>
+                                                <% if (entry.metadata && entry.metadata.line) { %>
+                                                    <div>Linha <%= entry.metadata.line %></div>
+                                                <% } else if (entry.metadata && entry.metadata.index) { %>
+                                                    <div>Registro <%= entry.metadata.index %></div>
+                                                <% } %>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-2">
+                            <div class="text-muted small">
+                                Importação preparada em <%= new Date(previewUploadedAt).toLocaleString('pt-BR') %>.<br />
+                                <span class="fw-semibold"><%= previewTotals.new %></span> lançamento(s) pronto(s) para importação.
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="/finance/payments" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                    Cancelar prévia
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-cloud-arrow-down me-2" aria-hidden="true"></i>
+                                    Importar lançamentos selecionados
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <% } %>
+</div>
+
+<script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    referrerpolicy="no-referrer"
+    defer
+></script>
+<script type="application/json" id="financePaymentsState">
+    <%- JSON.stringify({
+        monthlySummary: monthlySummaryList,
+        filters: filterValues,
+        summaryTotals,
+        periodLabel: periodText
+    }) %>
+</script>
+<script defer src="/js/financePayments.js"></script>
+
+<%- include('../partials/footer') %>

@@ -8,8 +8,8 @@ const {
     getRoleLevel
 } = require('../../src/constants/roles');
 
-describe('Finance management view', () => {
-    const templatePath = path.join(__dirname, '..', '..', 'src', 'views', 'finance', 'manageFinance.ejs');
+describe('Finance overview view', () => {
+    const templatePath = path.join(__dirname, '..', '..', 'src', 'views', 'finance', 'overview.ejs');
     const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
     const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
 
@@ -40,51 +40,38 @@ describe('Finance management view', () => {
 
     const baseContext = {
         ...sharedContext,
+        res: { locals: {} },
         csrfToken: 'test-csrf-token',
         user: { id: 1, name: 'Usuário Teste', role: USER_ROLES.MANAGER },
         userRoleLevel: getRoleLevel(USER_ROLES.MANAGER),
-        entries: [
-            {
-                id: 1,
-                description: 'Venda recorrente',
-                type: 'receivable',
-                value: 1200.5,
-                dueDate: '2024-05-20',
-                paymentDate: null,
-                status: 'pending',
-                recurring: false,
-                recurringInterval: '',
-                category: null,
-                attachments: []
-            }
-        ],
+        entriesCount: 5,
         financeTotals: {
             receivable: 3200.75,
             payable: 1850.25,
             pending: 980.35,
             overdue: 450.2
         },
-        monthlySummary: [
-            { month: '2024-05', receivable: 1600.25, payable: 930.1 }
-        ],
-        statusSummary: {
+        summaryStatus: {
             receivable: { pending: 1200.4, paid: 1600.35, overdue: 400.0, cancelled: 0 },
             payable: { pending: 900.2, paid: 750.05, overdue: 200.0, cancelled: 0 }
         },
-        projectionList: [],
+        monthlySummary: [
+            { month: '2024-05', receivable: 1600.25, payable: 930.1 }
+        ],
+        projections: [],
         financeGoals: [],
         financeThresholds: {
             overdueDays: 12,
             spendingAlertPercent: 78,
             netGoalFloor: 3500
         },
-        budgetSummaries: [
+        budgetCards: [
             {
-                id: 1,
+                budgetId: 1,
                 month: '2024-05',
                 categoryName: 'Operacional',
                 categoryColor: '#2563eb',
-                percentage: 45,
+                usage: 45,
                 consumption: 450,
                 monthlyLimit: 1000,
                 remaining: 550,
@@ -103,8 +90,11 @@ describe('Finance management view', () => {
             }
         ],
         budgetMonths: ['2024-05'],
-        filters: {},
-        alertsList: [],
+        activeBudgetMonth: '2024-05',
+        activeBudgetConsumption: 450,
+        activeBudgetLimit: 1000,
+        activeBudgetUsage: 45,
+        projectionAlerts: [],
         importPreview: null,
         formatCurrency: (value) => currencyFormatter.format(Number(value) || 0)
     };
@@ -126,12 +116,10 @@ describe('Finance management view', () => {
         expect(html).toContain('value="12"');
     });
 
-    it('allows overriding navigation URL for budgets', async () => {
-        const customHtml = await renderView({
-            ...baseContext,
-            budgetPageUrl: '/finance/planejamento'
-        });
+    it('renders serialized budget state for client hydration', async () => {
+        const html = await renderView(baseContext);
 
-        expect(customHtml).toContain('href="/finance/planejamento"');
+        expect(html).toContain('id="financeBudgetState"');
+        expect(html).toContain('Operacional');
     });
 });

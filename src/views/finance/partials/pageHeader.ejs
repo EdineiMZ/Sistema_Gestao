@@ -1,0 +1,111 @@
+<%
+const breadcrumbsList = Array.isArray(breadcrumbs) ? breadcrumbs.filter((item) => item && item.label) : [];
+const actionsList = Array.isArray(actions) ? actions.filter((action) => action && action.label) : [];
+const metaList = (() => {
+    if (Array.isArray(meta)) {
+        return meta.filter(Boolean);
+    }
+    if (meta && typeof meta === 'object') {
+        return [meta];
+    }
+    return [];
+})();
+const chipData = chip && typeof chip === 'object' ? chip : {};
+const resolveActionVariant = (variant) => {
+    if (typeof variant !== 'string') {
+        return 'btn-outline-primary';
+    }
+    const normalized = variant.trim();
+    if (!normalized) {
+        return 'btn-outline-primary';
+    }
+    if (normalized.startsWith('btn-')) {
+        return normalized;
+    }
+    return `btn-${normalized}`;
+};
+const safeTitle = typeof title === 'string' && title.trim() ? title.trim() : '';
+const safeDescription = typeof description === 'string' && description.trim() ? description.trim() : '';
+%>
+<section class="finance-page-header py-4 border-bottom border-light-subtle mb-4">
+    <div class="container-xl d-flex flex-column gap-3">
+        <% if (breadcrumbsList.length) { %>
+            <nav aria-label="Caminho de navegação" class="order-first">
+                <ol class="breadcrumb small mb-0">
+                    <% breadcrumbsList.forEach((crumb, index) => { %>
+                        <% const isLast = index === breadcrumbsList.length - 1; %>
+                        <li
+                            class="breadcrumb-item <%= isLast ? 'active text-primary fw-semibold' : '' %>"
+                            <%= isLast ? 'aria-current="page"' : '' %>
+                        >
+                            <% if (!isLast && crumb.href) { %>
+                                <a class="text-decoration-none" href="<%= crumb.href %>">
+                                    <%= crumb.label %>
+                                </a>
+                            <% } else { %>
+                                <span><%= crumb.label %></span>
+                            <% } %>
+                        </li>
+                    <% }); %>
+                </ol>
+            </nav>
+        <% } %>
+
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div class="d-flex flex-column gap-2">
+                <% if (chipData && chipData.label) { %>
+                    <span class="app-chip text-uppercase small fw-semibold">
+                        <% if (chipData.icon) { %>
+                            <i class="bi <%= chipData.icon %> me-2" aria-hidden="true"></i>
+                        <% } %>
+                        <%= chipData.label %>
+                    </span>
+                <% } %>
+                <% if (safeTitle) { %>
+                    <h1 class="h3 h-lg-1 fw-semibold mb-0"><%= safeTitle %></h1>
+                <% } %>
+                <% if (safeDescription) { %>
+                    <p class="text-muted mb-0"><%= safeDescription %></p>
+                <% } %>
+            </div>
+
+            <div class="d-flex flex-column align-items-lg-end gap-3 w-100 w-lg-auto">
+                <% if (metaList.length) { %>
+                    <div class="d-flex flex-wrap justify-content-lg-end gap-2 w-100">
+                        <% metaList.forEach((item) => { %>
+                            <% if (!item) { return; } %>
+                            <div class="bg-light-subtle rounded-3 px-3 py-2 text-muted small text-center text-lg-end flex-grow-1 flex-lg-grow-0">
+                                <% if (item.label) { %>
+                                    <span class="d-block text-uppercase fw-semibold small"><%= item.label %></span>
+                                <% } %>
+                                <% if (item.value !== undefined) { %>
+                                    <span class="d-block fs-6 fw-semibold text-dark"><%= item.value %></span>
+                                <% } %>
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+
+                <% if (actionsList.length) { %>
+                    <div class="d-flex flex-wrap justify-content-lg-end gap-2">
+                        <% actionsList.forEach((action) => { %>
+                            <% if (!action || !action.label) { return; } %>
+                            <a
+                                class="btn <%= resolveActionVariant(action.variant) %>"
+                                href="<%= action.href || '#' %>"
+                                <% if (action.target) { %>target="<%= action.target %>"<% } %>
+                                <% if (action.rel) { %>rel="<%= action.rel %>"<% } %>
+                                <%= action.title ? `title="${action.title}"` : '' %>
+                            >
+                                <% if (action.icon) { %>
+                                    <i class="bi <%= action.icon %> me-2" aria-hidden="true"></i>
+                                <% } %>
+                                <span><%= action.label %></span>
+                            </a>
+                        <% }); %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</section>

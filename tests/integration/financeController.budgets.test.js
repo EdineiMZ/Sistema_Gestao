@@ -176,7 +176,8 @@ describe('FinanceController budgets endpoints', () => {
         });
 
         const response = await request(app)
-            .get('/finance/budgets');
+            .get('/finance/budgets')
+            .set('Accept', 'application/json');
 
         expect(response.status).toBe(200);
         expect(Array.isArray(response.body.data)).toBe(true);

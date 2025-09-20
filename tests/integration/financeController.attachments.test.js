@@ -81,7 +81,7 @@ describe('FinanceController attachments', () => {
             .attach('attachments', pdfBuffer, { filename: 'Notas   fiscais.pdf', contentType: 'application/pdf' });
 
         expect(response.status).toBe(302);
-        expect(response.headers.location).toBe('/finance');
+        expect(response.headers.location).toBe('/finance/payments');
 
         const entry = await FinanceEntry.findOne({
             include: [{ model: FinanceAttachment, as: 'attachments' }]

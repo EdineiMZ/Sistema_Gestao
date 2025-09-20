@@ -7,6 +7,7 @@ const { authenticateTestUser } = require('../utils/authTestUtils');
 
 const financeRoutes = require('../../src/routes/financeRoutes');
 const financeReportingService = require('../../src/services/financeReportingService');
+const budgetService = require('../../src/services/budgetService');
 jest.mock('../../src/services/investmentSimulationService', () => ({
     simulateInvestmentProjections: jest.fn()
 }));
@@ -52,36 +53,99 @@ describe('Finance routes filtering', () => {
             }
         ];
 
-        const findAllSpy = jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(filteredEntries);
-        const summarySpy = jest.spyOn(financeReportingService, 'getFinanceSummary');
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue(filteredEntries);
+        const countSpy = jest.spyOn(FinanceEntry, 'count').mockResolvedValue(filteredEntries.length);
+        const summarySpy = jest.spyOn(financeReportingService, 'getFinanceSummary').mockResolvedValue({
+            totals: {
+                receivable: 2000.5,
+                payable: 0,
+                net: 2000.5,
+                overdue: 150.25,
+                paid: 1800.25,
+                pending: 200.25
+            },
+            statusSummary: {
+                receivable: { pending: 200.25, paid: 1800.25, overdue: 0, cancelled: 0 },
+                payable: { pending: 0, paid: 0, overdue: 150.25, cancelled: 0 }
+            },
+            monthlySummary: [
+                { month: '2024-03', receivable: 2000.5, payable: 150.25 }
+            ],
+            projections: [
+                {
+                    month: '2024-03',
+                    label: 'março de 2024',
+                    projected: { net: 2000.5 },
+                    goal: { targetNetAmount: 2500, gapToGoal: -499.5, achieved: false },
+                    isCurrent: true,
+                    isFuture: false,
+                    hasGoal: true,
+                    needsAttention: true
+                }
+            ],
+            highlightProjection: {
+                month: '2024-04',
+                label: 'abril de 2024',
+                projected: { net: 3200.75 },
+                goal: { targetNetAmount: 3000, gapToGoal: 200.75, achieved: true }
+            },
+            projectionAlerts: [
+                {
+                    month: '2024-03',
+                    label: 'março de 2024',
+                    projected: { net: 2000.5 },
+                    goal: { targetNetAmount: 2500, gapToGoal: -499.5, achieved: false },
+                    needsAttention: true
+                }
+            ],
+            periodLabel: 'março de 2024'
+        });
         investmentSimulationService.simulateInvestmentProjections.mockResolvedValue({
             categories: [],
             totals: { principal: 0, contributions: 0, simpleFutureValue: 0, compoundFutureValue: 0, interestDelta: 0 },
             options: { defaultPeriodMonths: 12 },
             generatedAt: new Date().toISOString()
         });
+        const budgetSpy = jest.spyOn(budgetService, 'getBudgetOverview').mockResolvedValue({
+            summaries: [
+                {
+                    id: 55,
+                    month: '2024-03',
+                    financeCategoryId: 11,
+                    categoryName: 'Consultorias',
+                    categoryColor: '#2563eb',
+                    monthlyLimit: 1500,
+                    consumption: 750,
+                    usage: 50,
+                    status: 'healthy',
+                    statusMeta: { key: 'healthy' }
+                }
+            ],
+            categoryConsumption: [
+                {
+                    categoryId: 11,
+                    categoryName: 'Consultorias',
+                    categoryColor: '#2563eb',
+                    totalConsumption: 750,
+                    totalLimit: 1500,
+                    remaining: 750,
+                    averagePercentage: 50,
+                    highestPercentage: 65,
+                    months: 1,
+                    statusMeta: { key: 'healthy', badgeClass: 'bg-success-subtle text-success', barColor: '#10b981', label: 'Saudável' }
+                }
+            ],
+            months: ['2024-03']
+        });
 
         const { agent } = await authenticateTestUser(app);
         const response = await agent.get(
-            '/finance?startDate=2024-03-01&endDate=2024-03-31&type=receivable&status=paid'
+            '/finance/overview?startDate=2024-03-01&endDate=2024-03-31&type=receivable&status=paid'
         );
 
         expect(response.status).toBe(200);
-        expect(findAllSpy).toHaveBeenCalledTimes(1);
 
-        const findAllArgs = findAllSpy.mock.calls[0][0];
-        expect(findAllArgs).toMatchObject({
-            order: expect.any(Array),
-            where: expect.objectContaining({
-                type: 'receivable',
-                status: 'paid',
-                userId: 1000
-            })
-        });
-
-        const { Op } = Sequelize;
-        expect(findAllArgs.where.dueDate[Op.gte]).toBe('2024-03-01');
-        expect(findAllArgs.where.dueDate[Op.lte]).toBe('2024-03-31');
+        expect(countSpy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.any(Object) }));
 
         expect(summarySpy).toHaveBeenCalledWith(
             {
@@ -90,21 +154,17 @@ describe('Finance routes filtering', () => {
                 type: 'receivable',
                 status: 'paid',
                 userId: 1000
-            },
-            expect.objectContaining({ entries: filteredEntries })
+            }
         );
-        expect(investmentSimulationService.simulateInvestmentProjections).toHaveBeenCalledWith(expect.objectContaining({
-            entries: expect.any(Array)
-        }));
+        expect(budgetSpy).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ includeCategoryConsumption: true }));
 
         const normalizedHtml = response.text.replace(/\u00a0/g, ' ');
-        expect(normalizedHtml).toContain('Visão consolidada');
+        expect(normalizedHtml).toContain('Visão rápida de resultados');
+        expect(normalizedHtml).toContain('Limites e alertas globais');
+        expect(normalizedHtml).toContain('Orçamentos monitorados');
         expect(normalizedHtml).toContain('R$ 2.000,50');
-        expect(normalizedHtml).toContain('Status por categoria');
-        expect(normalizedHtml).toContain('<option value="receivable" selected>');
-        expect(normalizedHtml).toContain('<option value="paid" selected>');
-        expect(normalizedHtml).toContain('Performance mensal');
+        expect(normalizedHtml).toContain('Metas e projeções');
+        expect(normalizedHtml).toContain('Configurar metas mensais');
         expect(normalizedHtml).toContain('março de 2024');
-        expect(normalizedHtml).toContain('Simulação de investimentos');
     });
 });

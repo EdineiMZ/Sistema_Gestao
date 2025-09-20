@@ -122,6 +122,18 @@ const normalizeAmountInput = (value) => {
 };
 
 const CONTRIBUTION_FREQUENCIES = ['monthly', 'quarterly', 'yearly', 'weekly'];
+const CONTRIBUTION_FREQUENCY_LABELS = Object.freeze({
+    monthly: 'Mensal',
+    quarterly: 'Trimestral',
+    yearly: 'Anual',
+    weekly: 'Semanal'
+});
+
+const FINANCE_THRESHOLD_DEFAULTS = Object.freeze({
+    overdueDays: 0,
+    spendingAlertPercent: 0,
+    netGoalFloor: 0
+});
 
 const resolveCurrentUserId = (req) => req?.user?.id ?? req?.session?.user?.id ?? null;
 
@@ -179,6 +191,181 @@ const normalizeContributionFrequency = (value) => {
 
 const createCategoryResolver = async (userId) => {
     return financeImportService.createFinanceCategoryResolver({ ownerId: userId });
+};
+
+const buildGlobalThresholds = (source = {}) => {
+    const ensureNumber = (value, fallback) => {
+        if (value === null || value === undefined || value === '') {
+            return fallback;
+        }
+        const numeric = Number.parseFloat(String(value).replace(',', '.'));
+        return Number.isFinite(numeric) ? numeric : fallback;
+    };
+
+    return {
+        overdueDays: ensureNumber(source.overdueDays, FINANCE_THRESHOLD_DEFAULTS.overdueDays),
+        spendingAlertPercent: ensureNumber(
+            source.spendingAlertPercent,
+            FINANCE_THRESHOLD_DEFAULTS.spendingAlertPercent
+        ),
+        netGoalFloor: ensureNumber(source.netGoalFloor, FINANCE_THRESHOLD_DEFAULTS.netGoalFloor)
+    };
+};
+
+const fetchFinanceCategoriesForUser = async (userId) => {
+    if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
+        return [{ id: null, name: 'Sem categoria', color: '#6c757d' }];
+    }
+
+    const where = {};
+    if (userId) {
+        where[Op.or] = [{ ownerId: userId }, { ownerId: null }];
+    } else {
+        where.ownerId = null;
+    }
+
+    try {
+        const records = await FinanceCategory.findAll({
+            where,
+            order: [['name', 'ASC']]
+        });
+
+        const sanitized = records
+            .map((record) => {
+                const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
+                const id = normalizeCategoryId(plain.id);
+                return {
+                    id,
+                    name: sanitizeCategoryName(plain.name),
+                    color: (() => {
+                        const candidate = sanitizeText(plain.color);
+                        return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
+                    })()
+                };
+            })
+            .filter((category) => category.id !== null && Number.isFinite(category.id));
+
+        const categories = [
+            { id: null, name: 'Sem categoria', color: '#6c757d' },
+            ...sanitized
+        ];
+
+        const unique = [];
+        const seen = new Set();
+        categories.forEach((category) => {
+            const key = category.id === null ? 'null' : String(category.id);
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            unique.push(category);
+        });
+
+        return unique;
+    } catch (error) {
+        if (process.env.NODE_ENV !== 'test') {
+            console.error('Erro ao carregar categorias financeiras:', error);
+        }
+        return [{ id: null, name: 'Sem categoria', color: '#6c757d' }];
+    }
+};
+
+const countFinanceEntries = async (filters = {}) => {
+    const options = buildEntriesQueryOptions(filters);
+    const where = options.where || undefined;
+    return FinanceEntry.count({ where });
+};
+
+const buildFinanceSummaryContext = async (filters = {}) => {
+    const summary = await financeReportingService.getFinanceSummary(filters);
+    const normalized = summary && typeof summary === 'object' ? summary : {};
+
+    const totals = normalized.totals && typeof normalized.totals === 'object'
+        ? { ...EMPTY_SUMMARY_TOTALS, ...normalized.totals }
+        : { ...EMPTY_SUMMARY_TOTALS };
+    if (!Number.isFinite(Number(totals.net))) {
+        totals.net = Number(totals.receivable || 0) - Number(totals.payable || 0);
+    }
+
+    const statusSummary = normalized.statusSummary && typeof normalized.statusSummary === 'object'
+        ? {
+            receivable: normalized.statusSummary.receivable || {},
+            payable: normalized.statusSummary.payable || {}
+        }
+        : { receivable: {}, payable: {} };
+
+    const monthlySummary = Array.isArray(normalized.monthlySummary)
+        ? normalized.monthlySummary
+        : [];
+
+    const projections = Array.isArray(normalized.projections)
+        ? normalized.projections
+        : [];
+
+    const highlightProjection = projections.find((item) => item.isFuture && item.hasGoal)
+        || projections.find((item) => item.isFuture)
+        || projections.find((item) => item.isCurrent)
+        || null;
+    const projectionAlerts = projections.filter((item) => item.needsAttention);
+
+    return {
+        totals,
+        statusSummary,
+        monthlySummary,
+        projections,
+        highlightProjection,
+        projectionAlerts,
+        periodLabel: formatPeriodLabel(filters)
+    };
+};
+
+const buildBudgetOverviewContext = async (filters = {}) => {
+    const overview = await budgetService.getBudgetOverview(filters, {
+        includeCategoryConsumption: true
+    });
+
+    const summaries = Array.isArray(overview?.summaries) ? overview.summaries : [];
+    const statusPalette = buildStatusPalette();
+    const budgetCards = buildBudgetCards(summaries, statusPalette);
+    const categoryConsumption = Array.isArray(overview?.categoryConsumption)
+        ? overview.categoryConsumption
+        : [];
+    const rawMonths = Array.isArray(overview?.months) ? overview.months : [];
+    const budgetMonths = rawMonths.length
+        ? rawMonths
+        : Array.from(new Set(
+            budgetCards
+                .map((item) => item?.month)
+                .filter(Boolean)
+        )).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+    const activeBudgetMonth = budgetMonths.length ? budgetMonths[budgetMonths.length - 1] : null;
+    const activeBudgetData = activeBudgetMonth
+        ? budgetCards.filter((item) => item.month === activeBudgetMonth)
+        : budgetCards;
+    const activeBudgetConsumption = activeBudgetData.reduce(
+        (acc, item) => acc + (Number(item.consumption) || 0),
+        0
+    );
+    const activeBudgetLimit = activeBudgetData.reduce(
+        (acc, item) => acc + (Number(item.monthlyLimit) || 0),
+        0
+    );
+    const activeBudgetUsage = activeBudgetLimit > 0
+        ? (activeBudgetConsumption / activeBudgetLimit) * 100
+        : 0;
+
+    return {
+        overview,
+        budgetCards,
+        categoryConsumption,
+        budgetMonths,
+        statusPalette,
+        activeBudgetMonth,
+        activeBudgetConsumption,
+        activeBudgetLimit,
+        activeBudgetUsage
+    };
 };
 
 const FALLBACK_STATUS_META = {
@@ -998,211 +1185,280 @@ const beginTransaction = async () => {
     return sequelizeInstance.transaction();
 };
 
-module.exports = {
-    listFinanceEntries: async (req, res) => {
-        try {
-            const filters = buildFiltersFromQuery(req.query);
-            const userId = resolveCurrentUserId(req);
+const redirectToOverview = (req, res) => {
+    if (wantsJsonResponse(req)) {
+        return res.json({ redirect: '/finance/overview' });
+    }
+    return res.redirect('/finance/overview');
+};
 
-            if (userId !== null) {
-                filters.userId = userId;
-            }
-            const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-            const summaryPromise = createSummaryPromise(entriesPromise, filters);
-            const goalsPromise = (async () => {
-                try {
-                    return await FinanceGoal.findAll({
-                        order: [['month', 'ASC']]
-                    });
-                } catch (error) {
-                    if (isMissingTableDbError(error, 'FinanceGoals')) {
-                        return [];
-                    }
-                    throw error;
-                }
-            })();
-            const budgetOverviewPromise = budgetService.getBudgetOverview(filters, {
-                includeCategoryConsumption: true,
-                entriesPromise
-            });
+const renderOverview = async (req, res) => {
+    try {
+        const filters = buildFiltersFromQuery(req.query);
+        const userId = resolveCurrentUserId(req);
 
-            const categoriesPromise = (async () => {
-                if (!FinanceCategory || typeof FinanceCategory.findAll !== 'function') {
-                    return [];
-                }
-
-                const where = {};
-                if (userId) {
-                    where[Op.or] = [{ ownerId: userId }, { ownerId: null }];
-                } else {
-                    where.ownerId = null;
-                }
-
-                try {
-                    const records = await FinanceCategory.findAll({
-                        where,
-                        order: [['name', 'ASC']]
-                    });
-                    return records.map((record) => {
-                        const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record;
-                        return {
-                            id: normalizeCategoryId(plain.id),
-                            name: sanitizeCategoryName(plain.name),
-                            color: (() => {
-                                const candidate = sanitizeText(plain.color);
-                                return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(candidate) ? candidate : '#6c757d';
-                            })()
-                        };
-                    }).filter((category) => Number.isFinite(category.id));
-                } catch (error) {
-                    if (process.env.NODE_ENV !== 'test') {
-                        console.error('Erro ao carregar categorias financeiras:', error);
-                    }
-                    return [];
-                }
-            })();
-
-            const [entries, summary, goals, categories, budgetOverview] = await Promise.all([
-                entriesPromise,
-                summaryPromise,
-                goalsPromise,
-                categoriesPromise,
-                budgetOverviewPromise
-            ]);
-
-            const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
-
-            const normalizedSummary = (summary && typeof summary === 'object') ? summary : {};
-            const summaryTotals = normalizedSummary.totals && typeof normalizedSummary.totals === 'object'
-                ? { ...EMPTY_SUMMARY_TOTALS, ...normalizedSummary.totals }
-                : { ...EMPTY_SUMMARY_TOTALS };
-            if (!Number.isFinite(Number(summaryTotals.net))) {
-                summaryTotals.net = Number(summaryTotals.receivable || 0) - Number(summaryTotals.payable || 0);
-            }
-
-            const summaryStatus = normalizedSummary.statusSummary && typeof normalizedSummary.statusSummary === 'object'
-                ? {
-                    receivable: normalizedSummary.statusSummary.receivable || {},
-                    payable: normalizedSummary.statusSummary.payable || {}
-                }
-                : {
-                    receivable: {},
-                    payable: {}
-                };
-
-            const summaryMonthly = Array.isArray(normalizedSummary.monthlySummary)
-                ? normalizedSummary.monthlySummary
-                : [];
-
-            const normalizedBudgetOverview = (
-                budgetOverview && typeof budgetOverview === 'object'
-                    ? budgetOverview
-                    : {}
-            );
-
-            const rawBudgetSummaries = Array.isArray(normalizedBudgetOverview?.summaries)
-                ? normalizedBudgetOverview.summaries
-                : [];
-            const categoryConsumption = Array.isArray(normalizedBudgetOverview?.categoryConsumption)
-                ? normalizedBudgetOverview.categoryConsumption
-                : [];
-            const budgetMonths = Array.isArray(normalizedBudgetOverview?.months)
-                ? normalizedBudgetOverview.months
-                : [];
-
-            const statusPalette = buildStatusPalette();
-            const budgetCards = buildBudgetCards(rawBudgetSummaries, statusPalette);
-
-            const projections = Array.isArray(normalizedSummary.projections) ? normalizedSummary.projections : [];
-            const projectionHighlight = projections.find((item) => item.isFuture && item.hasGoal)
-                || projections.find((item) => item.isFuture)
-                || projections.find((item) => item.isCurrent)
-                || null;
-            const projectionAlerts = projections.filter((item) => item.needsAttention);
-            const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
-
-            const simulationOptions = {};
-            if (filters.investmentPeriodMonths) {
-                simulationOptions.defaultPeriodMonths = filters.investmentPeriodMonths;
-            }
-            if (filters.investmentContribution !== null && filters.investmentContribution !== undefined) {
-                simulationOptions.defaultContribution = filters.investmentContribution;
-            }
-            if (filters.investmentContributionFrequency) {
-                simulationOptions.defaultContributionFrequency = filters.investmentContributionFrequency;
-            }
-
-            let investmentSimulation;
-            try {
-                investmentSimulation = await investmentSimulationService.simulateInvestmentProjections({
-                    entries: safeEntries,
-                    userId,
-                    categories,
-                    filters,
-                    options: simulationOptions
-                });
-            } catch (simulationError) {
-                if (process.env.NODE_ENV !== 'test') {
-                    console.error('Erro ao calcular simulação de investimentos:', simulationError);
-                }
-                investmentSimulation = {
-                    categories: [],
-                    totals: {
-                        principal: 0,
-                        contributions: 0,
-                        simpleFutureValue: 0,
-                        compoundFutureValue: 0,
-                        interestDelta: 0
-                    },
-                    options: simulationOptions,
-                    generatedAt: new Date().toISOString(),
-                    filters
-                };
-            }
-
-            const importPreview = req.session?.financeImportPreview || null;
-            if (importPreview) {
-                res.locals.importPreview = importPreview;
-                req.session.financeImportPreview = null;
-            }
-
-            res.render(
-                'finance/manageFinance',
-                {
-                    entries: safeEntries,
-                    filters,
-                    formatCurrency,
-                    periodLabel: formatPeriodLabel(filters),
-                    statusSummary: summaryStatus,
-                    monthlySummary: summaryMonthly,
-                    financeTotals: summaryTotals,
-                    budgetSummaries: rawBudgetSummaries,
-                    budgetCards,
-                    categoryConsumption,
-                    budgetMonths,
-                    importPreview,
-                    recurringIntervalOptions,
-                    budgetStatusMeta: financeReportingService.utils?.DEFAULT_STATUS_META || null,
-                    budgetStatusPalette: statusPalette,
-                    investmentSimulation,
-                    investmentSimulationTotals: investmentSimulation?.totals || null,
-                    investmentSimulationCategories: investmentSimulation?.categories || [],
-                    categories
-
-                },
-                (renderError, html) => {
-                    if (renderError) {
-                        throw renderError;
-                    }
-                    res.send(html);
-                }
-            );
-        } catch (err) {
-            console.error('Erro ao listar finanças:', err);
-            req.flash('error_msg', 'Erro ao listar finanças.');
-            res.redirect('/');
+        if (userId !== null) {
+            filters.userId = userId;
         }
-    },
+
+        const [summaryContext, budgetContext, goals, categories, entriesCount] = await Promise.all([
+            buildFinanceSummaryContext(filters),
+            buildBudgetOverviewContext(filters),
+            loadFinanceGoals(),
+            fetchFinanceCategoriesForUser(userId),
+            countFinanceEntries(filters)
+        ]);
+
+        const financeGoals = Array.isArray(goals) ? goals.map(serializeGoalForView) : [];
+        const thresholdsSource = res.locals?.financeThresholds || req.session?.financeThresholds || {};
+        const globalThresholds = buildGlobalThresholds(thresholdsSource);
+
+        const budgetState = {
+            budgets: budgetContext.budgetCards,
+            categoryConsumption: budgetContext.categoryConsumption,
+            budgetMonths: budgetContext.budgetMonths,
+            activeBudgetMonth: budgetContext.activeBudgetMonth,
+            budgetStatusMeta: budgetContext.statusPalette
+        };
+
+        res.render('finance/overview', {
+            pageTitle: 'Financeiro • Visão geral',
+            entriesCount,
+            financeTotals: summaryContext.totals,
+            summaryStatus: summaryContext.statusSummary,
+            monthlySummary: summaryContext.monthlySummary,
+            projections: summaryContext.projections,
+            highlightProjection: summaryContext.highlightProjection,
+            projectionAlerts: summaryContext.projectionAlerts,
+            periodLabel: summaryContext.periodLabel,
+            budgetCards: budgetContext.budgetCards,
+            categoryConsumption: budgetContext.categoryConsumption,
+            budgetMonths: budgetContext.budgetMonths,
+            activeBudgetMonth: budgetContext.activeBudgetMonth,
+            activeBudgetConsumption: budgetContext.activeBudgetConsumption,
+            activeBudgetLimit: budgetContext.activeBudgetLimit,
+            activeBudgetUsage: budgetContext.activeBudgetUsage,
+            budgetStatusPalette: budgetContext.statusPalette,
+            budgetState: JSON.stringify(budgetState),
+            financeGoals,
+            categories,
+            financeThresholds: globalThresholds,
+            thresholdValuesJson: JSON.stringify(globalThresholds),
+            contributionFrequencyLabels: CONTRIBUTION_FREQUENCY_LABELS,
+            formatCurrency
+        });
+    } catch (error) {
+        console.error('Erro ao carregar visão financeira geral:', error);
+        req.flash('error_msg', 'Erro ao carregar visão financeira.');
+        res.redirect('/');
+    }
+};
+
+const renderBudgetsPage = async (req, res) => {
+    try {
+        const filters = buildFiltersFromQuery(req.query);
+        const userId = resolveCurrentUserId(req);
+
+        if (userId !== null) {
+            filters.userId = userId;
+        }
+
+        const budgetContext = await buildBudgetOverviewContext(filters);
+        const budgetState = {
+            budgets: budgetContext.budgetCards,
+            categoryConsumption: budgetContext.categoryConsumption,
+            budgetMonths: budgetContext.budgetMonths,
+            activeBudgetMonth: budgetContext.activeBudgetMonth,
+            budgetStatusMeta: budgetContext.statusPalette
+        };
+
+        res.render('finance/budgets', {
+            pageTitle: 'Financeiro • Orçamentos',
+            budgetCards: budgetContext.budgetCards,
+            categoryConsumption: budgetContext.categoryConsumption,
+            budgetMonths: budgetContext.budgetMonths,
+            activeBudgetMonth: budgetContext.activeBudgetMonth,
+            activeBudgetConsumption: budgetContext.activeBudgetConsumption,
+            activeBudgetLimit: budgetContext.activeBudgetLimit,
+            activeBudgetUsage: budgetContext.activeBudgetUsage,
+            budgetStatusPalette: budgetContext.statusPalette,
+            budgetState: JSON.stringify(budgetState),
+            formatCurrency
+        });
+    } catch (error) {
+        console.error('Erro ao carregar painel de orçamentos:', error);
+        req.flash('error_msg', 'Erro ao carregar orçamentos.');
+        res.redirect('/finance/overview');
+    }
+};
+
+const renderPaymentsPage = async (req, res) => {
+    try {
+        const filters = buildFiltersFromQuery(req.query);
+        const userId = resolveCurrentUserId(req);
+
+        if (userId !== null) {
+            filters.userId = userId;
+        }
+
+        const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
+        const summaryPromise = createSummaryPromise(entriesPromise, filters);
+        const categoriesPromise = fetchFinanceCategoriesForUser(userId);
+
+        const [entries, summary, categories] = await Promise.all([
+            entriesPromise,
+            summaryPromise,
+            categoriesPromise
+        ]);
+
+        const safeEntries = Array.isArray(entries) ? entries.map(serializeEntryForView) : [];
+        const normalizedSummary = summary && typeof summary === 'object' ? summary : {};
+        const summaryTotals = normalizedSummary.totals && typeof normalizedSummary.totals === 'object'
+            ? { ...EMPTY_SUMMARY_TOTALS, ...normalizedSummary.totals }
+            : { ...EMPTY_SUMMARY_TOTALS };
+        if (!Number.isFinite(Number(summaryTotals.net))) {
+            summaryTotals.net = Number(summaryTotals.receivable || 0) - Number(summaryTotals.payable || 0);
+        }
+
+        const summaryStatus = normalizedSummary.statusSummary && typeof normalizedSummary.statusSummary === 'object'
+            ? {
+                receivable: normalizedSummary.statusSummary.receivable || {},
+                payable: normalizedSummary.statusSummary.payable || {}
+            }
+            : { receivable: {}, payable: {} };
+
+        const summaryMonthly = Array.isArray(normalizedSummary.monthlySummary)
+            ? normalizedSummary.monthlySummary
+            : [];
+
+        const projections = Array.isArray(normalizedSummary.projections)
+            ? normalizedSummary.projections
+            : [];
+
+        const importPreview = req.session?.financeImportPreview || null;
+        if (importPreview) {
+            res.locals.importPreview = importPreview;
+            req.session.financeImportPreview = null;
+        }
+
+        res.render('finance/payments', {
+            pageTitle: 'Financeiro • Pagamentos',
+            entries: safeEntries,
+            filters,
+            financeTotals: summaryTotals,
+            summaryStatus,
+            monthlySummary: summaryMonthly,
+            projections,
+            periodLabel: formatPeriodLabel(filters),
+            categories,
+            recurringIntervalOptions,
+            contributionFrequencyLabels: CONTRIBUTION_FREQUENCY_LABELS,
+            importPreview,
+            formatCurrency
+        });
+    } catch (error) {
+        console.error('Erro ao listar lançamentos financeiros:', error);
+        req.flash('error_msg', 'Erro ao listar lançamentos financeiros.');
+        res.redirect('/finance/overview');
+    }
+};
+
+const renderInvestmentsPage = async (req, res) => {
+    try {
+        const filters = buildFiltersFromQuery(req.query);
+        const userId = resolveCurrentUserId(req);
+
+        if (userId !== null) {
+            filters.userId = userId;
+        }
+
+        const categories = await fetchFinanceCategoriesForUser(userId);
+        const entryOptions = buildEntriesQueryOptions(filters);
+        entryOptions.attributes = [
+            'id',
+            'description',
+            'type',
+            'status',
+            'value',
+            'dueDate',
+            'financeCategoryId'
+        ];
+        entryOptions.include = [
+            FinanceCategory && {
+                model: FinanceCategory,
+                as: 'category',
+                attributes: ['id', 'name', 'color']
+            }
+        ].filter(Boolean);
+
+        const investmentEntries = await FinanceEntry.findAll(entryOptions);
+        const safeEntries = Array.isArray(investmentEntries)
+            ? investmentEntries.map(serializeEntryForView)
+            : [];
+
+        const simulationOptions = {};
+        if (filters.investmentPeriodMonths) {
+            simulationOptions.defaultPeriodMonths = filters.investmentPeriodMonths;
+        }
+        if (filters.investmentContribution !== null && filters.investmentContribution !== undefined) {
+            simulationOptions.defaultContribution = filters.investmentContribution;
+        }
+        if (filters.investmentContributionFrequency) {
+            simulationOptions.defaultContributionFrequency = filters.investmentContributionFrequency;
+        }
+
+        let investmentSimulation;
+        try {
+            investmentSimulation = await investmentSimulationService.simulateInvestmentProjections({
+                entries: safeEntries,
+                userId,
+                categories,
+                filters,
+                options: simulationOptions
+            });
+        } catch (simulationError) {
+            if (process.env.NODE_ENV !== 'test') {
+                console.error('Erro ao calcular simulação de investimentos:', simulationError);
+            }
+            investmentSimulation = {
+                categories: [],
+                totals: {
+                    principal: 0,
+                    contributions: 0,
+                    simpleFutureValue: 0,
+                    compoundFutureValue: 0,
+                    interestDelta: 0
+                },
+                options: simulationOptions,
+                generatedAt: new Date().toISOString(),
+                filters
+            };
+        }
+
+        res.render('finance/investments', {
+            pageTitle: 'Financeiro • Investimentos',
+            filters,
+            categories,
+            investmentSimulation,
+            investmentSimulationTotals: investmentSimulation?.totals || null,
+            investmentSimulationCategories: investmentSimulation?.categories || [],
+            contributionFrequencyLabels: CONTRIBUTION_FREQUENCY_LABELS,
+            formatCurrency
+        });
+    } catch (error) {
+        console.error('Erro ao carregar simulação de investimentos:', error);
+        req.flash('error_msg', 'Erro ao carregar simulação de investimentos.');
+        res.redirect('/finance/overview');
+    }
+};
+
+module.exports = {
+    redirectToOverview,
+    renderOverview,
+    renderBudgetsPage,
+    renderPaymentsPage,
+    renderInvestmentsPage,
+    listFinanceEntries: renderPaymentsPage,
 
     updateBudgetThresholds: async (req, res) => {
         try {
@@ -1303,7 +1559,7 @@ module.exports = {
 
             req.session.financeImportPreview = payload;
             req.flash('success_msg', 'Importação analisada. Revise os lançamentos antes de concluir.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/payments');
         } catch (error) {
             console.error('Erro ao pré-processar importação financeira:', error);
             const message = error.message || 'Não foi possível processar o arquivo.';
@@ -1311,7 +1567,7 @@ module.exports = {
                 return res.status(400).json({ ok: false, message });
             }
             req.flash('error_msg', message);
-            return res.redirect('/finance');
+            return res.redirect('/finance/payments');
         }
     },
 
@@ -1463,7 +1719,7 @@ module.exports = {
                 req.flash('error_msg', message || 'Nenhum lançamento foi importado.');
             }
 
-            return res.redirect('/finance');
+            return res.redirect('/finance/payments');
         } catch (error) {
             console.error('Erro ao concluir importação financeira:', error);
             const message = error.message || 'Erro ao concluir importação.';
@@ -1471,7 +1727,7 @@ module.exports = {
                 return res.status(400).json({ ok: false, message });
             }
             req.flash('error_msg', message);
-            return res.redirect('/finance');
+            return res.redirect('/finance/payments');
         }
     },
 
@@ -1483,7 +1739,7 @@ module.exports = {
             const currentUserId = resolveCurrentUserId(req);
             if (currentUserId === null) {
                 req.flash('error_msg', 'Usuário não autenticado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             let normalizedInput;
@@ -1491,7 +1747,7 @@ module.exports = {
                 normalizedInput = normalizeFinanceEntryInput(req.body);
             } catch (validationError) {
                 req.flash('error_msg', validationError.message || 'Dados do lançamento inválidos.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             transaction = await beginTransaction();
@@ -1514,7 +1770,7 @@ module.exports = {
                 await transaction.commit();
             }
             req.flash('success_msg', 'Lançamento criado com sucesso! Categoria, status e pagamento inicial registrados.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         } catch (err) {
             if (transaction) {
                 try {
@@ -1528,7 +1784,7 @@ module.exports = {
 
             console.error(err);
             req.flash('error_msg', 'Erro ao criar lançamento.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         }
     },
 
@@ -1540,7 +1796,7 @@ module.exports = {
             const currentUserId = resolveCurrentUserId(req);
             if (currentUserId === null) {
                 req.flash('error_msg', 'Usuário não autenticado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
             const { id } = req.params;
             let normalizedInput;
@@ -1548,7 +1804,7 @@ module.exports = {
                 normalizedInput = normalizeFinanceEntryInput(req.body);
             } catch (validationError) {
                 req.flash('error_msg', validationError.message || 'Dados do lançamento inválidos.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             transaction = await beginTransaction();
@@ -1567,7 +1823,7 @@ module.exports = {
                     await transaction.rollback();
                 }
                 req.flash('error_msg', 'Lançamento não encontrado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             entry.description = normalizedInput.description;
@@ -1593,7 +1849,7 @@ module.exports = {
             }
 
             req.flash('success_msg', 'Lançamento atualizado! Status e informações de pagamento salvos.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         } catch (err) {
             if (transaction) {
                 try {
@@ -1607,7 +1863,7 @@ module.exports = {
 
             console.error(err);
             req.flash('error_msg', 'Erro ao atualizar lançamento.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         }
     },
 
@@ -1616,7 +1872,7 @@ module.exports = {
             const currentUserId = resolveCurrentUserId(req);
             if (currentUserId === null) {
                 req.flash('error_msg', 'Usuário não autenticado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
             const { id } = req.params;
             const entry = await FinanceEntry.findOne({
@@ -1624,7 +1880,7 @@ module.exports = {
             });
             if (!entry) {
                 req.flash('error_msg', 'Lançamento não encontrado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             const attachments = await FinanceAttachment.findAll({
@@ -1641,11 +1897,11 @@ module.exports = {
             }
 
             req.flash('success_msg', 'Lançamento removido com sucesso.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         } catch (err) {
             console.error(err);
             req.flash('error_msg', 'Erro ao excluir lançamento.');
-            res.redirect('/finance');
+            res.redirect('/finance/payments');
         }
     },
 
@@ -1656,13 +1912,13 @@ module.exports = {
 
             if (!normalizedMonth) {
                 req.flash('error_msg', 'Período da meta inválido.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/overview');
             }
 
             const parsedAmount = normalizeAmountInput(targetNetAmount);
             if (!Number.isFinite(parsedAmount)) {
                 req.flash('error_msg', 'Valor da meta inválido.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/overview');
             }
 
             const cleanedNotes = sanitizeText(notes);
@@ -1672,7 +1928,7 @@ module.exports = {
                 const goal = await FinanceGoal.findByPk(goalId);
                 if (!goal) {
                     req.flash('error_msg', 'Meta financeira não encontrada.');
-                    return res.redirect('/finance');
+                    return res.redirect('/finance/overview');
                 }
 
                 goal.month = normalizedMonth;
@@ -1699,11 +1955,11 @@ module.exports = {
                 }
             }
 
-            return res.redirect('/finance');
+            return res.redirect('/finance/overview');
         } catch (error) {
             console.error(error);
             req.flash('error_msg', 'Erro ao salvar meta financeira.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/overview');
         }
     },
 
@@ -1713,16 +1969,16 @@ module.exports = {
             const goal = await FinanceGoal.findByPk(id);
             if (!goal) {
                 req.flash('error_msg', 'Meta financeira não encontrada.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/overview');
             }
 
             await goal.destroy();
             req.flash('success_msg', 'Meta financeira removida.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/overview');
         } catch (error) {
             console.error(error);
             req.flash('error_msg', 'Erro ao remover meta financeira.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/overview');
         }
     },
 
@@ -1737,7 +1993,7 @@ module.exports = {
                 return res.status(404).json({ success: false, message });
             }
             req.flash('error_msg', message);
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         }
 
         const { normalized, invalid } = parseThresholdInput(req.body?.thresholds);
@@ -1751,7 +2007,7 @@ module.exports = {
                 });
             }
             req.flash('error_msg', message);
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         }
 
         const applyDefaults = normalized.length === 0;
@@ -1765,7 +2021,7 @@ module.exports = {
                     return res.status(404).json({ success: false, message });
                 }
                 req.flash('error_msg', message);
-                return res.redirect('/finance');
+                return res.redirect('/finance/budgets');
             }
 
             budget.thresholds = thresholds;
@@ -1791,7 +2047,7 @@ module.exports = {
             }
 
             req.flash('success_msg', successMessage);
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         } catch (error) {
             console.error('Erro ao atualizar limiares de orçamento:', error);
             const validationMessage = Array.isArray(error?.errors) && error.errors.length
@@ -1804,7 +2060,7 @@ module.exports = {
             }
 
             req.flash('error_msg', validationMessage);
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         }
     },
 
@@ -1818,7 +2074,7 @@ module.exports = {
                     return res.status(400).json({ success: false, error: message });
                 }
                 req.flash('error_msg', message);
-                return res.redirect('/finance');
+                return res.redirect('/finance/budgets');
             }
 
             if (!Budget || typeof Budget.findByPk !== 'function') {
@@ -1827,7 +2083,7 @@ module.exports = {
                     return res.status(503).json({ success: false, error: message });
                 }
                 req.flash('error_msg', message);
-                return res.redirect('/finance');
+                return res.redirect('/finance/budgets');
             }
 
             const budget = await Budget.findByPk(budgetId);
@@ -1837,7 +2093,7 @@ module.exports = {
                     return res.status(404).json({ success: false, error: message });
                 }
                 req.flash('error_msg', message);
-                return res.redirect('/finance');
+                return res.redirect('/finance/budgets');
             }
 
             const input = req.body?.thresholds;
@@ -1864,7 +2120,7 @@ module.exports = {
                         return res.status(400).json({ success: false, error: message });
                     }
                     req.flash('error_msg', message);
-                    return res.redirect('/finance');
+                    return res.redirect('/finance/budgets');
                 }
             } else {
                 normalizedThresholds = getDefaultBudgetThresholds();
@@ -1876,7 +2132,7 @@ module.exports = {
                     return res.status(500).json({ success: false, error: message });
                 }
                 req.flash('error_msg', message);
-                return res.redirect('/finance');
+                return res.redirect('/finance/budgets');
             }
 
             await budget.update({ thresholds: normalizedThresholds });
@@ -1886,14 +2142,14 @@ module.exports = {
             }
 
             req.flash('success_msg', 'Limiares de orçamento atualizados.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         } catch (error) {
             console.error('Erro ao atualizar limiares de orçamento:', error);
             if (expectsJson) {
                 return res.status(500).json({ success: false, error: 'Erro ao atualizar limiares de orçamento.' });
             }
             req.flash('error_msg', 'Erro ao atualizar limiares de orçamento.');
-            return res.redirect('/finance');
+            return res.redirect('/finance/budgets');
         }
     },
 
@@ -2434,7 +2690,7 @@ module.exports = {
             const attachment = await FinanceAttachment.findByPk(attachmentId);
             if (!attachment) {
                 req.flash('error_msg', 'Anexo não encontrado.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             let stream;
@@ -2443,7 +2699,7 @@ module.exports = {
             } catch (error) {
                 console.error('Erro ao acessar anexo de finanças:', error);
                 req.flash('error_msg', 'Arquivo de anexo indisponível.');
-                return res.redirect('/finance');
+                return res.redirect('/finance/payments');
             }
 
             res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
@@ -2458,7 +2714,7 @@ module.exports = {
             console.error('Erro ao baixar anexo financeiro:', err);
             if (!res.headersSent) {
                 req.flash('error_msg', 'Erro ao baixar anexo.');
-                res.redirect('/finance');
+                res.redirect('/finance/payments');
             }
         }
     }
