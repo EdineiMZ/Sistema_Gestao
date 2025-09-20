@@ -1,5 +1,27 @@
 <%- include('../partials/header') %>
 
+<%
+    const statusStyles = {
+        pending: {
+            label: 'Pendente',
+            indicatorClass: 'status-indicator--pending'
+        },
+        in_progress: {
+            label: 'Em andamento',
+            indicatorClass: 'status-indicator--in-progress'
+        },
+        resolved: {
+            label: 'Resolvido',
+            indicatorClass: 'status-indicator--resolved'
+        }
+    };
+    const ticketStatusKey = ticket && typeof ticket.status === 'string' ? ticket.status : 'pending';
+    const ticketStatusStyle = statusStyles[ticketStatusKey] || {
+        label: ticketStatusKey || 'Status indefinido',
+        indicatorClass: 'status-indicator--default'
+    };
+%>
+
 <section class="support-chat-wrapper">
     <div class="row g-4">
         <div class="col-lg-4">
@@ -24,8 +46,8 @@
                     </div>
 
                     <div class="support-chat__status d-flex align-items-center gap-2">
-                        <span class="status-indicator"></span>
-                        <span class="text-uppercase small fw-semibold"><%= ticket.status %></span>
+                        <span class="status-indicator <%= ticketStatusStyle.indicatorClass %>" aria-hidden="true"></span>
+                        <span class="text-uppercase small fw-semibold"><%= ticketStatusStyle.label %></span>
                     </div>
 
                     <div>
@@ -220,8 +242,26 @@
         width: 10px;
         height: 10px;
         border-radius: 50%;
+    }
+
+    .support-chat__status .status-indicator--pending {
+        background: #f59e0b;
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+    }
+
+    .support-chat__status .status-indicator--in-progress {
+        background: #3b82f6;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+    }
+
+    .support-chat__status .status-indicator--resolved {
         background: #22c55e;
         box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+    }
+
+    .support-chat__status .status-indicator--default {
+        background: #94a3b8;
+        box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
     }
 
     @media (max-width: 991px) {
