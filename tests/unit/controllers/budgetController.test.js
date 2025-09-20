@@ -27,7 +27,7 @@ describe('budgetController', () => {
     });
 
     describe('list', () => {
-        it('retorna orçamentos filtrados por categoria', async () => {
+        it('retorna orçamentos sem paginação quando serviço responde lista simples', async () => {
             const budgets = [{ id: 1, monthlyLimit: '1000.00' }];
             budgetService.listBudgets.mockResolvedValue(budgets);
 
@@ -42,6 +42,27 @@ describe('budgetController', () => {
                 success: true,
                 message: 'Operação realizada com sucesso.',
                 data: budgets
+            });
+            expect(res.json.mock.calls[0][0]).not.toHaveProperty('pagination');
+        });
+
+        it('retorna orçamentos com paginação quando serviço fornece metadados', async () => {
+            const budgets = [{ id: 10, monthlyLimit: '2000.00' }];
+            const pagination = { page: 2, pageSize: 10, totalItems: 25, totalPages: 3 };
+            budgetService.listBudgets.mockResolvedValue({ data: budgets, pagination });
+
+            const req = { user: { id: 7 }, query: {} };
+            const res = buildResponse();
+
+            await budgetController.list(req, res);
+
+            expect(budgetService.listBudgets).toHaveBeenCalledWith({ userId: 7, financeCategoryId: undefined });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: 'Operação realizada com sucesso.',
+                data: budgets,
+                pagination
             });
         });
 

@@ -99,9 +99,20 @@ const parseIntegerId = (value, errorMessage) => {
 
 const extractUserId = (req) => req.user?.id || req.session?.user?.id;
 
-const sendSuccess = (res, { status = 200, message = 'Operação realizada com sucesso.', data = null }) => (
-    res.status(status).json({ success: true, message, data })
-);
+const sendSuccess = (res, {
+    status = 200,
+    message = 'Operação realizada com sucesso.',
+    data = null,
+    pagination
+}) => {
+    const payload = { success: true, message, data };
+
+    if (pagination !== undefined) {
+        payload.pagination = pagination;
+    }
+
+    return res.status(status).json(payload);
+};
 
 const buildErrorResponse = (error) => {
     if (error instanceof ValidationError || error instanceof NotFoundError) {
@@ -176,22 +187,22 @@ const budgetController = {
             };
             const result = await budgetService.listBudgets(filters);
 
-            const data = Array.isArray(result?.data)
-                ? result.data
-                : Array.isArray(result)
-                    ? result
-                    : [];
+            let data = [];
+            let pagination;
 
-            const pagination = result && typeof result === 'object' && !Array.isArray(result) && result.pagination
-                ? result.pagination
-                : {
-                    page: 1,
-                    pageSize: Array.isArray(data) ? data.length : 0,
-                    totalItems: Array.isArray(data) ? data.length : 0,
-                    totalPages: Array.isArray(data) && data.length > 0 ? 1 : 0
-                };
+            if (Array.isArray(result)) {
+                data = result;
+            } else if (result && typeof result === 'object') {
+                if (Array.isArray(result.data)) {
+                    data = result.data;
+                }
 
-            return sendSuccess(res, { data: { data, pagination } });
+                if (result.pagination && typeof result.pagination === 'object') {
+                    pagination = result.pagination;
+                }
+            }
+
+            return sendSuccess(res, { data, pagination });
         } catch (error) {
             return handleError(res, error, 'Erro ao listar orçamentos.');
         }
