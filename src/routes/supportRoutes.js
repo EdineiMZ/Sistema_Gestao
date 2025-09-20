@@ -19,6 +19,7 @@ router.get('/tickets', authMiddleware, supportTicketController.listTickets);
 router.post('/tickets', authMiddleware, supportTicketController.createTicket);
 router.post('/tickets/:ticketId/messages', authMiddleware, supportTicketController.addMessage);
 router.post('/tickets/:ticketId/status', authMiddleware, supportTicketController.updateStatus);
+router.get('/tickets/:ticketId', authMiddleware, supportTicketController.showTicket);
 router.get('/tickets/:ticketId/chat', authMiddleware, supportController.renderChat);
 router.get('/tickets/:ticketId/history', authMiddleware, supportController.fetchHistory);
 router.post(

@@ -39,6 +39,7 @@ jest.mock('../../../src/middlewares/authMiddleware', () => jest.fn((req, res, ne
 
 jest.mock('../../../src/services/supportTicketService', () => ({
     listTicketsForUser: jest.fn(),
+    getTicketById: jest.fn(),
     createTicket: jest.fn(),
     addMessage: jest.fn(),
     updateTicketStatus: jest.fn()
@@ -83,6 +84,26 @@ describe('Rotas de suporte - tickets', () => {
                 assignee: null
             }
         ]);
+        supportTicketService.getTicketById.mockResolvedValue({
+            id: 10,
+            subject: 'Problema no acesso',
+            status: 'pending',
+            creatorId: 1,
+            assignedToId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: [
+                {
+                    id: 1,
+                    body: 'Mensagem inicial',
+                    createdAt: new Date().toISOString(),
+                    sender: { id: 1, name: 'Cliente Teste', role: 'client' },
+                    attachments: []
+                }
+            ],
+            attachments: [],
+            attachmentCount: 0
+        });
         supportTicketService.createTicket.mockResolvedValue({ ticket: { id: 10 } });
         supportTicketService.addMessage.mockResolvedValue({ ticket: { id: 10 } });
         supportTicketService.updateTicketStatus.mockResolvedValue({ id: 10 });
@@ -139,5 +160,34 @@ describe('Rotas de suporte - tickets', () => {
             status: 'resolved',
             actor: expect.objectContaining({ id: 1 })
         }));
+    });
+
+    it('exibe os detalhes do ticket para o solicitante', async () => {
+        const response = await request(app).get('/support/tickets/10');
+
+        expect(response.status).toBe(200);
+        expect(response.text).toContain('Chamado #10');
+        expect(response.text).toContain('Problema no acesso');
+        expect(supportTicketService.getTicketById).toHaveBeenCalledWith({ ticketId: '10' });
+    });
+
+    it('impede visualizar ticket sem permissão', async () => {
+        supportTicketService.getTicketById.mockResolvedValueOnce({
+            id: 99,
+            subject: 'Outro chamado',
+            status: 'pending',
+            creatorId: 5,
+            assignedToId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: [],
+            attachments: [],
+            attachmentCount: 0
+        });
+
+        const response = await request(app).get('/support/tickets/99');
+
+        expect(response.status).toBe(302);
+        expect(response.headers.location).toBe('/support/tickets');
     });
 });
