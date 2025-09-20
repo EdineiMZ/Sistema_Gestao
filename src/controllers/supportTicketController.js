@@ -1,5 +1,5 @@
 const { TICKET_STATUSES, isSupportAgentRole } = require('../constants/support');
-const { ROLE_LABELS } = require('../constants/roles');
+const { ROLE_LABELS, USER_ROLES, roleAtLeast } = require('../constants/roles');
 const supportTicketService = require('../services/supportTicketService');
 
 const getRequestUser = (req) => {
@@ -43,11 +43,14 @@ const supportTicketController = {
             }
 
             const tickets = await supportTicketService.listTicketsForUser({ user });
+            const isAgent = isSupportAgentRole(user.role);
+            const isAdmin = roleAtLeast(user.role, USER_ROLES.ADMIN);
 
             res.render('support/tickets', {
                 tickets,
                 statuses: TICKET_STATUSES,
-                isAgent: isSupportAgentRole(user.role),
+                isAgent,
+                isAdmin,
                 user,
                 appName: req.app?.locals?.appName || 'Sistema de Gestão',
                 roleLabels: ROLE_LABELS,

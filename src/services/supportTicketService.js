@@ -14,6 +14,7 @@ const {
     isSupportAgentRole,
     sanitizeSupportContent
 } = require('../constants/support');
+const { buildTicketPresentation } = require('../utils/supportFormatting');
 
 const sanitizeSubject = (subject) => {
     if (subject === undefined || subject === null) {
@@ -148,7 +149,15 @@ const mapTicketPayload = (ticketInstance) => {
         ? plain.attachments.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         : [];
 
-    const attachmentsByMessageId = attachments.reduce((accumulator, attachment) => {
+    const normalizedAttachments = attachments.map((attachment) => ({
+        id: attachment.id,
+        messageId: attachment.messageId || null,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize || null,
+        createdAt: attachment.createdAt
+    }));
+
+    const attachmentsByMessageId = normalizedAttachments.reduce((accumulator, attachment) => {
         if (!attachment || !attachment.messageId) {
             return accumulator;
         }
@@ -190,10 +199,11 @@ const mapTicketPayload = (ticketInstance) => {
             }))
         : [];
 
-    return {
+    const ticketPayload = {
         id: plain.id,
         subject: plain.subject,
         status: plain.status,
+        priority: plain.priority || null,
         creatorId: plain.creatorId,
         assignedToId: plain.assignedToId,
         createdAt: plain.createdAt,
@@ -217,7 +227,13 @@ const mapTicketPayload = (ticketInstance) => {
                 role: plain.assignee.role
             }
             : null,
+        attachments: normalizedAttachments,
         messages: normalizedMessages
+    };
+
+    return {
+        ...ticketPayload,
+        ...buildTicketPresentation(ticketPayload)
     };
 };
 

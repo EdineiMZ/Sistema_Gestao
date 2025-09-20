@@ -33,6 +33,7 @@ const mockMessageInstance = (overrides = {}) => ({
 
 const mockSequelizeTransaction = jest.fn(async (handler) => handler(mockTransaction));
 const mockTicketCreate = jest.fn();
+const mockTicketFindAll = jest.fn();
 const mockTicketFindByPk = jest.fn();
 const mockMessageCreate = jest.fn();
 const mockAttachmentBulkCreate = jest.fn();
@@ -43,6 +44,7 @@ jest.mock('../../../database/models', () => ({
     sequelize: { transaction: mockSequelizeTransaction },
     SupportTicket: {
         create: mockTicketCreate,
+        findAll: mockTicketFindAll,
         findByPk: mockTicketFindByPk
     },
     SupportMessage: {
@@ -63,12 +65,57 @@ const {
     createTicket,
     addMessage,
     updateTicketStatus,
-    assignTicket
+    assignTicket,
+    listTicketsForUser
 } = require('../../../src/services/supportTicketService');
 
 describe('supportTicketService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+    });
+
+    it('adiciona campos derivados ao listar chamados', async () => {
+        const baseDate = new Date('2024-09-20T10:00:00Z');
+        const ticket = mockTicketInstance({
+            priority: 'HIGH',
+            createdAt: baseDate,
+            updatedAt: new Date('2024-09-20T11:00:00Z'),
+            lastMessageAt: new Date('2024-09-20T11:30:00Z'),
+            attachments: [
+                { id: 1, messageId: 99, fileName: 'erro.png', fileSize: 1024, createdAt: new Date('2024-09-20T11:10:00Z') }
+            ],
+            messages: [
+                {
+                    id: 99,
+                    ticketId: 1,
+                    senderId: 10,
+                    body: '<p>Mensagem</p>',
+                    isFromAgent: false,
+                    isSystem: false,
+                    createdAt: new Date('2024-09-20T11:05:00Z'),
+                    sender: { id: 10, name: 'Cliente', role: 'client' }
+                }
+            ],
+            creator: { id: 10, name: 'Cliente', email: 'cliente@example.com', role: 'client' }
+        });
+
+        mockTicketFindAll.mockResolvedValueOnce([ticket]);
+
+        const [result] = await listTicketsForUser({ user: { id: 10, role: 'client' } });
+
+        expect(mockTicketFindAll).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ creatorId: 10 })
+        }));
+        expect(result).toEqual(expect.objectContaining({
+            statusLabel: 'Pendente',
+            priority: 'high',
+            priorityLabel: 'Alta',
+            attachmentCount: 1
+        }));
+        expect(result.attachments).toHaveLength(1);
+        expect(result.messages[0].attachments).toHaveLength(1);
+        expect(result.createdAtFormatted).toBeTruthy();
+        expect(result.updatedAtFormatted).toBeTruthy();
     });
 
     it('cria um chamado com mensagem inicial e anexos em transação', async () => {
