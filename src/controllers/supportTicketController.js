@@ -1,5 +1,5 @@
 const { TICKET_STATUSES, isSupportAgentRole } = require('../constants/support');
-const { ROLE_LABELS } = require('../constants/roles');
+const { USER_ROLES, ROLE_LABELS, roleAtLeast } = require('../constants/roles');
 const supportTicketService = require('../services/supportTicketService');
 
 const getRequestUser = (req) => {
@@ -33,6 +33,114 @@ const pushFlashMessage = (req, type, message) => {
     }
 };
 
+const TICKET_STATUS_LABELS = Object.freeze({
+    [TICKET_STATUSES.PENDING]: 'Pendente',
+    [TICKET_STATUSES.IN_PROGRESS]: 'Em andamento',
+    [TICKET_STATUSES.RESOLVED]: 'Resolvido'
+});
+
+const TICKET_PRIORITY_LABELS = Object.freeze({
+    low: 'Baixa',
+    medium: 'Média',
+    high: 'Alta'
+});
+
+const ALLOWED_TICKET_PRIORITIES = Object.freeze(['low', 'medium', 'high']);
+const DEFAULT_TICKET_PRIORITY = 'medium';
+const DEFAULT_DATETIME_LABEL = '--';
+
+const createDateTimeFormatter = () => {
+    try {
+        return new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short'
+        });
+    } catch (error) {
+        return null;
+    }
+};
+
+const dateTimeFormatter = createDateTimeFormatter();
+
+const formatDateTime = (value) => {
+    if (!value) {
+        return DEFAULT_DATETIME_LABEL;
+    }
+
+    try {
+        const parsedDate = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return DEFAULT_DATETIME_LABEL;
+        }
+
+        if (dateTimeFormatter) {
+            return dateTimeFormatter.format(parsedDate);
+        }
+
+        return parsedDate.toLocaleString('pt-BR');
+    } catch (error) {
+        return DEFAULT_DATETIME_LABEL;
+    }
+};
+
+const summarizeTicketForList = (ticket) => {
+    if (!ticket) {
+        return null;
+    }
+
+    const normalizedPriority = typeof ticket.priority === 'string'
+        ? ticket.priority.trim().toLowerCase()
+        : null;
+
+    const priority = ALLOWED_TICKET_PRIORITIES.includes(normalizedPriority)
+        ? normalizedPriority
+        : DEFAULT_TICKET_PRIORITY;
+
+    const attachmentCount = Array.isArray(ticket.messages)
+        ? ticket.messages.reduce((total, message) => {
+            if (!message) {
+                return total;
+            }
+
+            const attachments = Array.isArray(message.attachments)
+                ? message.attachments.length
+                : 0;
+
+            return total + attachments;
+        }, 0)
+        : 0;
+
+    const creator = ticket.creator
+        ? {
+            id: ticket.creator.id,
+            name: ticket.creator.name,
+            email: ticket.creator.email || null
+        }
+        : null;
+
+    const requester = ticket.requester
+        ? {
+            id: ticket.requester.id,
+            name: ticket.requester.name,
+            email: ticket.requester.email || null
+        }
+        : null;
+
+    return {
+        id: ticket.id,
+        subject: ticket.subject,
+        status: ticket.status,
+        statusLabel: TICKET_STATUS_LABELS[ticket.status] || ticket.status,
+        priority,
+        priorityLabel: TICKET_PRIORITY_LABELS[priority] || priority,
+        createdAtFormatted: formatDateTime(ticket.createdAt),
+        updatedAtFormatted: formatDateTime(ticket.updatedAt || ticket.lastMessageAt || ticket.createdAt),
+        attachmentCount,
+        creator,
+        requester
+    };
+};
+
 const supportTicketController = {
     async listTickets(req, res) {
         try {
@@ -44,10 +152,14 @@ const supportTicketController = {
 
             const tickets = await supportTicketService.listTicketsForUser({ user });
 
-            res.render('support/tickets', {
-                tickets,
-                statuses: TICKET_STATUSES,
+            const ticketSummaries = Array.isArray(tickets)
+                ? tickets.map(summarizeTicketForList).filter(Boolean)
+                : [];
+
+            res.render('support/listTickets', {
+                tickets: ticketSummaries,
                 isAgent: isSupportAgentRole(user.role),
+                isAdmin: roleAtLeast(user.role, USER_ROLES.ADMIN),
                 user,
                 appName: req.app?.locals?.appName || 'Sistema de Gestão',
                 roleLabels: ROLE_LABELS,
