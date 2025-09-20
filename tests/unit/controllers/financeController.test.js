@@ -44,7 +44,15 @@ describe('financeController', () => {
         await financeController.createFinanceEntry(req, res);
 
         expect(FinanceEntry.create).toHaveBeenCalledWith(
-            expect.objectContaining({ recurringInterval: 'monthly', userId: 42 })
+            expect.objectContaining({
+                recurringInterval: 'monthly',
+                userId: 42,
+                status: 'pending',
+                paymentDate: null,
+                financeCategoryId: null,
+                recurring: true,
+                value: 199.9
+            })
         );
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
         expect(res.redirect).toHaveBeenCalledWith('/finance');
@@ -88,6 +96,10 @@ describe('financeController', () => {
         await financeController.updateFinanceEntry(req, res);
 
         expect(entry.recurringInterval).toBe('biweekly');
+        expect(entry.recurring).toBe(true);
+        expect(entry.value).toBe(500);
+        expect(entry.paymentDate).toBeNull();
+        expect(entry.status).toBe('paid');
         expect(save).toHaveBeenCalledTimes(1);
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
         expect(res.redirect).toHaveBeenCalledWith('/finance');

@@ -335,6 +335,146 @@ const normalizeStatusValue = (value, allowedValues = []) => {
     return allowedValues.includes(normalized) ? normalized : null;
 };
 
+const buildValidationError = (message) => {
+    const error = new Error(message || 'Dados inválidos.');
+    error.name = 'FinanceEntryValidationError';
+    error.isValidationError = true;
+    return error;
+};
+
+const normalizeBooleanInput = (value) => {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value !== 0 : false;
+    }
+
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+            return false;
+        }
+        return ['1', 'true', 'yes', 'sim', 'on'].includes(normalized);
+    }
+
+    return false;
+};
+
+const formatDateOnly = (year, month, day) => {
+    const normalizedYear = String(year).padStart(4, '0');
+    const normalizedMonth = String(month).padStart(2, '0');
+    const normalizedDay = String(day).padStart(2, '0');
+    return `${normalizedYear}-${normalizedMonth}-${normalizedDay}`;
+};
+
+const normalizeDateOnlyInput = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (value instanceof Date) {
+        if (!Number.isFinite(value.getTime())) {
+            return null;
+        }
+        return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const fromNumber = new Date(value);
+        if (!Number.isFinite(fromNumber.getTime())) {
+            return null;
+        }
+        return fromNumber.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+
+        const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) {
+            return formatDateOnly(isoMatch[1], isoMatch[2], isoMatch[3]);
+        }
+
+        const isoDateTimeMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]/);
+        if (isoDateTimeMatch) {
+            return formatDateOnly(isoDateTimeMatch[1], isoDateTimeMatch[2], isoDateTimeMatch[3]);
+        }
+
+        const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (brMatch) {
+            return formatDateOnly(brMatch[3], brMatch[2], brMatch[1]);
+        }
+
+        const compactMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+        if (compactMatch) {
+            return formatDateOnly(compactMatch[1], compactMatch[2], compactMatch[3]);
+        }
+
+        const parsed = new Date(trimmed);
+        if (Number.isFinite(parsed.getTime())) {
+            return formatDateOnly(
+                parsed.getUTCFullYear(),
+                parsed.getUTCMonth() + 1,
+                parsed.getUTCDate()
+            );
+        }
+    }
+
+    return null;
+};
+
+const normalizeFinanceEntryInput = (body = {}) => {
+    const description = sanitizeText(body.description);
+    if (!description) {
+        throw buildValidationError('Informe uma descrição para o lançamento.');
+    }
+
+    const normalizedType = normalizeStatusValue(body.type, FINANCE_TYPES) || 'payable';
+
+    const normalizedAmount = normalizeAmountInput(body.value);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
+        throw buildValidationError('Informe um valor válido (use ponto para decimais).');
+    }
+    const value = Number.parseFloat(normalizedAmount.toFixed(2));
+
+    const dueDate = normalizeDateOnlyInput(body.dueDate);
+    if (!dueDate) {
+        throw buildValidationError('Informe uma data de vencimento válida no formato AAAA-MM-DD.');
+    }
+
+    let paymentDate = null;
+    if (body.paymentDate !== undefined && body.paymentDate !== null) {
+        const normalizedPayment = normalizeDateOnlyInput(body.paymentDate);
+        if (normalizedPayment) {
+            paymentDate = normalizedPayment;
+        } else if (String(body.paymentDate).trim()) {
+            throw buildValidationError('Data de pagamento inválida. Utilize AAAA-MM-DD ou deixe em branco.');
+        }
+    }
+
+    const status = normalizeStatusValue(body.status, FINANCE_STATUSES) || 'pending';
+    const financeCategoryId = normalizeCategoryId(body.financeCategoryId ?? body.categoryId);
+    const recurring = normalizeBooleanInput(body.recurring);
+    const recurringInterval = normalizeRecurringInterval(body.recurringInterval);
+
+    return {
+        description,
+        type: normalizedType,
+        value,
+        dueDate,
+        paymentDate,
+        status,
+        financeCategoryId,
+        recurring,
+        recurringInterval: recurringInterval || null
+    };
+};
+
 const serializeAttachmentForView = (attachment) => {
     const plain = typeof attachment?.get === 'function'
         ? attachment.get({ plain: true })
@@ -1046,7 +1186,8 @@ module.exports = {
                     budgetStatusPalette: statusPalette,
                     investmentSimulation,
                     investmentSimulationTotals: investmentSimulation?.totals || null,
-                    investmentSimulationCategories: investmentSimulation?.categories || []
+                    investmentSimulationCategories: investmentSimulation?.categories || [],
+                    categories
 
                 },
                 (renderError, html) => {
@@ -1344,22 +1485,20 @@ module.exports = {
                 req.flash('error_msg', 'Usuário não autenticado.');
                 return res.redirect('/finance');
             }
-            const { description, type, value, dueDate, recurring, recurringInterval } = req.body;
-            const financeCategoryId = normalizeCategoryId(
-                req.body.financeCategoryId ?? req.body.categoryId
-            );
+
+            let normalizedInput;
+            try {
+                normalizedInput = normalizeFinanceEntryInput(req.body);
+            } catch (validationError) {
+                req.flash('error_msg', validationError.message || 'Dados do lançamento inválidos.');
+                return res.redirect('/finance');
+            }
 
             transaction = await beginTransaction();
 
             const createPayload = {
-                description,
-                type,
-                value,
-                dueDate,
-                financeCategoryId,
+                ...normalizedInput,
                 userId: currentUserId,
-                recurring: (recurring === 'true'),
-                recurringInterval: normalizeRecurringInterval(recurringInterval)
             };
 
             let entry;
@@ -1374,7 +1513,7 @@ module.exports = {
             if (transaction) {
                 await transaction.commit();
             }
-            req.flash('success_msg', 'Lançamento criado com sucesso!');
+            req.flash('success_msg', 'Lançamento criado com sucesso! Categoria, status e pagamento inicial registrados.');
             res.redirect('/finance');
         } catch (err) {
             if (transaction) {
@@ -1404,20 +1543,13 @@ module.exports = {
                 return res.redirect('/finance');
             }
             const { id } = req.params;
-            const {
-                description,
-                type,
-                value,
-                dueDate,
-                paymentDate,
-                status,
-                recurring,
-                recurringInterval
-            } = req.body;
-
-            const financeCategoryId = normalizeCategoryId(
-                req.body.financeCategoryId ?? req.body.categoryId
-            );
+            let normalizedInput;
+            try {
+                normalizedInput = normalizeFinanceEntryInput(req.body);
+            } catch (validationError) {
+                req.flash('error_msg', validationError.message || 'Dados do lançamento inválidos.');
+                return res.redirect('/finance');
+            }
 
             transaction = await beginTransaction();
 
@@ -1438,15 +1570,15 @@ module.exports = {
                 return res.redirect('/finance');
             }
 
-            entry.description = description;
-            entry.type = type;
-            entry.value = value;
-            entry.dueDate = dueDate;
-            entry.paymentDate = paymentDate || null;
-            entry.status = status;
-            entry.financeCategoryId = financeCategoryId;
-            entry.recurring = (recurring === 'true');
-            entry.recurringInterval = normalizeRecurringInterval(recurringInterval);
+            entry.description = normalizedInput.description;
+            entry.type = normalizedInput.type;
+            entry.value = normalizedInput.value;
+            entry.dueDate = normalizedInput.dueDate;
+            entry.paymentDate = normalizedInput.paymentDate;
+            entry.status = normalizedInput.status;
+            entry.financeCategoryId = normalizedInput.financeCategoryId;
+            entry.recurring = normalizedInput.recurring;
+            entry.recurringInterval = normalizedInput.recurringInterval;
 
             if (transaction) {
                 await entry.save({ transaction });
@@ -1460,7 +1592,7 @@ module.exports = {
                 await transaction.commit();
             }
 
-            req.flash('success_msg', 'Lançamento atualizado!');
+            req.flash('success_msg', 'Lançamento atualizado! Status e informações de pagamento salvos.');
             res.redirect('/finance');
         } catch (err) {
             if (transaction) {

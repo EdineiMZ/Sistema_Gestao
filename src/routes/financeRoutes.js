@@ -90,7 +90,6 @@ const adaptBudgetJsonResponse = (handler, { prepare } = {}) => async (req, res, 
                         pagination: payload.pagination
                     });
                 }
-
                 return originalJson(payload.data);
             }
 
