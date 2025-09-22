@@ -48,15 +48,85 @@ const dropLegacyMonthIndexes = async (queryInterface, transaction) => {
         return index.unique && fields.length === 1 && fields[0] === 'month';
     });
 
+    const dialect = queryInterface.sequelize.getDialect();
+
     for (const index of legacyIndexes) {
         const indexName = index.name || index.fields.join('_');
+        const constraintName = index.constraintName || indexName;
+        const sanitizedConstraintName = constraintName.replace(/"/g, '""');
+        const sanitizedIndexName = indexName.replace(/"/g, '""');
+
+        const hasConstraintHint = index.primary === true || Boolean(index.constraintName);
+        const shouldTryConstraintRemoval = hasConstraintHint || (dialect === 'postgres' && index.unique);
+
+        let removalSucceeded = false;
+
+        if (shouldTryConstraintRemoval) {
+            try {
+                await queryInterface.removeConstraint(TABLE_NAME, constraintName, { transaction });
+                removalSucceeded = true;
+            } catch (constraintError) {
+                const isMissingConstraint =
+                    constraintError?.original?.code === '42704'
+                    || /does not exist/i.test(constraintError?.message || '');
+
+                if (!isMissingConstraint && dialect === 'postgres') {
+                    try {
+                        await queryInterface.sequelize.query(
+                            `DROP INDEX IF EXISTS "${sanitizedConstraintName}" CASCADE;`,
+                            { transaction }
+                        );
+                        removalSucceeded = true;
+                    } catch (dropError) {
+                        if (process.env.NODE_ENV !== 'test') {
+                            console.error(
+                                `Falha ao remover constraint antiga ${constraintName}:`,
+                                dropError.message
+                            );
+                        }
+                        throw dropError;
+                    }
+                } else if (!isMissingConstraint) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error(
+                            `Falha ao remover constraint antiga ${constraintName}:`,
+                            constraintError.message
+                        );
+                    }
+                    throw constraintError;
+                }
+            }
+        }
+
+        if (removalSucceeded) {
+            continue;
+        }
+
         try {
             await queryInterface.removeIndex(TABLE_NAME, indexName, { transaction });
-        } catch (error) {
-            if (process.env.NODE_ENV !== 'test') {
-                // Best-effort removal; ignore if index does not exist in this dialect.
-                console.warn(`Não foi possível remover índice antigo ${indexName}:`, error.message);
+        } catch (indexError) {
+            if (dialect === 'postgres') {
+                try {
+                    await queryInterface.sequelize.query(
+                        `DROP INDEX IF EXISTS "${sanitizedIndexName}" CASCADE;`,
+                        { transaction }
+                    );
+                    continue;
+                } catch (dropError) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.error(
+                            `Falha ao remover índice antigo ${indexName}:`,
+                            dropError.message
+                        );
+                    }
+                    throw dropError;
+                }
             }
+
+            if (process.env.NODE_ENV !== 'test') {
+                console.error(`Falha ao remover índice antigo ${indexName}:`, indexError.message);
+            }
+            throw indexError;
         }
     }
 };
