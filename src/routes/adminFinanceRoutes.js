@@ -2,6 +2,7 @@ const express = require('express');
 const adminFinanceController = require('../controllers/adminFinanceController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
+const audit = require('../middlewares/audit');
 const { USER_ROLES } = require('../constants/roles');
 
 const router = express.Router();
@@ -19,6 +20,13 @@ router.use((req, res, next) => {
 
 router.use(authMiddleware);
 router.use(permissionMiddleware(USER_ROLES.ADMIN));
+
+router.get('/access-policy', adminFinanceController.renderFinanceAccessPolicy);
+router.post(
+    '/access-policy',
+    audit('finance.accessPolicy.update', () => 'FinanceAccessPolicy'),
+    adminFinanceController.updateFinanceAccessPolicy
+);
 
 router.get('/budgets', adminFinanceController.listBudgets);
 router.post('/budgets', adminFinanceController.createBudget);

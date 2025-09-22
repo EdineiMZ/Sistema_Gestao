@@ -7,36 +7,43 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
 const financeImportUpload = require('../middlewares/financeImportUpload');
-const { USER_ROLES, parseRole, sortRolesByHierarchy } = require('../constants/roles');
+const financeAccessPolicyService = require('../services/financeAccessPolicyService');
 const { uploadAttachments } = require('../middlewares/financeAttachmentUpload');
 
-const parseFinanceAllowedRoles = (value) => {
-    const fallback = [USER_ROLES.CLIENT];
-
-    if (value === undefined || value === null || value === '') {
-        return [...fallback];
+const shouldSuppressPolicyError = (error) => {
+    if (!error || typeof error !== 'object') {
+        return false;
     }
 
-    const tokens = Array.isArray(value)
-        ? value
-        : String(value)
-            .split(/[,;|\s]+/)
-            .map((item) => item.trim())
-            .filter(Boolean);
+    const parent = error.parent || error.original || {};
+    const code = parent.code || error.code;
+    const message = String(parent.message || error.message || '').toLowerCase();
 
-    const resolved = tokens
-        .map((token) => parseRole(token))
-        .filter(Boolean);
-
-    if (!resolved.length) {
-        return [...fallback];
+    if (message.includes('no such table') || message.includes('does not exist')) {
+        return true;
     }
 
-    return sortRolesByHierarchy(resolved);
+    if (code === '42P01') {
+        return true;
+    }
+
+    return false;
 };
 
-const FINANCE_ALLOWED_ROLES = parseFinanceAllowedRoles(process.env.FINANCE_ALLOWED_ROLES);
-const requireFinanceAccess = permissionMiddleware(FINANCE_ALLOWED_ROLES);
+const requireFinanceAccess = permissionMiddleware(async () => {
+    try {
+        const roles = await financeAccessPolicyService.getAllowedRoles();
+        if (Array.isArray(roles) && roles.length > 0) {
+            return roles;
+        }
+    } catch (error) {
+        if (!shouldSuppressPolicyError(error)) {
+            console.error('Não foi possível carregar a política de acesso financeiro:', error);
+        }
+    }
+
+    return financeAccessPolicyService.resolveEnvFallbackRoles();
+});
 
 const prefersJsonResponse = (req) => {
     if (req.xhr) {
