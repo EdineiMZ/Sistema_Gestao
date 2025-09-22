@@ -105,6 +105,38 @@ const ensureAdminRole = (user) => {
     }
 };
 
+const normalizeAttachmentPayload = (attachment) => {
+    if (!attachment) {
+        return null;
+    }
+
+    const plain = typeof attachment.get === 'function'
+        ? attachment.get({ plain: true })
+        : attachment;
+
+    const fileName = plain.fileName || plain.originalName || null;
+    const contentType = plain.contentType || plain.mimeType || null;
+    const fileSize = plain.fileSize !== undefined && plain.fileSize !== null
+        ? Number(plain.fileSize)
+        : (plain.size !== undefined ? Number(plain.size) : null);
+
+    return {
+        id: plain.id,
+        ticketId: plain.ticketId || null,
+        messageId: plain.messageId || plain.attachmentId || null,
+        uploadedById: plain.uploadedById || null,
+        fileName,
+        contentType,
+        fileSize: Number.isFinite(fileSize) ? fileSize : null,
+        createdAt: plain.createdAt || null,
+        updatedAt: plain.updatedAt || null,
+        // Campos antigos preservados para compatibilidade
+        originalName: fileName,
+        mimeType: contentType,
+        size: Number.isFinite(fileSize) ? fileSize : null
+    };
+};
+
 const mapMessageToPayload = (message) => {
     if (!message) {
         return null;
@@ -115,12 +147,7 @@ const mapMessageToPayload = (message) => {
         : message;
 
     const attachment = plain.attachment
-        ? {
-            id: plain.attachment.id,
-            originalName: plain.attachment.originalName,
-            mimeType: plain.attachment.mimeType,
-            size: plain.attachment.size
-        }
+        ? normalizeAttachmentPayload(plain.attachment)
         : null;
 
     const sender = plain.sender
@@ -170,10 +197,12 @@ const listTicketAttachments = async (ticketId) => {
     const attachments = await SupportAttachment.findAll({
         where: { ticketId },
         order: [['createdAt', 'ASC']],
-        attributes: ['id', 'ticketId', 'originalName', 'mimeType', 'size', 'createdAt']
+        attributes: ['id', 'ticketId', 'messageId', 'uploadedById', 'fileName', 'contentType', 'fileSize', 'createdAt', 'updatedAt']
     });
 
-    return attachments.map((attachment) => attachment.get({ plain: true }));
+    return attachments
+        .map((attachment) => normalizeAttachmentPayload(attachment))
+        .filter(Boolean);
 };
 
 const persistMessage = async ({
@@ -254,20 +283,14 @@ const createAttachment = async ({ ticketId, file }) => {
 
     const attachment = await SupportAttachment.create({
         ticketId,
-        originalName: stored.sanitizedFileName,
+        fileName: stored.sanitizedFileName,
         storageKey: stored.storageKey,
-        mimeType: file.mimetype,
-        size: file.size,
+        contentType: file.mimetype,
+        fileSize: file.size,
         checksum: stored.checksum
     });
 
-    return {
-        id: attachment.id,
-        ticketId: attachment.ticketId,
-        originalName: attachment.originalName,
-        mimeType: attachment.mimeType,
-        size: attachment.size
-    };
+    return normalizeAttachmentPayload(attachment);
 };
 
 const getAttachmentById = async (attachmentId) => {

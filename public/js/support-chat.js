@@ -26,6 +26,23 @@ const state = {
 
 const socket = typeof io === 'function' ? io() : null;
 
+const getAttachmentName = (attachment) => {
+    if (!attachment) {
+        return 'arquivo';
+    }
+
+    return attachment.fileName || attachment.originalName || 'arquivo';
+};
+
+const getAttachmentSize = (attachment) => {
+    if (!attachment) {
+        return 0;
+    }
+
+    const size = Number(attachment.fileSize ?? attachment.size ?? 0);
+    return Number.isFinite(size) && size >= 0 ? size : 0;
+};
+
 const formatTime = (value) => {
     const date = value ? new Date(value) : new Date();
     if (Number.isNaN(date.getTime())) {
@@ -121,7 +138,7 @@ const renderMessage = (message) => {
         const attachmentLink = document.createElement('a');
         attachmentLink.href = `/support/attachments/${message.attachment.id}/download`;
         attachmentLink.className = 'd-inline-flex align-items-center gap-2 small fw-semibold';
-        attachmentLink.innerHTML = `<i class="bi bi-paperclip"></i> ${message.attachment.originalName}`;
+        attachmentLink.innerHTML = `<i class="bi bi-paperclip"></i> ${getAttachmentName(message.attachment)}`;
         bubble.append(attachmentLink);
     }
 
@@ -158,13 +175,13 @@ const renderAttachments = () => {
         item.className = 'attachment-item d-flex align-items-center gap-3';
         item.dataset.attachmentId = attachment.id;
 
-        const sizeKb = ((attachment.size || 0) / 1024).toFixed(1);
+        const sizeKb = (getAttachmentSize(attachment) / 1024).toFixed(1);
 
         item.innerHTML = `
             <span class="attachment-icon bg-primary-subtle text-primary"><i class="bi bi-paperclip"></i></span>
             <div class="flex-grow-1">
                 <a class="text-decoration-none fw-semibold" href="/support/attachments/${attachment.id}/download">
-                    ${attachment.originalName}
+                    ${getAttachmentName(attachment)}
                 </a>
                 <small class="text-muted d-block">Tamanho: ${sizeKb} KB</small>
             </div>

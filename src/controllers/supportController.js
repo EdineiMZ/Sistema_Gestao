@@ -143,8 +143,23 @@ const supportController = {
 
             await ensureTicketAccess(attachment.ticketId, user);
 
-            res.setHeader('Content-Type', attachment.mimeType);
-            res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+            const plainAttachment = typeof attachment.get === 'function'
+                ? attachment.get({ plain: true })
+                : attachment;
+
+            const contentType = plainAttachment.contentType || plainAttachment.mimeType || 'application/octet-stream';
+            const fileNameSource = plainAttachment.fileName || plainAttachment.originalName || 'anexo';
+            const safeFileName = String(fileNameSource)
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/"/g, '')
+                .trim() || 'anexo';
+
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+
+            if (Number.isFinite(Number(plainAttachment.fileSize))) {
+                res.setHeader('Content-Length', String(plainAttachment.fileSize));
+            }
 
             const stream = fileStorageService.createReadStream(attachment.storageKey);
             stream.on('error', (error) => {
