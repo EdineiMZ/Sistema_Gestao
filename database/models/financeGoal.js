@@ -32,10 +32,18 @@ const normalizeMonthValue = (value) => {
 
 module.exports = (sequelize, DataTypes) => {
     const FinanceGoal = sequelize.define('FinanceGoal', {
+        userId: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            validate: {
+                isInt: {
+                    msg: 'Usuário da meta inválido.'
+                }
+            }
+        },
         month: {
             type: DataTypes.DATEONLY,
             allowNull: false,
-            unique: true,
             validate: {
                 isDate: {
                     msg: 'Período da meta inválido.'
@@ -61,7 +69,8 @@ module.exports = (sequelize, DataTypes) => {
         indexes: [
             {
                 unique: true,
-                fields: ['month']
+                name: 'finance_goals_user_month_unique',
+                fields: ['userId', 'month']
             }
         ]
     });
@@ -78,6 +87,15 @@ module.exports = (sequelize, DataTypes) => {
     });
 
     FinanceGoal.normalizeMonthValue = normalizeMonthValue;
+
+    FinanceGoal.associate = (models) => {
+        if (models.User) {
+            FinanceGoal.belongsTo(models.User, {
+                as: 'user',
+                foreignKey: 'userId'
+            });
+        }
+    };
 
     return FinanceGoal;
 };

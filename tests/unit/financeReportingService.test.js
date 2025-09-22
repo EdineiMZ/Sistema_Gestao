@@ -77,10 +77,16 @@ describe('financeReportingService', () => {
         const findAllSpy = jest.spyOn(FinanceEntry, 'findAll');
         const goalSpy = jest.spyOn(FinanceGoal, 'findAll').mockResolvedValue([]);
 
-        const summary = await getFinanceSummary({ referenceDate: '2024-03-05', projectionMonths: 1 }, { entries });
+        const summary = await getFinanceSummary(
+            { userId: 10, referenceDate: '2024-03-05', projectionMonths: 1 },
+            { entries }
+        );
 
         expect(findAllSpy).not.toHaveBeenCalled();
         expect(goalSpy).toHaveBeenCalledTimes(1);
+        expect(goalSpy).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: 10 })
+        }));
         expect(summary.statusSummary).toEqual({
             payable: { pending: 100, paid: 0, overdue: 0, cancelled: 0 },
             receivable: { pending: 0, paid: 250, overdue: 0, cancelled: 0 }
@@ -126,7 +132,7 @@ describe('financeReportingService', () => {
             { id: 2, month: '2024-09-01', targetNetAmount: '250.00', notes: null }
         ]);
 
-        const projections = await getMonthlyProjection({ referenceDate: '2024-07-15', projectionMonths: 3 });
+        const projections = await getMonthlyProjection({ userId: 22, referenceDate: '2024-07-15', projectionMonths: 3 });
 
         expect(Array.isArray(projections)).toBe(true);
         expect(projections).toHaveLength(3);
@@ -143,5 +149,25 @@ describe('financeReportingService', () => {
         expect(september.projected.net).toBeCloseTo(300, 2);
         expect(september.goal).toMatchObject({ achieved: true });
         expect(september.goal.gapToGoal).toBeCloseTo(50, 2);
+    });
+
+    it('filtra metas por usuário ao gerar projeções', async () => {
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue([]);
+        const goalSpy = jest.spyOn(FinanceGoal, 'findAll').mockResolvedValue([]);
+
+        await getMonthlyProjection({ userId: 33, referenceDate: '2024-01-10', projectionMonths: 2 });
+
+        expect(goalSpy).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: 33 })
+        }));
+    });
+
+    it('não consulta metas quando usuário não é informado', async () => {
+        jest.spyOn(FinanceEntry, 'findAll').mockResolvedValue([]);
+        const goalSpy = jest.spyOn(FinanceGoal, 'findAll').mockResolvedValue([]);
+
+        await getMonthlyProjection({ referenceDate: '2024-02-01', projectionMonths: 1 });
+
+        expect(goalSpy).not.toHaveBeenCalled();
     });
 });

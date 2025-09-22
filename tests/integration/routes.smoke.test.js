@@ -171,6 +171,9 @@ describe('Smoke tests das rotas principais', () => {
         expect(financeReportingService.getFinanceSummary).toHaveBeenCalledWith(
             expect.objectContaining({ userId: 1000 })
         );
+        expect(FinanceGoal.findAll).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: 1000 })
+        }));
         expect(budgetService.getBudgetOverview).toHaveBeenCalledWith(
             expect.objectContaining({ userId: 1000 }),
             expect.objectContaining({ includeCategoryConsumption: true })

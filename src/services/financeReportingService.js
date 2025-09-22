@@ -1050,6 +1050,11 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return [];
     }
 
+    const userId = parseIntegerId(options.userId);
+    if (userId === null) {
+        return [];
+    }
+
     const monthValues = monthKeys.map((key) => {
         if (typeof key === 'string' && /^\d{4}-\d{2}$/.test(key)) {
             return `${key}-01`;
@@ -1060,6 +1065,7 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return await FinanceGoal.findAll({
             attributes: ['id', 'month', 'targetNetAmount', 'notes'],
             where: {
+                userId,
                 month: { [Op.in]: monthValues }
             },
             order: [['month', 'ASC']],
@@ -1314,40 +1320,17 @@ const getMonthlySummary = async (filters = {}, options = {}) => {
 const getMonthlyProjection = async (filters = {}, options = {}) => {
     const entries = await resolveEntries(filters, options);
     const settings = resolveProjectionSettings(filters, options);
-    return buildMonthlyProjectionFromEntries(entries, settings, options);
+    const userId = parseIntegerId(options.userId ?? filters.userId);
+    return buildMonthlyProjectionFromEntries(entries, settings, { ...options, userId });
 };
 
 const getFinanceSummary = async (filters = {}, options = {}) => {
-    const providedEntries = Array.isArray(options.entries) ? options.entries : null;
-    const includeProjections = options.includeProjections !== false;
-
-    const statusPromise = providedEntries
-        ? Promise.resolve(buildStatusSummaryFromEntries(providedEntries))
-        : (async () => {
-            const rows = await fetchEntries(filters, { mode: 'statusSummary' });
-            return buildStatusSummaryFromAggregates(rows);
-        })();
-
-    const monthlyPromise = providedEntries
-        ? Promise.resolve(buildMonthlySummaryFromEntries(providedEntries))
-        : (async () => {
-            const rows = await fetchEntries(filters, { mode: 'monthlySummary' });
-            return buildMonthlySummaryFromAggregates(rows);
-        })();
-
-    const [statusSummary, monthlySummary] = await Promise.all([statusPromise, monthlyPromise]);
-
-    let projections = [];
-    let entriesForProjection = providedEntries;
-
-    if (includeProjections) {
-        if (!entriesForProjection) {
-            entriesForProjection = await fetchEntries(filters);
-        }
-        const projectionSettings = resolveProjectionSettings(filters, options);
-        projections = await buildMonthlyProjectionFromEntries(entriesForProjection, projectionSettings, options);
-    }
-
+    const entries = await resolveEntries(filters, options);
+    const statusSummary = buildStatusSummaryFromEntries(entries);
+    const projectionSettings = resolveProjectionSettings(filters, options);
+    const userId = parseIntegerId(options.userId ?? filters.userId);
+    const projectionOptions = { ...options, userId };
+    const projections = await buildMonthlyProjectionFromEntries(entries, projectionSettings, projectionOptions);
     return {
         statusSummary,
         monthlySummary,

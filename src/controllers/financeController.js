@@ -1125,13 +1125,19 @@ const serializeGoalForView = (goal) => {
     };
 };
 
-const loadFinanceGoals = async () => {
+const loadFinanceGoals = async (userId) => {
+    const normalizedUserId = normalizeUserId(userId);
+    if (normalizedUserId === null) {
+        return [];
+    }
+
     if (!FinanceGoal || typeof FinanceGoal.findAll !== 'function') {
         return [];
     }
 
     try {
         return await FinanceGoal.findAll({
+            where: { userId: normalizedUserId },
             order: [['month', 'ASC']]
         });
     } catch (error) {
@@ -1265,7 +1271,7 @@ const renderOverview = async (req, res) => {
         const [summaryContext, budgetContext, goals, categories, entriesCount] = await Promise.all([
             buildFinanceSummaryContext(filters),
             buildBudgetOverviewContext(filters),
-            loadFinanceGoals(),
+            loadFinanceGoals(userId),
             fetchFinanceCategoriesForUser(userId),
             countFinanceEntries(filters)
         ]);
@@ -1993,6 +1999,12 @@ module.exports = {
 
     saveFinanceGoal: async (req, res) => {
         try {
+            const currentUserId = normalizeUserId(resolveCurrentUserId(req));
+            if (currentUserId === null) {
+                req.flash('error_msg', 'Usuário não autenticado.');
+                return res.redirect('/finance/overview');
+            }
+
             const { goalId, month, targetNetAmount, notes } = req.body;
             const normalizedMonth = normalizeGoalMonth(month);
 
@@ -2011,7 +2023,12 @@ module.exports = {
             const finalNotes = cleanedNotes ? cleanedNotes : null;
 
             if (goalId) {
-                const goal = await FinanceGoal.findByPk(goalId);
+                const goal = await FinanceGoal.findOne({
+                    where: {
+                        id: goalId,
+                        userId: currentUserId
+                    }
+                });
                 if (!goal) {
                     req.flash('error_msg', 'Meta financeira não encontrada.');
                     return res.redirect('/finance/overview');
@@ -2020,12 +2037,17 @@ module.exports = {
                 goal.month = normalizedMonth;
                 goal.targetNetAmount = parsedAmount;
                 goal.notes = finalNotes;
+                goal.userId = currentUserId;
                 await goal.save();
                 req.flash('success_msg', 'Meta financeira atualizada com sucesso!');
             } else {
                 const [goal, created] = await FinanceGoal.findOrCreate({
-                    where: { month: normalizedMonth },
+                    where: {
+                        userId: currentUserId,
+                        month: normalizedMonth
+                    },
                     defaults: {
+                        userId: currentUserId,
                         targetNetAmount: parsedAmount,
                         notes: finalNotes
                     }
@@ -2051,8 +2073,19 @@ module.exports = {
 
     deleteFinanceGoal: async (req, res) => {
         try {
+            const currentUserId = normalizeUserId(resolveCurrentUserId(req));
+            if (currentUserId === null) {
+                req.flash('error_msg', 'Usuário não autenticado.');
+                return res.redirect('/finance/overview');
+            }
+
             const { id } = req.params;
-            const goal = await FinanceGoal.findByPk(id);
+            const goal = await FinanceGoal.findOne({
+                where: {
+                    id,
+                    userId: currentUserId
+                }
+            });
             if (!goal) {
                 req.flash('error_msg', 'Meta financeira não encontrada.');
                 return res.redirect('/finance/overview');
