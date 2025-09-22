@@ -65,9 +65,9 @@
                                                     class="text-decoration-none fw-semibold"
                                                     href="/support/attachments/<%= attachment.id %>/download"
                                                 >
-                                                    <%= attachment.originalName %>
+                                                    <%= attachment.fileName || attachment.originalName %>
                                                 </a>
-                                                <small class="text-muted d-block">Tamanho: <%= (((attachment.size || 0) / 1024).toFixed(1)) %> KB</small>
+                                                <small class="text-muted d-block">Tamanho: <%= (((attachment.fileSize || attachment.size || 0) / 1024).toFixed(1)) %> KB</small>
                                             </div>
                                         </li>
                                     <% }); %>

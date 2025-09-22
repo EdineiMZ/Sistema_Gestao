@@ -63,6 +63,9 @@ describe('Rotas de suporte - chat e anexos', () => {
         supportChatService.createAttachment.mockResolvedValue({
             id: 10,
             ticketId: 1,
+            fileName: 'log.txt',
+            contentType: 'text/plain',
+            fileSize: 42,
             originalName: 'log.txt',
             mimeType: 'text/plain',
             size: 42
@@ -73,17 +76,36 @@ describe('Rotas de suporte - chat e anexos', () => {
                 body: 'Mensagem',
                 isFromAgent: false,
                 isSystem: false,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                attachment: {
+                    id: 50,
+                    fileName: 'relatorio.pdf',
+                    contentType: 'application/pdf',
+                    fileSize: 1024,
+                    originalName: 'relatorio.pdf',
+                    mimeType: 'application/pdf',
+                    size: 1024
+                }
             }
         ]);
         supportChatService.listTicketAttachments.mockResolvedValue([
-            { id: 9, originalName: 'erro.pdf', mimeType: 'application/pdf' }
+            {
+                id: 9,
+                ticketId: 1,
+                fileName: 'erro.pdf',
+                contentType: 'application/pdf',
+                fileSize: 2048,
+                originalName: 'erro.pdf',
+                mimeType: 'application/pdf',
+                size: 2048
+            }
         ]);
         supportChatService.getAttachmentById.mockResolvedValue({
             id: 9,
             ticketId: 1,
-            mimeType: 'text/plain',
-            originalName: 'log.txt',
+            contentType: 'text/plain',
+            fileName: 'log.txt',
+            fileSize: 8,
             storageKey: 'support/log.txt'
         });
         fileStorageService.createReadStream.mockReturnValue(Readable.from('conteudo'));
@@ -95,7 +117,12 @@ describe('Rotas de suporte - chat e anexos', () => {
             .attach('file', Buffer.from('log de teste'), 'log.txt');
 
         expect(response.status).toBe(201);
-        expect(response.body.attachment).toMatchObject({ originalName: 'log.txt' });
+        expect(response.body.attachment).toMatchObject({
+            fileName: 'log.txt',
+            contentType: 'text/plain',
+            fileSize: 42,
+            originalName: 'log.txt'
+        });
         expect(supportChatService.createAttachment).toHaveBeenCalledWith({
             ticketId: 1,
             file: expect.objectContaining({ originalname: 'log.txt' })
@@ -117,6 +144,18 @@ describe('Rotas de suporte - chat e anexos', () => {
         expect(response.status).toBe(200);
         expect(response.body.history).toHaveLength(1);
         expect(response.body.attachments).toHaveLength(1);
+        expect(response.body.attachments[0]).toMatchObject({
+            fileName: 'erro.pdf',
+            contentType: 'application/pdf',
+            fileSize: 2048,
+            originalName: 'erro.pdf'
+        });
+        expect(response.body.history[0].attachment).toMatchObject({
+            fileName: 'relatorio.pdf',
+            contentType: 'application/pdf',
+            fileSize: 1024
+        });
+        expect(response.body.history[0].attachment.originalName).toBe('relatorio.pdf');
         expect(supportChatService.loadTicketHistory).toHaveBeenCalledWith(1);
         expect(supportChatService.listTicketAttachments).toHaveBeenCalledWith(1);
     });
@@ -162,6 +201,7 @@ describe('Rotas de suporte - chat e anexos', () => {
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toBe('text/plain');
         expect(response.headers['content-disposition']).toContain('filename="log.txt"');
+        expect(response.headers['content-length']).toBe('8');
         expect(fileStorageService.createReadStream).toHaveBeenCalledWith('support/log.txt');
     });
 
