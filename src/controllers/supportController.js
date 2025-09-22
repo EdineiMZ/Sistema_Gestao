@@ -30,16 +30,28 @@ const supportController = {
             }
 
             const ticketId = Number.parseInt(req.params.ticketId, 10);
-            const { ticket } = await ensureTicketAccess(ticketId, user);
+            const access = await ensureTicketAccess(ticketId, user);
+            const { ticket } = access;
             const [history, attachments] = await Promise.all([
                 loadTicketHistory(ticket.id),
                 listTicketAttachments(ticket.id)
             ]);
 
+            const plainTicket = typeof ticket.get === 'function'
+                ? ticket.get({ plain: true })
+                : ticket;
+
             res.render('support/chat', {
-                ticket: ticket.get({ plain: true }),
+                ticket: plainTicket,
                 history,
-                attachments
+                attachments,
+                user,
+                permissions: {
+                    isOwner: Boolean(access.isOwner),
+                    isAdmin: Boolean(access.isAdmin),
+                    isAgent: Boolean(access.isAgent),
+                    isAssigned: Boolean(access.isAssigned)
+                }
             });
         } catch (error) {
             const status = error?.status || 500;

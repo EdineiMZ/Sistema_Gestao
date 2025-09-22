@@ -22,6 +22,15 @@
     };
 %>
 
+<%
+    const chatPermissions = permissions && typeof permissions === 'object' ? permissions : {};
+    const currentUser = user && typeof user === 'object' ? {
+        id: user.id,
+        name: user.name,
+        role: user.role
+    } : null;
+%>
+
 <section class="support-chat-wrapper">
     <div class="row g-4">
         <div class="col-lg-4">
@@ -151,7 +160,13 @@
         ticketId: <%- JSON.stringify(ticket.id) %>,
         history: <%- JSON.stringify(history || []) %>,
         attachments: <%- JSON.stringify(attachments || []) %>,
-        user: <%- JSON.stringify(user ? { id: user.id, name: user.name, role: user.role } : null) %>
+        user: <%- JSON.stringify(currentUser) %>,
+        permissions: <%- JSON.stringify({
+            isOwner: Boolean(chatPermissions.isOwner),
+            isAdmin: Boolean(chatPermissions.isAdmin),
+            isAgent: Boolean(chatPermissions.isAgent),
+            isAssigned: Boolean(chatPermissions.isAssigned)
+        }) %>
     };
 </script>
 <script src="/socket.io/socket.io.js"></script>

@@ -13,9 +13,17 @@ const elements = {
     adminEntryButton: document.querySelector('[data-enter-as-admin]')
 };
 
+const initialPermissions = config && typeof config.permissions === 'object'
+    ? { ...config.permissions }
+    : {};
+
 const state = {
     ticketId: config.ticketId,
-    isAdmin: config?.user?.role === 'admin',
+    permissions: initialPermissions,
+    isAdmin: Boolean(initialPermissions.isAdmin || config?.user?.role === 'admin'),
+    isAgent: Boolean(initialPermissions.isAgent),
+    isAssigned: Boolean(initialPermissions.isAssigned),
+    isOwner: Boolean(initialPermissions.isOwner),
     joined: false,
     joining: false,
     asAdmin: false,
@@ -203,6 +211,8 @@ const joinChat = (asAdmin = false) => {
         state.joined = true;
         state.asAdmin = Boolean(asAdmin);
         state.messages = Array.isArray(response.history) ? response.history : [];
+        refreshPermissionState(response.permissions);
+        updateAdminButtonVisibility();
         renderMessages();
         setAgentStatus(state.asAdmin ? 'Administrador conectado' : 'Canal disponível', state.asAdmin ? 'primary' : 'success');
 
@@ -342,20 +352,21 @@ const bindEvents = () => {
     }
 
     if (elements.adminEntryButton) {
-        if (state.isAdmin) {
-            elements.adminEntryButton.classList.remove('d-none');
-            elements.adminEntryButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                joinChat(true);
-                fetch(`/support/tickets/${state.ticketId}/notify-admin-entry`, {
-                    method: 'POST'
-                }).catch(() => {
-                    // Notificar falha silenciosa para não interromper fluxo.
-                });
+        elements.adminEntryButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (!state.isAdmin) {
+                return;
+            }
+
+            joinChat(true);
+            fetch(`/support/tickets/${state.ticketId}/notify-admin-entry`, {
+                method: 'POST'
+            }).catch(() => {
+                // Notificar falha silenciosa para não interromper fluxo.
             });
-        } else {
-            elements.adminEntryButton.classList.add('d-none');
-        }
+        });
+
+        updateAdminButtonVisibility();
     }
 };
 
@@ -388,8 +399,8 @@ const bindSocketEvents = () => {
         state.joined = false;
         state.joining = false;
 
-        if (state.isAdmin && elements.adminEntryButton) {
-            elements.adminEntryButton.classList.remove('d-none');
+        if (elements.adminEntryButton) {
+            updateAdminButtonVisibility();
         }
     });
 };
@@ -414,3 +425,27 @@ const init = () => {
 };
 
 init();
+const refreshPermissionState = (permissions = {}) => {
+    if (!permissions || typeof permissions !== 'object') {
+        return;
+    }
+
+    state.permissions = { ...state.permissions, ...permissions };
+    state.isAdmin = Boolean(state.permissions.isAdmin || config?.user?.role === 'admin');
+    state.isAgent = Boolean(state.permissions.isAgent);
+    state.isAssigned = Boolean(state.permissions.isAssigned);
+    state.isOwner = Boolean(state.permissions.isOwner);
+};
+
+const updateAdminButtonVisibility = () => {
+    if (!elements.adminEntryButton) {
+        return;
+    }
+
+    if (state.isAdmin) {
+        elements.adminEntryButton.classList.remove('d-none');
+    } else {
+        elements.adminEntryButton.classList.add('d-none');
+    }
+};
+
