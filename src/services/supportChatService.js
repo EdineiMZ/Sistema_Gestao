@@ -87,14 +87,22 @@ const ensureTicketAccess = async (ticketId, user) => {
 
     const isOwner = ticket.creatorId === user.id;
     const isAdmin = getRoleLevel(user.role) >= getRoleLevel(USER_ROLES.ADMIN);
+    const isAgent = isSupportAgentRole(user.role);
+    const isAssigned = Boolean(ticket.assignedToId && ticket.assignedToId === user.id);
 
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !isAdmin && !isAgent && !isAssigned) {
         const error = new Error('FORBIDDEN');
         error.status = 403;
         throw error;
     }
 
-    return { ticket, isOwner, isAdmin };
+    return {
+        ticket,
+        isOwner,
+        isAdmin,
+        isAgent,
+        isAssigned
+    };
 };
 
 const ensureAdminRole = (user) => {
@@ -373,7 +381,13 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
         socket.on('support:join', async ({ ticketId, asAdmin }, ack = () => {}) => {
             try {
                 const user = socket.data.user;
-                const { ticket, isAdmin } = await ensureTicketAccess(ticketId, user);
+                const {
+                    ticket,
+                    isAdmin,
+                    isAgent,
+                    isAssigned,
+                    isOwner
+                } = await ensureTicketAccess(ticketId, user);
 
                 if (asAdmin) {
                     ensureAdminRole(user);
@@ -385,7 +399,16 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
 
                 const history = await loadTicketHistory(ticketId);
 
-                ack({ ok: true, history });
+                ack({
+                    ok: true,
+                    history,
+                    permissions: {
+                        isAdmin: Boolean(isAdmin),
+                        isAgent: Boolean(isAgent),
+                        isAssigned: Boolean(isAssigned),
+                        isOwner: Boolean(isOwner)
+                    }
+                });
 
                 if (asAdmin && isAdmin && io) {
                     io.to(roomName).emit('support:agent:online', {
@@ -408,7 +431,11 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
                     throw new Error('NOT_IN_ROOM');
                 }
 
-                const { ticket } = await ensureTicketAccess(ticketId, user);
+                const {
+                    isAdmin,
+                    isAgent,
+                    isAssigned
+                } = await ensureTicketAccess(ticketId, user);
 
                 let finalAttachmentId = null;
                 if (attachmentId) {
@@ -430,7 +457,7 @@ const initializeSupportChat = ({ io, sessionMiddleware }) => {
                     ticketId,
                     senderId: user.id,
                     body: body || '',
-                    isFromAgent: isSupportAgentRole(user.role),
+                    isFromAgent: Boolean(isAdmin || isAgent || isAssigned),
                     isSystem: false,
                     attachmentId: finalAttachmentId
                 });
