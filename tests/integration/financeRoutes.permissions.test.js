@@ -4,6 +4,9 @@ const { USER_ROLES } = require('../../src/constants/roles');
 const { createRouterTestApp } = require('../utils/createRouterTestApp');
 const { authenticateTestUser } = require('../utils/authTestUtils');
 
+const mockGetAllowedRoles = jest.fn(() => Promise.resolve([USER_ROLES.CLIENT]));
+const mockResolveEnvFallbackRoles = jest.fn(() => [USER_ROLES.CLIENT]);
+
 const buildFinanceRoutes = () => {
     jest.resetModules();
 
@@ -31,6 +34,11 @@ const buildFinanceRoutes = () => {
         delete: jest.fn((req, res) => res.json({ ok: true, route: 'budget.delete' }))
     }));
 
+    jest.doMock('../../src/services/financeAccessPolicyService', () => ({
+        getAllowedRoles: mockGetAllowedRoles,
+        resolveEnvFallbackRoles: mockResolveEnvFallbackRoles
+    }));
+
     return require('../../src/routes/financeRoutes');
 };
 
@@ -45,6 +53,10 @@ describe('Finance routes permissions', () => {
     afterEach(() => {
         jest.resetModules();
         jest.clearAllMocks();
+        mockGetAllowedRoles.mockReset();
+        mockResolveEnvFallbackRoles.mockReset();
+        mockGetAllowedRoles.mockImplementation(() => Promise.resolve([USER_ROLES.CLIENT]));
+        mockResolveEnvFallbackRoles.mockImplementation(() => [USER_ROLES.CLIENT]);
         if (originalAllowedRoles === undefined) {
             delete process.env.FINANCE_ALLOWED_ROLES;
         } else {
@@ -54,6 +66,8 @@ describe('Finance routes permissions', () => {
 
     it('permite acesso a clientes quando nenhuma configuração personalizada é definida', async () => {
         delete process.env.FINANCE_ALLOWED_ROLES;
+        mockResolveEnvFallbackRoles.mockReturnValueOnce([USER_ROLES.CLIENT]);
+        mockGetAllowedRoles.mockResolvedValueOnce([USER_ROLES.CLIENT]);
         const app = buildTestApp();
         const { agent } = await authenticateTestUser(app, { role: USER_ROLES.CLIENT });
 
@@ -67,6 +81,8 @@ describe('Finance routes permissions', () => {
 
     it('bloqueia usuários fora da lista configurada de perfis permitidos', async () => {
         process.env.FINANCE_ALLOWED_ROLES = 'manager,admin';
+        mockResolveEnvFallbackRoles.mockReturnValueOnce([USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
+        mockGetAllowedRoles.mockResolvedValueOnce([USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
         const app = buildTestApp();
         const { agent } = await authenticateTestUser(app, { role: USER_ROLES.COLLABORATOR });
 
@@ -80,6 +96,8 @@ describe('Finance routes permissions', () => {
 
     it('permite acesso a gestores quando configurados explicitamente', async () => {
         process.env.FINANCE_ALLOWED_ROLES = 'manager';
+        mockResolveEnvFallbackRoles.mockReturnValueOnce([USER_ROLES.MANAGER]);
+        mockGetAllowedRoles.mockResolvedValueOnce([USER_ROLES.MANAGER]);
         const app = buildTestApp();
         const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
 

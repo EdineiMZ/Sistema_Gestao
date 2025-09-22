@@ -1,9 +1,68 @@
 const { Budget, FinanceCategory, Sequelize } = require('../../database/models');
+const financeAccessPolicyService = require('../services/financeAccessPolicyService');
+const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, sortRolesByHierarchy } = require('../constants/roles');
 
 const { ValidationError, UniqueConstraintError } = Sequelize || {};
 
 const isValidationError = (error) => ValidationError && error instanceof ValidationError;
 const isUniqueConstraintError = (error) => UniqueConstraintError && error instanceof UniqueConstraintError;
+
+const roleDescriptions = Object.freeze({
+    [USER_ROLES.CLIENT]: 'Visualiza dashboards e indicadores financeiros com acesso de leitura.',
+    [USER_ROLES.COLLABORATOR]: 'Registra lançamentos, anexos e acompanha o fluxo operacional.',
+    [USER_ROLES.SPECIALIST]: 'Realiza análises avançadas, exporta dados e ajusta projeções.',
+    [USER_ROLES.MANAGER]: 'Define orçamentos, metas e supervisiona o desempenho da equipe.',
+    [USER_ROLES.ADMIN]: 'Controla políticas, integrações e auditoria completa do módulo financeiro.'
+});
+
+const requestExpectsJson = (req) => {
+    if (req?.xhr) {
+        return true;
+    }
+
+    const acceptsHeader = typeof req?.get === 'function' ? req.get('Accept') : req?.headers?.accept;
+    if (typeof acceptsHeader === 'string' && acceptsHeader.includes('application/json')) {
+        return true;
+    }
+
+    const fetchMode = req?.headers?.['sec-fetch-mode'];
+    if (typeof fetchMode === 'string' && fetchMode.toLowerCase() === 'cors') {
+        return true;
+    }
+
+    return false;
+};
+
+const normalizeAllowedRolesInput = (value) => {
+    if (Array.isArray(value)) {
+        return sortRolesByHierarchy(value);
+    }
+
+    if (value === undefined || value === null) {
+        return [];
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return [];
+        }
+
+        return sortRolesByHierarchy(trimmed.split(/[,;|\s]+/));
+    }
+
+    return [];
+};
+
+const buildRoleOptions = (selectedRoles = []) => {
+    const selectedSet = new Set(Array.isArray(selectedRoles) ? selectedRoles : []);
+    return ROLE_ORDER.map((role) => ({
+        value: role,
+        label: ROLE_LABELS[role],
+        description: roleDescriptions[role],
+        selected: selectedSet.has(role)
+    }));
+};
 
 const normalizeMonthlyLimit = (value) => {
     if (value === undefined || value === null) {
@@ -388,6 +447,89 @@ const deleteCategory = async (req, res) => {
     }
 };
 
+const renderFinanceAccessPolicy = async (req, res) => {
+    try {
+        const policy = await financeAccessPolicyService.getFinanceAccessPolicy();
+        const fallbackRoles = financeAccessPolicyService.resolveEnvFallbackRoles();
+        const roleOptions = buildRoleOptions(policy.allowedRoles);
+
+        res.locals.pageTitle = 'Perfis autorizados do financeiro';
+
+        return res.render('admin/financeAccessPolicy', {
+            policy,
+            roleOptions,
+            fallbackRoles,
+            fallbackApplied: policy.fallbackApplied,
+            policySource: policy.source
+        });
+    } catch (error) {
+        console.error('Erro ao carregar a política de acesso financeiro:', error);
+
+        if (requestExpectsJson(req)) {
+            return res.status(500).json({ message: 'Não foi possível carregar a política financeira.' });
+        }
+
+        if (typeof req.flash === 'function') {
+            req.flash('error_msg', 'Não foi possível carregar a política financeira. Tente novamente em instantes.');
+        }
+
+        return res.redirect('/admin');
+    }
+};
+
+const updateFinanceAccessPolicy = async (req, res) => {
+    const inputRoles = req.body?.allowedRoles ?? req.body?.roles;
+    const normalizedRoles = normalizeAllowedRolesInput(inputRoles);
+
+    if (!normalizedRoles.length) {
+        if (requestExpectsJson(req)) {
+            return res.status(400).json({ message: 'Selecione ao menos um perfil válido para acessar o módulo financeiro.' });
+        }
+
+        if (typeof req.flash === 'function') {
+            req.flash('error_msg', 'Selecione ao menos um perfil válido para acessar o módulo financeiro.');
+        }
+
+        return res.redirect('/admin/finance/access-policy');
+    }
+
+    try {
+        const updatedBy = req.user
+            ? { id: req.user.id, name: req.user.name || req.user.email || `Usuário ${req.user.id}` }
+            : null;
+
+        const policy = await financeAccessPolicyService.saveFinanceAccessPolicy({
+            allowedRoles: normalizedRoles,
+            updatedBy
+        });
+
+        if (requestExpectsJson(req)) {
+            return res.json({
+                message: 'Perfis autorizados atualizados com sucesso.',
+                data: policy
+            });
+        }
+
+        if (typeof req.flash === 'function') {
+            req.flash('success_msg', 'Perfis autorizados atualizados com sucesso.');
+        }
+
+        return res.redirect('/admin/finance/access-policy');
+    } catch (error) {
+        console.error('Erro ao atualizar a política de acesso financeiro:', error);
+
+        if (requestExpectsJson(req)) {
+            return res.status(500).json({ message: 'Não foi possível atualizar a política financeira.' });
+        }
+
+        if (typeof req.flash === 'function') {
+            req.flash('error_msg', 'Não foi possível atualizar a política financeira. Tente novamente.');
+        }
+
+        return res.redirect('/admin/finance/access-policy');
+    }
+};
+
 module.exports = {
     listBudgets,
     createBudget,
@@ -396,6 +538,8 @@ module.exports = {
     listCategories,
     createCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    renderFinanceAccessPolicy,
+    updateFinanceAccessPolicy
 };
 
