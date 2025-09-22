@@ -66,6 +66,7 @@ const {
     Procedure,
     FinanceCategory,
     FinanceEntry,
+    FinanceGoal,
     Budget,
     BudgetThresholdStatus,
     SupportTicket,
@@ -192,6 +193,20 @@ if (User && FinanceEntry && !(FinanceEntry.associations && FinanceEntry.associat
 if (User && FinanceEntry && !(User.associations && User.associations.financeEntries)) {
     User.hasMany(FinanceEntry, {
         as: 'financeEntries',
+        foreignKey: 'userId'
+    });
+}
+
+if (FinanceGoal && User && !(FinanceGoal.associations && FinanceGoal.associations.user)) {
+    FinanceGoal.belongsTo(User, {
+        as: 'user',
+        foreignKey: 'userId'
+    });
+}
+
+if (User && FinanceGoal && !(User.associations && User.associations.financeGoals)) {
+    User.hasMany(FinanceGoal, {
+        as: 'financeGoals',
         foreignKey: 'userId'
     });
 }

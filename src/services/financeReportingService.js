@@ -995,6 +995,11 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return [];
     }
 
+    const userId = parseIntegerId(options.userId);
+    if (userId === null) {
+        return [];
+    }
+
     const monthValues = monthKeys.map((key) => {
         if (typeof key === 'string' && /^\d{4}-\d{2}$/.test(key)) {
             return `${key}-01`;
@@ -1005,6 +1010,7 @@ const fetchGoalsForMonths = async (monthKeys, options = {}) => {
         return await FinanceGoal.findAll({
             attributes: ['id', 'month', 'targetNetAmount', 'notes'],
             where: {
+                userId,
                 month: { [Op.in]: monthValues }
             },
             order: [['month', 'ASC']],
@@ -1209,14 +1215,17 @@ const getMonthlySummary = async (filters = {}, options = {}) => {
 const getMonthlyProjection = async (filters = {}, options = {}) => {
     const entries = await resolveEntries(filters, options);
     const settings = resolveProjectionSettings(filters, options);
-    return buildMonthlyProjectionFromEntries(entries, settings, options);
+    const userId = parseIntegerId(options.userId ?? filters.userId);
+    return buildMonthlyProjectionFromEntries(entries, settings, { ...options, userId });
 };
 
 const getFinanceSummary = async (filters = {}, options = {}) => {
     const entries = await resolveEntries(filters, options);
     const statusSummary = buildStatusSummaryFromEntries(entries);
     const projectionSettings = resolveProjectionSettings(filters, options);
-    const projections = await buildMonthlyProjectionFromEntries(entries, projectionSettings, options);
+    const userId = parseIntegerId(options.userId ?? filters.userId);
+    const projectionOptions = { ...options, userId };
+    const projections = await buildMonthlyProjectionFromEntries(entries, projectionSettings, projectionOptions);
     return {
         statusSummary,
         monthlySummary: buildMonthlySummaryFromEntries(entries),
