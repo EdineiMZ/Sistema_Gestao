@@ -91,6 +91,41 @@
         ? csrfToken
         : (typeof locals?.csrfToken === 'string' ? locals.csrfToken : '');
     const periodText = typeof periodLabel === 'string' && periodLabel.trim() ? periodLabel.trim() : 'Todo o período';
+    const paginationDefaults = { page: 1, pageSize: 25, totalPages: 1, totalRecords: Array.isArray(entries) ? entries.length : 0 };
+    const paginationSource = pagination && typeof pagination === 'object' ? pagination : (typeof locals?.pagination === 'object' ? locals.pagination : null);
+    const paginationData = { ...paginationDefaults, ...(paginationSource || {}) };
+    paginationData.page = Number.isInteger(Number(paginationData.page)) && Number(paginationData.page) > 0 ? Number(paginationData.page) : 1;
+    paginationData.pageSize = Number.isInteger(Number(paginationData.pageSize)) && Number(paginationData.pageSize) > 0 ? Number(paginationData.pageSize) : paginationDefaults.pageSize;
+    paginationData.totalPages = Number.isInteger(Number(paginationData.totalPages)) && Number(paginationData.totalPages) > 0 ? Number(paginationData.totalPages) : 1;
+    paginationData.totalRecords = Number.isInteger(Number(paginationData.totalRecords)) && Number(paginationData.totalRecords) >= 0 ? Number(paginationData.totalRecords) : 0;
+    const pageWindowSize = 5;
+    const tentativeStart = Math.max(1, paginationData.page - Math.floor(pageWindowSize / 2));
+    let tentativeEnd = Math.min(paginationData.totalPages, tentativeStart + pageWindowSize - 1);
+    const adjustedStart = Math.max(1, tentativeEnd - pageWindowSize + 1);
+    const pageNumbers = [];
+    for (let page = adjustedStart; page <= tentativeEnd; page += 1) {
+        pageNumbers.push(page);
+    }
+    const buildPageHref = (pageNumber) => {
+        const numericPage = Number(pageNumber);
+        if (!Number.isInteger(numericPage) || numericPage < 1) {
+            return '#';
+        }
+        const params = new URLSearchParams();
+        Object.entries(filterValues).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value).trim()) {
+                params.set(key, value);
+            }
+        });
+        if (paginationData.pageSize) {
+            params.set('pageSize', paginationData.pageSize);
+        }
+        params.set('page', numericPage);
+        const queryString = params.toString();
+        return queryString ? `/finance/payments?${queryString}` : '/finance/payments';
+    };
+    const firstItemIndex = paginationData.totalRecords === 0 ? 0 : ((paginationData.page - 1) * paginationData.pageSize) + 1;
+    const lastItemIndex = paginationData.totalRecords === 0 ? 0 : Math.min(paginationData.page * paginationData.pageSize, paginationData.totalRecords);
 %>
 
 <%- include('./partials/pageHeader', {
@@ -320,6 +355,12 @@
                 <div>
                     <h3 class="fw-semibold mb-1">Lançamentos recentes</h3>
                     <p class="text-muted mb-0">Monitoramento contínuo de receitas, despesas e recorrências.</p>
+                    <% if (paginationData.totalRecords > 0) { %>
+                        <p class="text-muted small mb-0">
+                            Exibindo <strong><%= firstItemIndex %></strong> - <strong><%= lastItemIndex %></strong>
+                            de <strong><%= paginationData.totalRecords %></strong> lançamento<%= paginationData.totalRecords === 1 ? '' : 's' %>.
+                        </p>
+                    <% } %>
                 </div>
                 <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-end gap-2 text-sm-end">
                     <span class="badge rounded-pill bg-light text-muted">
@@ -409,7 +450,19 @@
                                                 class="btn btn-outline-primary"
                                                 type="button"
                                                 data-bs-toggle="modal"
-                                                data-bs-target="#editEntryModal<%= entry.id %>"
+                                                data-bs-target="#financeEntryModal"
+                                                data-entry-edit
+                                                data-entry-id="<%= entry.id %>"
+                                                data-entry-description="<%= entry.description %>"
+                                                data-entry-type="<%= entry.type %>"
+                                                data-entry-status="<%= entry.status %>"
+                                                data-entry-value="<%= entry.valueInput %>"
+                                                data-entry-due-date="<%= entry.dueDateInput %>"
+                                                data-entry-payment-date="<%= entry.paymentDateInput %>"
+                                                data-entry-recurring="<%= entry.recurring ? 'true' : 'false' %>"
+                                                data-entry-recurring-interval="<%= entry.recurringInterval || '' %>"
+                                                data-entry-category-id="<%= entry.categoryId === null ? '' : entry.categoryId %>"
+                                                data-entry-attachments="<%- encodeURIComponent(JSON.stringify(entry.attachments || [])) %>"
                                             >
                                                 <i class="bi bi-pencil-square" aria-hidden="true"></i>
                                             </button>
@@ -429,129 +482,157 @@
                     </tbody>
                 </table>
             </div>
+            <% if (paginationData.totalPages > 1) { %>
+                <nav class="d-flex justify-content-end mt-3" aria-label="Paginação de lançamentos">
+                    <ul class="pagination pagination-sm mb-0 flex-wrap gap-2">
+                        <li class="page-item <%= paginationData.page > 1 ? '' : 'disabled' %>">
+                            <a
+                                class="page-link"
+                                href="<%= paginationData.page > 1 ? buildPageHref(paginationData.page - 1) : '#' %>"
+                                aria-label="Página anterior"
+                                <%= paginationData.page > 1 ? '' : 'tabindex="-1" aria-disabled="true"' %>
+                            >
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        <% if (adjustedStart > 1) { %>
+                            <li class="page-item">
+                                <a class="page-link" href="<%= buildPageHref(1) %>">1</a>
+                            </li>
+                            <% if (adjustedStart > 2) { %>
+                                <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            <% } %>
+                        <% } %>
+                        <% pageNumbers.forEach((pageNumber) => { %>
+                            <li class="page-item <%= pageNumber === paginationData.page ? 'active' : '' %>">
+                                <% if (pageNumber === paginationData.page) { %>
+                                    <span class="page-link" aria-current="page"><%= pageNumber %></span>
+                                <% } else { %>
+                                    <a class="page-link" href="<%= buildPageHref(pageNumber) %>"><%= pageNumber %></a>
+                                <% } %>
+                            </li>
+                        <% }) %>
+                        <% if (pageNumbers.length && pageNumbers[pageNumbers.length - 1] < paginationData.totalPages) { %>
+                            <% if (pageNumbers[pageNumbers.length - 1] < paginationData.totalPages - 1) { %>
+                                <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            <% } %>
+                            <li class="page-item">
+                                <a class="page-link" href="<%= buildPageHref(paginationData.totalPages) %>"><%= paginationData.totalPages %></a>
+                            </li>
+                        <% } %>
+                        <li class="page-item <%= paginationData.page < paginationData.totalPages ? '' : 'disabled' %>">
+                            <a
+                                class="page-link"
+                                href="<%= paginationData.page < paginationData.totalPages ? buildPageHref(paginationData.page + 1) : '#' %>"
+                                aria-label="Próxima página"
+                                <%= paginationData.page < paginationData.totalPages ? '' : 'tabindex="-1" aria-disabled="true"' %>
+                            >
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            <% } %>
         </div>
     </div>
 
-    <% if (entries && entries.length) { %>
-        <% entries.forEach((entry) => { %>
-            <div class="modal fade" id="editEntryModal<%= entry.id %>" tabindex="-1" aria-labelledby="editEntryModalLabel<%= entry.id %>" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="editEntryModalLabel<%= entry.id %>">Editar lançamento #<%= entry.id %></h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                        </div>
-                        <form action="/finance/update/<%= entry.id %>?_method=PUT" method="POST" enctype="multipart/form-data">
-                            <div class="modal-body row g-3">
-                                <% if (resolvedCsrfToken) { %>
-                                    <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
-                                <% } %>
-                                <div class="col-12">
-                                    <label class="form-label">Descrição</label>
-                                    <input type="text" class="form-control" name="description" value="<%= entry.description %>" required />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Tipo</label>
-                                    <select class="form-select" name="type" required>
-                                        <option value="receivable" <%= entry.type === 'receivable' ? 'selected' : '' %>>Receber</option>
-                                        <option value="payable" <%= entry.type === 'payable' ? 'selected' : '' %>>Pagar</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Categoria</label>
-                                    <select class="form-select" name="financeCategoryId">
-                                        <% financeCategoryOptions.forEach((category) => { %>
-                                            <option value="<%= category.id === null ? '' : category.id %>" <%= (entry.financeCategoryId || null) === category.id ? 'selected' : '' %>>
-                                                <%= category.name %>
-                                            </option>
-                                        <% }) %>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Valor</label>
-                                    <input type="number" class="form-control" name="value" value="<%= Number(entry.value || 0).toFixed(2) %>" step="0.01" min="0" required />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Data de vencimento</label>
-                                    <input type="date" class="form-control" name="dueDate" value="<%= entry.dueDate ? entry.dueDate : '' %>" required />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Data de pagamento</label>
-                                    <input type="date" class="form-control" name="paymentDate" value="<%= entry.paymentDate ? entry.paymentDate : '' %>" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Status</label>
-                                    <select class="form-select" name="status">
-                                        <% statusKeys.forEach((statusKey) => { %>
-                                            <option value="<%= statusKey %>" <%= entry.status === statusKey ? 'selected' : '' %>>
-                                                <%= statusLabels[statusKey] %>
-                                            </option>
-                                        <% }) %>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Recorrência</label>
-                                    <select class="form-select" name="recurring">
-                                        <option value="true" <%= entry.recurring ? 'selected' : '' %>>Lançamento recorrente</option>
-                                        <option value="false" <%= !entry.recurring ? 'selected' : '' %>>Evento único</option>
-                                    </select>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label">Intervalo de recorrência</label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        name="recurringInterval"
-                                        list="recurring-interval-options"
-                                        value="<%= entry.recurringInterval || '' %>"
-                                        placeholder="Ex.: mensal, trimestral"
-                                    />
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label">Anexos cadastrados</label>
-                                    <% if (entry.attachments && entry.attachments.length) { %>
-                                        <ul class="list-group list-group-flush rounded shadow-sm">
-                                            <% entry.attachments.forEach((attachment) => { %>
-                                                <li class="list-group-item d-flex align-items-center justify-content-between gap-3">
-                                                    <div class="d-flex align-items-center gap-2 text-truncate">
-                                                        <i class="bi bi-paperclip text-primary" aria-hidden="true"></i>
-                                                        <span class="text-truncate" title="<%= attachment.fileName %>"><%= attachment.fileName %></span>
-                                                    </div>
-                                                    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2 text-sm-end">
-                                                        <span class="text-muted small"><%= Math.max(1, Math.round((attachment.size || 0) / 1024)) %> KB</span>
-                                                        <a class="btn btn-outline-primary btn-sm" href="/finance/attachments/<%= attachment.id %>/download">
-                                                            <i class="bi bi-download me-1" aria-hidden="true"></i>Baixar
-                                                        </a>
-                                                    </div>
-                                                </li>
-                                            <% }) %>
-                                        </ul>
-                                    <% } else { %>
-                                        <p class="text-muted small mb-0">Nenhum anexo disponível para este lançamento.</p>
-                                    <% } %>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label">Adicionar novos anexos</label>
-                                    <input
-                                        type="file"
-                                        class="form-control"
-                                        name="attachments"
-                                        multiple
-                                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
-                                    />
-                                    <div class="form-text">Anexe arquivos relevantes (até 10MB por arquivo).</div>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                <button type="submit" class="btn btn-gradient">Salvar</button>
-                            </div>
-                        </form>
-                    </div>
+    <div class="modal fade" id="financeEntryModal" tabindex="-1" aria-labelledby="financeEntryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="financeEntryModalLabel" data-modal-title>Editar lançamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
+                <form action="/finance/update/0?_method=PUT" method="POST" enctype="multipart/form-data" data-modal-form>
+                    <div class="modal-body row g-3">
+                        <% if (resolvedCsrfToken) { %>
+                            <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                        <% } %>
+                        <div class="col-12">
+                            <label class="form-label" for="modal-entry-description">Descrição</label>
+                            <input type="text" class="form-control" id="modal-entry-description" name="description" data-modal-field="description" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modal-entry-type">Tipo</label>
+                            <select class="form-select" id="modal-entry-type" name="type" data-modal-field="type" required>
+                                <option value="receivable">Receber</option>
+                                <option value="payable">Pagar</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modal-entry-category">Categoria</label>
+                            <select class="form-select" id="modal-entry-category" name="financeCategoryId" data-modal-field="financeCategoryId">
+                                <% financeCategoryOptions.forEach((category) => { %>
+                                    <option value="<%= category.id === null ? '' : category.id %>"><%= category.name %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="modal-entry-value">Valor</label>
+                            <input type="number" class="form-control" id="modal-entry-value" name="value" data-modal-field="value" step="0.01" min="0" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="modal-entry-due-date">Data de vencimento</label>
+                            <input type="date" class="form-control" id="modal-entry-due-date" name="dueDate" data-modal-field="dueDate" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="modal-entry-payment-date">Data de pagamento</label>
+                            <input type="date" class="form-control" id="modal-entry-payment-date" name="paymentDate" data-modal-field="paymentDate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modal-entry-status">Status</label>
+                            <select class="form-select" id="modal-entry-status" name="status" data-modal-field="status">
+                                <% statusKeys.forEach((statusKey) => { %>
+                                    <option value="<%= statusKey %>"><%= statusLabels[statusKey] %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modal-entry-recurring">Recorrência</label>
+                            <select class="form-select" id="modal-entry-recurring" name="recurring" data-modal-field="recurring">
+                                <option value="true">Lançamento recorrente</option>
+                                <option value="false">Evento único</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="modal-entry-recurring-interval">Intervalo de recorrência</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="modal-entry-recurring-interval"
+                                name="recurringInterval"
+                                data-modal-field="recurringInterval"
+                                list="recurring-interval-options"
+                                placeholder="Ex.: mensal, trimestral"
+                            />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Anexos cadastrados</label>
+                            <div class="border rounded-3 p-3 bg-light-subtle" data-modal-attachments>
+                                <p class="text-muted small mb-0">Nenhum anexo disponível para este lançamento.</p>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="modal-entry-attachments">Adicionar novos anexos</label>
+                            <input
+                                type="file"
+                                class="form-control"
+                                id="modal-entry-attachments"
+                                name="attachments"
+                                multiple
+                                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                            />
+                            <div class="form-text">Anexe arquivos relevantes (até 10MB por arquivo).</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-gradient">Salvar</button>
+                    </div>
+                </form>
             </div>
-        <% }); %>
-    <% } %>
+        </div>
+    </div>
 
     <div class="col-12 col-xxl-10">
         <div class="card card-soft responsive-panel">
@@ -747,7 +828,8 @@
         monthlySummary: monthlySummaryList,
         filters: filterValues,
         summaryTotals,
-        periodLabel: periodText
+        periodLabel: periodText,
+        pagination: paginationData
     }) %>
 </script>
 <script defer src="/js/financePayments.js"></script>

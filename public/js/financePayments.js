@@ -190,6 +190,161 @@
         });
     };
 
+    const formatFileSize = (bytes) => {
+        const size = Number(bytes);
+        if (!Number.isFinite(size) || size <= 0) {
+            return '—';
+        }
+        if (size >= 1024 * 1024) {
+            return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+        }
+        return `${Math.max(1, Math.round(size / 1024))} KB`;
+    };
+
+    const decodeAttachmentData = (value) => {
+        if (!value) {
+            return [];
+        }
+        try {
+            const decoded = decodeURIComponent(value);
+            const parsed = JSON.parse(decoded);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.warn('Não foi possível interpretar anexos do lançamento.', error);
+            return [];
+        }
+    };
+
+    const hydrateAttachmentsList = (container, attachments) => {
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '';
+
+        if (!Array.isArray(attachments) || !attachments.length) {
+            const emptyMessage = document.createElement('p');
+            emptyMessage.className = 'text-muted small mb-0';
+            emptyMessage.textContent = 'Nenhum anexo disponível para este lançamento.';
+            container.appendChild(emptyMessage);
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'list-group list-group-flush rounded shadow-sm';
+
+        attachments.forEach((attachment) => {
+            const listItem = document.createElement('li');
+            listItem.className = 'list-group-item d-flex align-items-center justify-content-between gap-3';
+
+            const info = document.createElement('div');
+            info.className = 'd-flex align-items-center gap-2 text-truncate';
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-paperclip text-primary';
+            icon.setAttribute('aria-hidden', 'true');
+            info.appendChild(icon);
+
+            const name = document.createElement('span');
+            name.className = 'text-truncate';
+            const label = typeof attachment?.fileName === 'string' && attachment.fileName.trim()
+                ? attachment.fileName.trim()
+                : 'Documento';
+            name.textContent = label;
+            name.title = label;
+            info.appendChild(name);
+
+            listItem.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'd-flex flex-column flex-sm-row align-items-sm-center gap-2 text-sm-end';
+
+            const sizeLabel = document.createElement('span');
+            sizeLabel.className = 'text-muted small';
+            sizeLabel.textContent = formatFileSize(attachment?.size);
+            actions.appendChild(sizeLabel);
+
+            if (attachment && attachment.id) {
+                const link = document.createElement('a');
+                link.className = 'btn btn-outline-primary btn-sm';
+                link.href = `/finance/attachments/${attachment.id}/download`;
+                link.innerHTML = '<i class="bi bi-download me-1" aria-hidden="true"></i>Baixar';
+                actions.appendChild(link);
+            }
+
+            listItem.appendChild(actions);
+            list.appendChild(listItem);
+        });
+
+        container.appendChild(list);
+    };
+
+    const registerEntryModal = () => {
+        const modalElement = document.getElementById('financeEntryModal');
+        if (!modalElement) {
+            return;
+        }
+
+        const modalForm = modalElement.querySelector('[data-modal-form]');
+        const modalTitle = modalElement.querySelector('[data-modal-title]');
+        const attachmentsContainer = modalElement.querySelector('[data-modal-attachments]');
+        const triggers = document.querySelectorAll('[data-entry-edit]');
+
+        const setFieldValue = (fieldName, value) => {
+            if (!modalForm) {
+                return;
+            }
+            const field = modalForm.querySelector(`[data-modal-field="${fieldName}"]`);
+            if (!field) {
+                return;
+            }
+            const normalized = value === null || value === undefined ? '' : String(value);
+            field.value = normalized;
+        };
+
+        const hydrateModal = (trigger) => {
+            if (!trigger || !modalForm) {
+                return;
+            }
+
+            const entryId = trigger.getAttribute('data-entry-id');
+            if (!entryId) {
+                return;
+            }
+
+            modalForm.setAttribute('action', `/finance/update/${entryId}?_method=PUT`);
+
+            if (modalTitle) {
+                const description = trigger.getAttribute('data-entry-description') || '';
+                modalTitle.textContent = description
+                    ? `Editar lançamento #${entryId} • ${description}`
+                    : `Editar lançamento #${entryId}`;
+            }
+
+            setFieldValue('description', trigger.getAttribute('data-entry-description') || '');
+            setFieldValue('type', trigger.getAttribute('data-entry-type') || 'payable');
+            setFieldValue('financeCategoryId', trigger.getAttribute('data-entry-category-id'));
+            setFieldValue('value', trigger.getAttribute('data-entry-value') || '');
+            setFieldValue('dueDate', trigger.getAttribute('data-entry-due-date') || '');
+            setFieldValue('paymentDate', trigger.getAttribute('data-entry-payment-date') || '');
+            setFieldValue('status', trigger.getAttribute('data-entry-status') || 'pending');
+            const recurringValue = trigger.getAttribute('data-entry-recurring') === 'true' ? 'true' : 'false';
+            setFieldValue('recurring', recurringValue);
+            setFieldValue('recurringInterval', trigger.getAttribute('data-entry-recurring-interval') || '');
+
+            const attachments = decodeAttachmentData(trigger.getAttribute('data-entry-attachments'));
+            hydrateAttachmentsList(attachmentsContainer, attachments);
+
+            const attachmentsInput = modalForm.querySelector('#modal-entry-attachments');
+            if (attachmentsInput) {
+                attachmentsInput.value = '';
+            }
+        };
+
+        triggers.forEach((trigger) => {
+            trigger.addEventListener('click', () => hydrateModal(trigger));
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
         const state = parseStateElement();
         const filterForms = document.querySelectorAll('[data-filter-form]');
@@ -238,5 +393,6 @@
         }
 
         setupImportToggle();
+        registerEntryModal();
     });
 })();

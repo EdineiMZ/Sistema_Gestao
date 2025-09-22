@@ -81,6 +81,12 @@ const buildViewContext = () => ({
         totals: { new: 1, conflicting: 0, total: 1 },
         uploadedAt: new Date().toISOString()
     },
+    pagination: {
+        page: 1,
+        pageSize: 10,
+        totalPages: 2,
+        totalRecords: 12
+    },
     success_msg: null,
     error_msg: null,
     error: null,
@@ -137,9 +143,11 @@ describe('views/finance/payments', () => {
 
         expect(html).toContain('enctype="multipart/form-data"');
         expect(html).toContain('name="attachments"');
-        expect(html).toContain('href="/finance/attachments/701/download"');
+        expect(html).toContain('data-entry-edit');
+        expect(html).toContain('data-entry-attachments=');
+        expect(html).toContain('financeEntryModal');
+        expect(html).toContain('data-modal-attachments');
         expect(html).toContain('comprovante.pdf');
-        expect(html).toContain('bi bi-paperclip');
     });
 
     it('renders import preview with selection controls', async () => {
@@ -149,5 +157,15 @@ describe('views/finance/payments', () => {
         expect(html).toContain('data-import-select-all');
         expect(html).toContain('name="entries[0][enabled]"');
         expect(html).toContain('Importar lançamentos selecionados');
+    });
+
+    it('exibe navegação paginada com resumo de registros', async () => {
+        const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
+
+        expect(html).toContain('aria-label="Paginação de lançamentos"');
+        expect(html).toContain('pageSize=10');
+        expect(html).toContain('page=2');
+        expect(html).toContain('Exibindo <strong>');
+        expect(html).toContain('de <strong>12</strong>');
     });
 });
