@@ -678,6 +678,23 @@ const serializeAttachmentForView = (attachment) => {
     };
 };
 
+const formatDateInputValue = (value) => {
+    if (!value) {
+        return '';
+    }
+
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date?.getTime())) {
+        return '';
+    }
+
+    return date.toISOString().slice(0, 10);
+};
+
 const serializeEntryForView = (entry) => {
     const plain = typeof entry?.get === 'function'
         ? entry.get({ plain: true })
@@ -705,13 +722,18 @@ const serializeEntryForView = (entry) => {
         ? plain.attachments.map(serializeAttachmentForView)
         : [];
 
+    const valueNumber = parseAmount(plain.value);
+
     return {
         id: plain.id ?? null,
         description: sanitizeText(plain.description),
         type: normalizedType,
-        value: parseAmount(plain.value),
+        value: valueNumber,
+        valueInput: Number.isFinite(valueNumber) ? valueNumber.toFixed(2) : '0.00',
         dueDate: plain.dueDate || null,
+        dueDateInput: formatDateInputValue(plain.dueDate),
         paymentDate: plain.paymentDate || null,
+        paymentDateInput: formatDateInputValue(plain.paymentDate),
         status: normalizedStatus,
         categoryId,
         categoryLabel: categoryName,
@@ -913,7 +935,32 @@ const buildFiltersFromQuery = (query = {}) => {
     return filters;
 };
 
-const buildEntriesQueryOptions = (filters = {}) => {
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+const resolvePaginationFromQuery = (query = {}) => {
+    const rawPage = Number.parseInt(query.page, 10);
+    const rawPageSize = Number.parseInt(query.pageSize ?? query.limit, 10);
+
+    const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+
+    let pageSize = Number.isInteger(rawPageSize) && rawPageSize > 0 ? rawPageSize : DEFAULT_PAGE_SIZE;
+    if (pageSize > MAX_PAGE_SIZE) {
+        pageSize = MAX_PAGE_SIZE;
+    }
+
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+
+    return {
+        page,
+        pageSize,
+        limit,
+        offset
+    };
+};
+
+const buildEntriesQueryOptions = (filters = {}, extraOptions = {}) => {
     const options = {
         include: [
             {
@@ -955,6 +1002,20 @@ const buildEntriesQueryOptions = (filters = {}) => {
     }
 
     options.where = Object.keys(where).length > 0 ? where : undefined;
+
+    const limit = Number.isInteger(extraOptions.limit) && extraOptions.limit > 0
+        ? extraOptions.limit
+        : null;
+    const offset = Number.isInteger(extraOptions.offset) && extraOptions.offset >= 0
+        ? extraOptions.offset
+        : null;
+
+    if (limit !== null) {
+        options.limit = limit;
+    }
+    if (offset !== null) {
+        options.offset = offset;
+    }
 
     return options;
 };
@@ -1307,9 +1368,21 @@ const renderPaymentsPage = async (req, res) => {
             filters.userId = userId;
         }
 
-        const entriesPromise = FinanceEntry.findAll(buildEntriesQueryOptions(filters));
-        const summaryPromise = createSummaryPromise(entriesPromise, filters);
+        const pagination = resolvePaginationFromQuery(req.query);
+        const entryOptions = buildEntriesQueryOptions(filters, pagination);
+        const totalCountPromise = FinanceEntry.count({ where: entryOptions.where });
+        const summaryPromise = financeReportingService.getFinanceSummary(filters, { includeProjections: false });
         const categoriesPromise = fetchFinanceCategoriesForUser(userId);
+
+        const totalRecordsRaw = await totalCountPromise;
+        const totalRecords = Number.isInteger(totalRecordsRaw) ? totalRecordsRaw : 0;
+        const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / pagination.pageSize) : 1;
+        const currentPage = totalRecords > 0 ? Math.min(pagination.page, totalPages) : 1;
+
+        entryOptions.limit = pagination.pageSize;
+        entryOptions.offset = (currentPage - 1) * pagination.pageSize;
+
+        const entriesPromise = FinanceEntry.findAll(entryOptions);
 
         const [entries, summary, categories] = await Promise.all([
             entriesPromise,
@@ -1341,6 +1414,18 @@ const renderPaymentsPage = async (req, res) => {
             ? normalizedSummary.projections
             : [];
 
+        const totalItems = totalRecords;
+        const paginationMeta = {
+            page: currentPage,
+            pageSize: pagination.pageSize,
+            totalPages,
+            totalRecords: totalItems,
+            hasPrevious: currentPage > 1,
+            hasNext: currentPage < totalPages,
+            previousPage: currentPage > 1 ? currentPage - 1 : null,
+            nextPage: currentPage < totalPages ? currentPage + 1 : null
+        };
+
         const importPreview = req.session?.financeImportPreview || null;
         if (importPreview) {
             res.locals.importPreview = importPreview;
@@ -1360,6 +1445,7 @@ const renderPaymentsPage = async (req, res) => {
             recurringIntervalOptions,
             contributionFrequencyLabels: CONTRIBUTION_FREQUENCY_LABELS,
             importPreview,
+            pagination: paginationMeta,
             formatCurrency
         });
     } catch (error) {

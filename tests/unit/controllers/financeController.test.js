@@ -6,7 +6,8 @@ jest.mock('../../../database/models', () => {
             create: jest.fn(),
             findAll: jest.fn(),
             findByPk: jest.fn(),
-            findOne: jest.fn()
+            findOne: jest.fn(),
+            count: jest.fn()
         },
         Sequelize: { Op }
     };
@@ -14,14 +15,17 @@ jest.mock('../../../database/models', () => {
 
 const { FinanceEntry } = require('../../../database/models');
 const financeController = require('../../../src/controllers/financeController');
+const financeReportingService = require('../../../src/services/financeReportingService');
 
 const buildResponseMock = () => ({
-    redirect: jest.fn()
+    redirect: jest.fn(),
+    render: jest.fn()
 });
 
 describe('financeController', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.restoreAllMocks();
     });
 
     it('mapeia rótulos traduzidos para intervalos aceitos ao criar um lançamento', async () => {
@@ -103,5 +107,75 @@ describe('financeController', () => {
         expect(save).toHaveBeenCalledTimes(1);
         expect(req.flash).toHaveBeenCalledWith('success_msg', expect.any(String));
         expect(res.redirect).toHaveBeenCalledWith('/finance/payments');
+    });
+
+    describe('renderPaymentsPage', () => {
+        const buildRequest = (query = {}) => ({
+            query,
+            user: { id: 9 },
+            flash: jest.fn(),
+            session: {}
+        });
+
+        const minimalSummary = {
+            totals: { receivable: 0, payable: 0, net: 0, overdue: 0, paid: 0, pending: 0 },
+            statusSummary: { receivable: {}, payable: {} },
+            monthlySummary: [],
+            projections: []
+        };
+
+        it('aplica limite e deslocamento com base em page/pageSize e retorna paginação', async () => {
+            FinanceEntry.count.mockResolvedValueOnce(12);
+            FinanceEntry.findAll.mockResolvedValueOnce([
+                { id: 51, description: 'Mensalidade', type: 'receivable', status: 'pending', value: '120', dueDate: '2024-01-10' }
+            ]);
+            jest.spyOn(financeReportingService, 'getFinanceSummary').mockResolvedValue(minimalSummary);
+
+            const req = buildRequest({ page: '2', pageSize: '5' });
+            const res = buildResponseMock();
+
+            await financeController.renderPaymentsPage(req, res);
+
+            expect(FinanceEntry.count).toHaveBeenCalledWith(expect.objectContaining({
+                where: expect.objectContaining({ userId: 9 })
+            }));
+            expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
+                limit: 5,
+                offset: 5
+            }));
+            expect(res.render).toHaveBeenCalledWith('finance/payments', expect.objectContaining({
+                pagination: expect.objectContaining({
+                    page: 2,
+                    pageSize: 5,
+                    totalPages: 3,
+                    totalRecords: 12
+                })
+            }));
+        });
+
+        it('ajusta a página quando o valor excede o total de registros', async () => {
+            FinanceEntry.count.mockResolvedValueOnce(6);
+            FinanceEntry.findAll.mockResolvedValueOnce([
+                { id: 77, description: 'Compra de materiais', type: 'payable', status: 'pending', value: '90', dueDate: '2024-01-12' }
+            ]);
+            jest.spyOn(financeReportingService, 'getFinanceSummary').mockResolvedValue(minimalSummary);
+
+            const req = buildRequest({ page: '10', pageSize: '5' });
+            const res = buildResponseMock();
+
+            await financeController.renderPaymentsPage(req, res);
+
+            expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
+                limit: 5,
+                offset: 5
+            }));
+            expect(res.render).toHaveBeenCalledWith('finance/payments', expect.objectContaining({
+                pagination: expect.objectContaining({
+                    page: 2,
+                    totalPages: 2,
+                    totalRecords: 6
+                })
+            }));
+        });
     });
 });

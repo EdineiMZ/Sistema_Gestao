@@ -19,7 +19,7 @@ describe('financeReportingService', () => {
         });
         expect(FinanceEntry.findAll).toHaveBeenCalledTimes(1);
         expect(FinanceEntry.findAll).toHaveBeenCalledWith(expect.objectContaining({
-            attributes: ['id', 'type', 'status', 'value', 'dueDate'],
+            group: expect.arrayContaining(['FinanceEntry.type', 'FinanceEntry.status']),
             raw: true
         }));
     });
@@ -36,12 +36,12 @@ describe('financeReportingService', () => {
 
     it('agrupa os lançamentos por status e tipo', async () => {
         jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([
-            { type: 'payable', status: 'pending', value: '120.50', dueDate: '2024-04-10' },
-            { type: 'payable', status: 'paid', value: '80', dueDate: '2024-04-11' },
-            { type: 'receivable', status: 'paid', value: '150.20', dueDate: '2024-04-12' },
-            { type: 'receivable', status: 'overdue', value: '200', dueDate: '2024-05-01' },
-            { type: 'receivable', status: 'cancelled', value: '50', dueDate: '2024-05-02' },
-            { type: 'invalid', status: 'pending', value: '999', dueDate: '2024-06-01' }
+            { type: 'payable', status: 'pending', totalValue: '120.50' },
+            { type: 'payable', status: 'paid', totalValue: '80' },
+            { type: 'receivable', status: 'paid', totalValue: '150.20' },
+            { type: 'receivable', status: 'overdue', totalValue: '200' },
+            { type: 'receivable', status: 'cancelled', totalValue: '50' },
+            { type: 'invalid', status: 'pending', totalValue: '999' }
         ]);
 
         const summary = await getStatusSummary();
@@ -54,12 +54,10 @@ describe('financeReportingService', () => {
 
     it('organiza os dados por mês', async () => {
         jest.spyOn(FinanceEntry, 'findAll').mockResolvedValueOnce([
-            { type: 'payable', status: 'pending', value: 100, dueDate: '2024-01-15' },
-            { type: 'payable', status: 'paid', value: 50, dueDate: '2024-01-20' },
-            { type: 'receivable', status: 'paid', value: '200', dueDate: '2024-02-05' },
-            { type: 'receivable', status: 'paid', value: '150', dueDate: '2024-01-08' },
-            { type: 'receivable', status: 'paid', value: '120', dueDate: '2024-02-12' },
-            { type: 'payable', status: 'paid', value: '10', dueDate: 'invalid-date' }
+            { month: '2024-01', type: 'payable', totalValue: 150 },
+            { month: '2024-01', type: 'receivable', totalValue: 150 },
+            { month: '2024-02', type: 'receivable', totalValue: 320 },
+            { month: '2024-03', type: 'invalid', totalValue: 999 }
         ]);
 
         const summary = await getMonthlySummary();

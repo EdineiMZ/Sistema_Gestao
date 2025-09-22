@@ -372,6 +372,27 @@ const buildStatusSummaryFromEntries = (entries) => {
     return summary;
 };
 
+const buildStatusSummaryFromAggregates = (rows) => {
+    const summary = createEmptyStatusSummary();
+
+    if (!Array.isArray(rows)) {
+        return summary;
+    }
+
+    for (const row of rows) {
+        const type = FINANCE_TYPES.includes(row?.type) ? row.type : null;
+        const status = FINANCE_STATUSES.includes(row?.status) ? row.status : null;
+        if (!type || !status) {
+            continue;
+        }
+
+        const totalValue = row?.totalValue ?? row?.sum ?? row?.value ?? 0;
+        summary[type][status] += toNumber(totalValue);
+    }
+
+    return summary;
+};
+
 const formatMonth = (value) => {
     let date;
 
@@ -419,6 +440,40 @@ const buildMonthlySummaryFromEntries = (entries) => {
     return Object.keys(monthly)
         .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
         .map(month => ({ month, ...monthly[month] }));
+};
+
+const buildMonthlySummaryFromAggregates = (rows) => {
+    if (!Array.isArray(rows) || !rows.length) {
+        return [];
+    }
+
+    const monthly = {};
+
+    for (const row of rows) {
+        const type = FINANCE_TYPES.includes(row?.type) ? row.type : null;
+        if (!type) {
+            continue;
+        }
+
+        const monthKey = typeof row?.month === 'string' ? row.month : formatMonth(row?.month);
+        if (!monthKey) {
+            continue;
+        }
+
+        if (!monthly[monthKey]) {
+            monthly[monthKey] = { payable: 0, receivable: 0 };
+        }
+
+        monthly[monthKey][type] += toNumber(row?.totalValue ?? row?.sum ?? row?.value ?? 0);
+    }
+
+    return Object.keys(monthly)
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .map((month) => ({
+            month,
+            payable: toNumber(monthly[month].payable),
+            receivable: toNumber(monthly[month].receivable)
+        }));
 };
 
 const startOfMonth = (date) => {
@@ -1152,7 +1207,7 @@ const buildTotalsFromStatus = (statusSummary) => {
     return totals;
 };
 
-const fetchEntries = async (filters = {}) => {
+const fetchEntries = async (filters = {}, options = {}) => {
     const where = {};
 
     const userId = parseIntegerId(filters.userId);
@@ -1184,15 +1239,59 @@ const fetchEntries = async (filters = {}) => {
         }
     }
 
-    return FinanceEntry.findAll({
-        attributes: ['id', 'type', 'status', 'value', 'dueDate'],
+    const mode = options.mode || 'list';
+
+    if (mode === 'statusSummary') {
+        return FinanceEntry.findAll({
+            attributes: [
+                'type',
+                'status',
+                [Sequelize.fn('SUM', Sequelize.col('FinanceEntry.value')), 'totalValue'],
+                [Sequelize.fn('COUNT', Sequelize.col('FinanceEntry.id')), 'count']
+            ],
+            where,
+            group: ['FinanceEntry.type', 'FinanceEntry.status'],
+            raw: true
+        });
+    }
+
+    if (mode === 'monthlySummary') {
+        const monthExpression = buildMonthKeyExpression('FinanceEntry.dueDate');
+        return FinanceEntry.findAll({
+            attributes: [
+                [monthExpression, 'month'],
+                'type',
+                [Sequelize.fn('SUM', Sequelize.col('FinanceEntry.value')), 'totalValue']
+            ],
+            where,
+            group: [monthExpression, 'FinanceEntry.type'],
+            order: [[Sequelize.literal('month'), 'ASC']],
+            raw: true
+        });
+    }
+
+    const attributes = Array.isArray(options.attributes) && options.attributes.length
+        ? options.attributes
+        : ['id', 'type', 'status', 'value', 'dueDate', 'paymentDate', 'recurring', 'recurringInterval'];
+
+    const queryOptions = {
+        attributes,
         where,
-        order: [
+        order: options.order || [
             ['dueDate', 'ASC'],
             ['id', 'ASC']
         ],
-        raw: true
-    });
+        raw: options.raw === undefined ? true : options.raw
+    };
+
+    if (Number.isInteger(options.limit) && options.limit > 0) {
+        queryOptions.limit = options.limit;
+    }
+    if (Number.isInteger(options.offset) && options.offset >= 0) {
+        queryOptions.offset = options.offset;
+    }
+
+    return FinanceEntry.findAll(queryOptions);
 };
 
 const resolveEntries = async (filters = {}, options = {}) => {
@@ -1203,13 +1302,19 @@ const resolveEntries = async (filters = {}, options = {}) => {
 };
 
 const getStatusSummary = async (filters = {}, options = {}) => {
-    const entries = await resolveEntries(filters, options);
-    return buildStatusSummaryFromEntries(entries);
+    if (Array.isArray(options.entries)) {
+        return buildStatusSummaryFromEntries(options.entries);
+    }
+    const rows = await fetchEntries(filters, { mode: 'statusSummary' });
+    return buildStatusSummaryFromAggregates(rows);
 };
 
 const getMonthlySummary = async (filters = {}, options = {}) => {
-    const entries = await resolveEntries(filters, options);
-    return buildMonthlySummaryFromEntries(entries);
+    if (Array.isArray(options.entries)) {
+        return buildMonthlySummaryFromEntries(options.entries);
+    }
+    const rows = await fetchEntries(filters, { mode: 'monthlySummary' });
+    return buildMonthlySummaryFromAggregates(rows);
 };
 
 const getMonthlyProjection = async (filters = {}, options = {}) => {
@@ -1228,7 +1333,7 @@ const getFinanceSummary = async (filters = {}, options = {}) => {
     const projections = await buildMonthlyProjectionFromEntries(entries, projectionSettings, projectionOptions);
     return {
         statusSummary,
-        monthlySummary: buildMonthlySummaryFromEntries(entries),
+        monthlySummary,
         totals: buildTotalsFromStatus(statusSummary),
         projections
     };
