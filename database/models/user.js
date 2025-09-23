@@ -1,6 +1,11 @@
 'use strict';
 const argon2 = require('argon2');
 const { USER_ROLES, ROLE_ORDER, parseRole } = require('../../src/constants/roles');
+const {
+    COMPANY_ACCESS_LEVEL_ORDER,
+    normalizeCompanyAccessLevel,
+    DEFAULT_COMPANY_ACCESS_LEVEL
+} = require('../../src/constants/companyAccessLevels');
 
 const parsePositiveInt = (value, fallback) => {
     if (value === undefined || value === null || value === '') {
@@ -168,6 +173,28 @@ module.exports = (sequelize, DataTypes) => {
                     msg: 'Hash do código de 2FA inválido.'
                 }
             }
+        },
+        companyId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: 'Companies',
+                key: 'id'
+            }
+        },
+        companyAccessLevel: {
+            type: DataTypes.STRING(20),
+            allowNull: false,
+            defaultValue: DEFAULT_COMPANY_ACCESS_LEVEL,
+            set(value) {
+                this.setDataValue('companyAccessLevel', normalizeCompanyAccessLevel(value));
+            },
+            validate: {
+                isIn: {
+                    args: [COMPANY_ACCESS_LEVEL_ORDER],
+                    msg: 'Nível de acesso da empresa inválido.'
+                }
+            }
         }
     }, {
         tableName: 'Users',
@@ -204,6 +231,13 @@ module.exports = (sequelize, DataTypes) => {
     };
 
     User.associate = (models) => {
+        if (models.Company) {
+            User.belongsTo(models.Company, {
+                as: 'company',
+                foreignKey: 'companyId'
+            });
+        }
+
         if (models.UserNotificationPreference) {
             User.hasOne(models.UserNotificationPreference, {
                 as: 'notificationPreference',

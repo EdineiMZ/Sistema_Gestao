@@ -12,6 +12,12 @@ const { sequelize, User } = require('./database/models');
 const { initializeSupportChat } = require('./src/services/supportChatService');
 const { ensureFinanceEntriesUserId } = require('./src/services/ensureFinanceEntriesUserId');
 const { USER_ROLES, ROLE_LABELS, ROLE_ORDER, getRoleLevel } = require('./src/constants/roles');
+const {
+    COMPANY_ACCESS_LEVELS,
+    COMPANY_ACCESS_LEVEL_LABELS,
+    buildCompanyAccessLevelOptions,
+    DEFAULT_COMPANY_ACCESS_LEVEL
+} = require('./src/constants/companyAccessLevels');
 const { getNavigationShortcuts, getMenuItems, getQuickActions } = require('./src/utils/navigation');
 const { generalRateLimiter } = require('./src/middlewares/rateLimiters');
 
@@ -53,6 +59,7 @@ const campaignRoutes = require('./src/routes/campaignRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
 const posRoutes = require('./src/routes/posRoutes');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -142,6 +149,7 @@ app.use(generalRateLimiter);
 
 // Variáveis locais
 const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
+const companyAccessLevelOptions = buildCompanyAccessLevelOptions();
 
 app.use((req, res, next) => {
     const normalizeFlashMessages = (messages) => {
@@ -188,6 +196,10 @@ app.use((req, res, next) => {
     res.locals.roles = USER_ROLES;
     res.locals.roleLabels = ROLE_LABELS;
     res.locals.roleOptions = roleOptions;
+    res.locals.companyAccessLevels = COMPANY_ACCESS_LEVELS;
+    res.locals.companyAccessLevelLabels = COMPANY_ACCESS_LEVEL_LABELS;
+    res.locals.companyAccessLevelOptions = companyAccessLevelOptions;
+    res.locals.defaultCompanyAccessLevel = DEFAULT_COMPANY_ACCESS_LEVEL;
     res.locals.getRoleLevel = getRoleLevel;
     res.locals.managerLevel = getRoleLevel(USER_ROLES.MANAGER);
     res.locals.adminLevel = getRoleLevel(USER_ROLES.ADMIN);
