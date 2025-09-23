@@ -174,7 +174,7 @@ const listProducts = async (req, res) => {
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 10, 50);
 
     try {
-        const whereClauses = { active: true };
+        const whereClauses = { status: 'active' };
 
         if (term) {
             const likeTerm = `%${term}%`;
@@ -199,7 +199,7 @@ const listProducts = async (req, res) => {
             name: product.name,
             sku: product.sku,
             unit: product.unit,
-            unitPrice: Number.parseFloat(product.unitPrice || 0),
+            unitPrice: Number.parseFloat((product.unitPrice ?? product.price) || 0),
             taxRate: Number.parseFloat(product.taxRate || 0),
             taxCode: product.taxCode || null
         }));
@@ -242,7 +242,7 @@ const addItem = async (req, res) => {
         }
 
         const product = await Product.findOne({
-            where: { id: productId, active: true },
+            where: { id: productId, status: 'active' },
             transaction,
             lock: transaction.LOCK.SHARE
         });
@@ -258,7 +258,8 @@ const addItem = async (req, res) => {
             return res.status(422).json({ message: 'Quantidade inválida.' });
         }
 
-        const resolvedUnitPrice = unitPrice ? Number.parseFloat(unitPrice) : Number.parseFloat(product.unitPrice || 0);
+        const productBasePrice = (product.unitPrice ?? product.price) || 0;
+        const resolvedUnitPrice = unitPrice ? Number.parseFloat(unitPrice) : Number.parseFloat(productBasePrice);
         const gross = quantityCents * resolvedUnitPrice;
         const discount = Number.parseFloat(discountValue || 0);
         const tax = Number.parseFloat(taxValue || 0);
