@@ -731,7 +731,7 @@ const fetchCategoryMonthlyConsumption = async (filters = {}) => {
             [Sequelize.fn('SUM', Sequelize.col('FinanceEntry.value')), 'totalValue']
         ],
         where,
-        group: [Sequelize.literal('month'), Sequelize.literal('monthStart'), 'financeCategoryId'],
+        group: [Sequelize.literal('month'), Sequelize.col('monthStart'), 'financeCategoryId'],
         raw: true
     });
 };
