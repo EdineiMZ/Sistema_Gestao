@@ -44,6 +44,13 @@ const rawShortcuts = [
         groups: ['menu']
     },
     {
+        label: 'PDV',
+        route: '/pos',
+        icon: 'bi-bag-check',
+        minimumRole: USER_ROLES.MANAGER,
+        groups: ['menu', 'quick']
+    },
+    {
         label: 'Salas',
         route: '/rooms',
         icon: 'bi-door-open',

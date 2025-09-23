@@ -1,0 +1,826 @@
+<%- include('../partials/header') %>
+
+<main class="app-main py-5">
+    <div class="container-xl">
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-4">
+            <div>
+                <h1 class="page-title mb-1">Ponto de Venda Inteligente</h1>
+                <p class="text-muted mb-0">
+                    Busque produtos, monte o carrinho, registre pagamentos e gere o comprovante fiscal em poucos cliques.
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button id="finalizeSaleButton" class="btn btn-gradient" disabled>
+                    <i class="bi bi-receipt-cutoff me-2"></i>Finalizar venda
+                </button>
+                <a id="downloadReceiptButton" class="btn btn-outline-secondary disabled" role="button" aria-disabled="true">
+                    <i class="bi bi-download me-2"></i>Comprovante
+                </a>
+            </div>
+        </div>
+
+        <div id="posFeedback" class="alert alert-dismissible fade" role="alert">
+            <span id="posFeedbackMessage"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <section class="card h-100 shadow-sm border-0">
+                    <div class="card-body">
+                        <h2 class="h5 card-title mb-3">
+                            <i class="bi bi-search me-2 text-primary"></i>Buscar produto
+                        </h2>
+                        <div class="input-group rounded-pill mb-3 shadow-sm">
+                            <span class="input-group-text bg-transparent border-0 ps-3">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input
+                                id="productSearchInput"
+                                type="search"
+                                class="form-control border-0"
+                                placeholder="Nome, SKU ou código interno"
+                                autocomplete="off"
+                            />
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-muted">Resultados recentes</span>
+                            <div class="form-text m-0" id="searchResultCounter"></div>
+                        </div>
+                        <div id="productResults" class="product-results-list"></div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-lg-5">
+                <section class="card h-100 shadow-sm border-0">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h2 class="h5 card-title mb-0">
+                                <i class="bi bi-bag me-2 text-success"></i>Carrinho atual
+                            </h2>
+                            <span class="badge bg-success-subtle text-success" id="saleStatusBadge">Preparando...</span>
+                        </div>
+                        <div class="border rounded-4 p-3 mb-3 bg-light-subtle" id="saleItemsContainer">
+                            <p class="text-muted mb-0 small">Nenhum item adicionado ainda.</p>
+                        </div>
+                        <div class="totals-grid rounded-4 p-3 border bg-white shadow-sm-sm">
+                            <div>
+                                <span class="totals-label">Subtotal</span>
+                                <strong class="totals-value" id="subtotalValue">R$ 0,00</strong>
+                            </div>
+                            <div>
+                                <span class="totals-label">Descontos</span>
+                                <strong class="totals-value text-danger" id="discountValue">- R$ 0,00</strong>
+                            </div>
+                            <div>
+                                <span class="totals-label">Tributos</span>
+                                <strong class="totals-value" id="taxValue">R$ 0,00</strong>
+                            </div>
+                            <div class="totals-highlight">
+                                <span class="totals-label">Total líquido</span>
+                                <strong class="totals-value fs-4" id="netTotalValue">R$ 0,00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-lg-3">
+                <section class="card h-100 shadow-sm border-0">
+                    <div class="card-body">
+                        <h2 class="h5 card-title mb-3">
+                            <i class="bi bi-credit-card-2-front me-2 text-info"></i>Pagamentos
+                        </h2>
+                        <form id="paymentForm" class="payment-form needs-validation" novalidate>
+                            <div class="mb-3">
+                                <label for="paymentMethod" class="form-label small text-muted">Forma de pagamento</label>
+                                <select id="paymentMethod" class="form-select rounded-pill" required></select>
+                                <div class="invalid-feedback">Escolha um método válido.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="paymentAmount" class="form-label small text-muted">Valor recebido</label>
+                                <div class="input-group rounded-pill">
+                                    <span class="input-group-text border-0 bg-transparent">R$</span>
+                                    <input
+                                        id="paymentAmount"
+                                        type="number"
+                                        class="form-control border-0"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0,00"
+                                        required
+                                    />
+                                </div>
+                                <div class="invalid-feedback">Informe um valor maior que zero.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="paymentReference" class="form-label small text-muted">Referência (opcional)</label>
+                                <input id="paymentReference" type="text" class="form-control rounded-pill" maxlength="120" />
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill">
+                                <i class="bi bi-plus-circle me-2"></i>Adicionar pagamento
+                            </button>
+                        </form>
+
+                        <div class="mt-4">
+                            <span class="fw-semibold small text-muted d-block mb-2">Pagamentos registrados</span>
+                            <ul class="list-unstyled payment-list" id="paymentList">
+                                <li class="text-muted small">Nenhum pagamento cadastrado.</li>
+                            </ul>
+                            <div class="border-top pt-3 mt-3">
+                                <div class="d-flex justify-content-between small text-muted mb-1">
+                                    <span>Total pago</span>
+                                    <strong id="totalPaidValue">R$ 0,00</strong>
+                                </div>
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Troco</span>
+                                    <strong id="changeDueValue">R$ 0,00</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section class="card shadow-sm border-0 mt-4">
+            <div class="card-body d-flex flex-column flex-lg-row gap-4 align-items-lg-center justify-content-lg-between">
+                <div>
+                    <h2 class="h5 card-title mb-1">Comprovante fiscal</h2>
+                    <p class="text-muted mb-0 small">
+                        Após finalizar a venda, você poderá imprimir, baixar ou compartilhar o cupom fiscal com o cliente.
+                    </p>
+                </div>
+                <div class="d-flex flex-wrap gap-2" id="receiptActions">
+                    <button id="previewReceiptButton" class="btn btn-outline-primary rounded-pill" disabled>
+                        <i class="bi bi-eye me-2"></i>Visualizar
+                    </button>
+                    <button id="shareReceiptButton" class="btn btn-outline-secondary rounded-pill" disabled>
+                        <i class="bi bi-share me-2"></i>Compartilhar
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addItemModalLabel">Adicionar produto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="addItemForm" class="needs-validation" novalidate>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Produto</label>
+                        <div id="selectedProductName" class="fw-semibold"></div>
+                        <div id="selectedProductSku" class="text-muted small"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label for="itemQuantity" class="form-label small text-muted">Quantidade</label>
+                            <input
+                                id="itemQuantity"
+                                type="number"
+                                class="form-control"
+                                step="0.01"
+                                min="0.01"
+                                value="1"
+                                required
+                            />
+                            <div class="invalid-feedback">Informe a quantidade.</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="itemUnitPrice" class="form-label small text-muted">Preço unitário</label>
+                            <input
+                                id="itemUnitPrice"
+                                type="number"
+                                class="form-control"
+                                step="0.01"
+                                min="0"
+                                required
+                            />
+                            <div class="invalid-feedback">Informe o preço unitário.</div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-sm-6">
+                            <label for="itemDiscount" class="form-label small text-muted">Desconto</label>
+                            <input id="itemDiscount" type="number" class="form-control" step="0.01" min="0" value="0" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="itemTax" class="form-label small text-muted">Tributos</label>
+                            <input id="itemTax" type="number" class="form-control" step="0.01" min="0" value="0" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-2"></i>Adicionar item
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const paymentMethods = <%- JSON.stringify(paymentMethods) %>;
+
+        const state = {
+            sale: null,
+            receipt: null,
+            loading: false,
+            selectedProduct: null
+        };
+
+        const endpoints = {
+            openSale: '/pos/sales',
+            sale: (id) => `/pos/sales/${id}`,
+            products: '/pos/products',
+            addItem: (id) => `/pos/sales/${id}/items`,
+            addPayment: (id) => `/pos/sales/${id}/payments`,
+            finalize: (id) => `/pos/sales/${id}/finalize`,
+            receipt: (id) => `/pos/sales/${id}/receipt`
+        };
+
+        const dom = {
+            finalizeButton: document.getElementById('finalizeSaleButton'),
+            downloadButton: document.getElementById('downloadReceiptButton'),
+            previewButton: document.getElementById('previewReceiptButton'),
+            shareButton: document.getElementById('shareReceiptButton'),
+            paymentForm: document.getElementById('paymentForm'),
+            paymentMethod: document.getElementById('paymentMethod'),
+            paymentAmount: document.getElementById('paymentAmount'),
+            paymentReference: document.getElementById('paymentReference'),
+            paymentList: document.getElementById('paymentList'),
+            subtotal: document.getElementById('subtotalValue'),
+            discount: document.getElementById('discountValue'),
+            tax: document.getElementById('taxValue'),
+            netTotal: document.getElementById('netTotalValue'),
+            totalPaid: document.getElementById('totalPaidValue'),
+            changeDue: document.getElementById('changeDueValue'),
+            saleStatusBadge: document.getElementById('saleStatusBadge'),
+            saleItemsContainer: document.getElementById('saleItemsContainer'),
+            productResults: document.getElementById('productResults'),
+            productSearchInput: document.getElementById('productSearchInput'),
+            resultCounter: document.getElementById('searchResultCounter'),
+            feedback: document.getElementById('posFeedback'),
+            feedbackMessage: document.getElementById('posFeedbackMessage'),
+            downloadLink: document.getElementById('downloadReceiptButton')
+        };
+
+        const addItemModalEl = document.getElementById('addItemModal');
+        const addItemModal = new bootstrap.Modal(addItemModalEl);
+        const addItemForm = document.getElementById('addItemForm');
+        const itemQuantity = document.getElementById('itemQuantity');
+        const itemUnitPrice = document.getElementById('itemUnitPrice');
+        const itemDiscount = document.getElementById('itemDiscount');
+        const itemTax = document.getElementById('itemTax');
+        const selectedProductName = document.getElementById('selectedProductName');
+        const selectedProductSku = document.getElementById('selectedProductSku');
+
+        const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const setLoading = (isLoading) => {
+            state.loading = isLoading;
+            dom.finalizeButton.disabled = isLoading || !state.sale || !state.sale.items || !state.sale.items.length;
+            dom.paymentForm.querySelectorAll('input, select, button').forEach((element) => {
+                element.disabled = isLoading || !state.sale;
+            });
+        };
+
+        const showFeedback = (message, type = 'success') => {
+            dom.feedback.classList.remove('alert-success', 'alert-danger', 'show');
+            dom.feedbackMessage.textContent = message;
+            dom.feedback.classList.add(type === 'error' ? 'alert-danger' : 'alert-success', 'show');
+        };
+
+        const clearFeedback = () => {
+            dom.feedback.classList.remove('show');
+            dom.feedbackMessage.textContent = '';
+        };
+
+        const buildRequest = (method, body) => ({
+            method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: body ? JSON.stringify(body) : undefined
+        });
+
+        const formatStatus = (status) => {
+            switch (status) {
+                case 'completed':
+                    return { label: 'Finalizada', className: 'bg-success-subtle text-success' };
+                case 'pending_payment':
+                    return { label: 'Aguardando pagamento', className: 'bg-warning-subtle text-warning' };
+                case 'open':
+                default:
+                    return { label: 'Em aberto', className: 'bg-primary-subtle text-primary' };
+            }
+        };
+
+        const updateReceiptActions = () => {
+            const hasReceipt = Boolean(state.receipt && state.receipt.base64);
+            dom.previewButton.disabled = !hasReceipt;
+            dom.shareButton.disabled = !hasReceipt;
+            dom.downloadButton.classList.toggle('disabled', !hasReceipt);
+            dom.downloadButton.setAttribute('aria-disabled', String(!hasReceipt));
+
+            if (hasReceipt) {
+                dom.downloadButton.addEventListener('click', handleDownloadReceipt, { once: true });
+            }
+        };
+
+        const updateSaleSummary = () => {
+            if (!state.sale) {
+                return;
+            }
+
+            const statusMeta = formatStatus(state.sale.status);
+            dom.saleStatusBadge.textContent = statusMeta.label;
+            dom.saleStatusBadge.className = `badge ${statusMeta.className}`;
+
+            const itemsContainer = dom.saleItemsContainer;
+            itemsContainer.innerHTML = '';
+
+            if (!state.sale.items.length) {
+                itemsContainer.innerHTML = '<p class="text-muted mb-0 small">Nenhum item adicionado ainda.</p>';
+            } else {
+                state.sale.items.forEach((item) => {
+                    const card = document.createElement('div');
+                    card.className = 'sale-item-card';
+                    card.innerHTML = `
+                        <div>
+                            <span class="item-name">${item.productName}</span>
+                            <span class="item-meta">${item.quantity.toLocaleString('pt-BR')} ${item.unitLabel || 'un'} • ${currencyFormatter.format(item.unitPrice)}</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="item-total">${currencyFormatter.format(item.netTotal)}</span>
+                            ${item.discountValue ? `<div class="item-discount">- ${currencyFormatter.format(item.discountValue)} em descontos</div>` : ''}
+                        </div>
+                    `;
+                    itemsContainer.appendChild(card);
+                });
+            }
+
+            dom.subtotal.textContent = currencyFormatter.format(state.sale.totalGross || 0);
+            dom.discount.textContent = `- ${currencyFormatter.format(state.sale.totalDiscount || 0)}`;
+            dom.tax.textContent = currencyFormatter.format(state.sale.totalTax || 0);
+            dom.netTotal.textContent = currencyFormatter.format(state.sale.totalNet || 0);
+            dom.totalPaid.textContent = currencyFormatter.format(state.sale.totalPaid || 0);
+            dom.changeDue.textContent = currencyFormatter.format(state.sale.changeDue || 0);
+
+            const paymentList = dom.paymentList;
+            paymentList.innerHTML = '';
+            if (!state.sale.payments.length) {
+                paymentList.innerHTML = '<li class="text-muted small">Nenhum pagamento cadastrado.</li>';
+            } else {
+                state.sale.payments.forEach((payment) => {
+                    const li = document.createElement('li');
+                    li.className = 'payment-item';
+                    const paidAt = payment.paidAt ? new Date(payment.paidAt).toLocaleString('pt-BR') : '-';
+                    li.innerHTML = `
+                        <div class="d-flex justify-content-between">
+                            <span class="text-uppercase small fw-semibold">${payment.method}</span>
+                            <span class="fw-semibold">${currencyFormatter.format(payment.amount)}</span>
+                        </div>
+                        <div class="text-muted small">${paidAt}${payment.transactionReference ? ` • Ref.: ${payment.transactionReference}` : ''}</div>
+                    `;
+                    paymentList.appendChild(li);
+                });
+            }
+
+            dom.finalizeButton.disabled = !state.sale.items.length;
+        };
+
+        const ensureSale = async () => {
+            if (state.sale) {
+                return state.sale;
+            }
+
+            setLoading(true);
+            try {
+                const response = await fetch(endpoints.openSale, buildRequest('POST', {}));
+                if (!response.ok) {
+                    throw new Error('Não foi possível iniciar uma nova venda.');
+                }
+                const data = await response.json();
+                state.sale = data.sale;
+                updateSaleSummary();
+                clearFeedback();
+                return state.sale;
+            } catch (error) {
+                showFeedback(error.message || 'Erro ao iniciar venda.', 'error');
+                throw error;
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const fetchProducts = async (term = '') => {
+            const params = new URLSearchParams();
+            if (term) {
+                params.set('q', term);
+            }
+            params.set('limit', '8');
+
+            const response = await fetch(`${endpoints.products}?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error('Não foi possível carregar os produtos.');
+            }
+            return response.json();
+        };
+
+        const renderProducts = (products) => {
+            dom.productResults.innerHTML = '';
+            dom.resultCounter.textContent = `${products.length} itens`;
+
+            if (!products.length) {
+                dom.productResults.innerHTML = '<p class="text-muted small mb-0">Nenhum produto encontrado para a busca.</p>';
+                return;
+            }
+
+            products.forEach((product) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'product-result-card';
+                button.innerHTML = `
+                    <div>
+                        <span class="fw-semibold d-block">${product.name}</span>
+                        <span class="text-muted small">SKU ${product.sku} • ${currencyFormatter.format(product.unitPrice)}</span>
+                    </div>
+                    <i class="bi bi-plus-circle"></i>
+                `;
+                button.addEventListener('click', () => openAddItemModal(product));
+                dom.productResults.appendChild(button);
+            });
+        };
+
+        const debounce = (fn, delay = 400) => {
+            let timer = null;
+            const debounced = (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn(...args), delay);
+            };
+            debounced.cancel = () => clearTimeout(timer);
+            return debounced;
+        };
+
+        const handleSearchInput = debounce(async (event) => {
+            const term = event.target.value.trim();
+            try {
+                const { products } = await fetchProducts(term);
+                renderProducts(products);
+            } catch (error) {
+                showFeedback(error.message, 'error');
+            }
+        }, 400);
+
+        const openAddItemModal = (product) => {
+            state.selectedProduct = product;
+            selectedProductName.textContent = product.name;
+            selectedProductSku.textContent = product.sku ? `SKU ${product.sku}` : '';
+            itemQuantity.value = 1;
+            itemUnitPrice.value = product.unitPrice;
+            itemDiscount.value = 0;
+            itemTax.value = ((product.unitPrice || 0) * ((product.taxRate || 0) / 100)).toFixed(2);
+            addItemModal.show();
+        };
+
+        const handleAddItem = async (event) => {
+            event.preventDefault();
+            if (!addItemForm.checkValidity()) {
+                addItemForm.classList.add('was-validated');
+                return;
+            }
+
+            if (!state.selectedProduct) {
+                showFeedback('Selecione um produto válido.', 'error');
+                return;
+            }
+
+            try {
+                await ensureSale();
+                setLoading(true);
+                const payload = {
+                    productId: state.selectedProduct.id,
+                    quantity: Number.parseFloat(itemQuantity.value),
+                    unitPrice: Number.parseFloat(itemUnitPrice.value),
+                    discountValue: Number.parseFloat(itemDiscount.value || 0),
+                    taxValue: Number.parseFloat(itemTax.value || 0)
+                };
+
+                const response = await fetch(endpoints.addItem(state.sale.id), buildRequest('POST', payload));
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error?.message || 'Não foi possível adicionar o item.');
+                }
+
+                const data = await response.json();
+                state.sale = data.sale;
+                updateSaleSummary();
+                showFeedback('Item adicionado com sucesso!');
+                addItemModal.hide();
+                addItemForm.reset();
+            } catch (error) {
+                showFeedback(error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const handleAddPayment = async (event) => {
+            event.preventDefault();
+            if (!dom.paymentForm.checkValidity()) {
+                dom.paymentForm.classList.add('was-validated');
+                return;
+            }
+
+            try {
+                await ensureSale();
+                setLoading(true);
+                const payload = {
+                    method: dom.paymentMethod.value,
+                    amount: Number.parseFloat(dom.paymentAmount.value),
+                    transactionReference: dom.paymentReference.value || undefined
+                };
+
+                const response = await fetch(endpoints.addPayment(state.sale.id), buildRequest('POST', payload));
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error?.message || 'Não foi possível registrar o pagamento.');
+                }
+
+                const data = await response.json();
+                state.sale = data.sale;
+                updateSaleSummary();
+                dom.paymentForm.reset();
+                dom.paymentForm.classList.remove('was-validated');
+                showFeedback('Pagamento registrado com sucesso!');
+            } catch (error) {
+                showFeedback(error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const handleFinalizeSale = async () => {
+            if (!state.sale) {
+                return;
+            }
+
+            try {
+                setLoading(true);
+                const response = await fetch(endpoints.finalize(state.sale.id), buildRequest('POST', {}));
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error?.message || 'Não foi possível finalizar a venda.');
+                }
+
+                const data = await response.json();
+                state.sale = data.sale;
+                state.receipt = data.receipt;
+                updateSaleSummary();
+                updateReceiptActions();
+                showFeedback('Venda finalizada com sucesso! Cupom fiscal disponível.');
+            } catch (error) {
+                showFeedback(error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const handleDownloadReceipt = (event) => {
+            event.preventDefault();
+            if (!state.receipt || !state.receipt.base64) {
+                return;
+            }
+            const blob = b64toBlob(state.receipt.base64, state.receipt.mimeType);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = state.receipt.fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        };
+
+        const handlePreviewReceipt = () => {
+            if (!state.receipt || !state.receipt.base64) {
+                return;
+            }
+            const blob = b64toBlob(state.receipt.base64, state.receipt.mimeType);
+            const url = URL.createObjectURL(blob);
+            const previewWindow = window.open(url, '_blank', 'noopener');
+            if (!previewWindow) {
+                showFeedback('Autorize pop-ups para visualizar o comprovante.', 'error');
+            }
+        };
+
+        const handleShareReceipt = async () => {
+            if (!navigator.share || !state.receipt) {
+                showFeedback('Compartilhamento nativo não suportado neste dispositivo.', 'error');
+                return;
+            }
+
+            try {
+                const blob = b64toBlob(state.receipt.base64, state.receipt.mimeType);
+                const file = new File([blob], state.receipt.fileName, { type: state.receipt.mimeType });
+                await navigator.share({
+                    title: 'Cupom fiscal',
+                    text: 'Comprovante de venda disponível para download.',
+                    files: [file]
+                });
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    showFeedback('Não foi possível compartilhar o comprovante.', 'error');
+                }
+            }
+        };
+
+        const b64toBlob = (b64Data, contentType = '', sliceSize = 512) => {
+            const byteCharacters = atob(b64Data);
+            const byteArrays = [];
+
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i += 1) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            return new Blob(byteArrays, { type: contentType });
+        };
+
+        const populatePaymentMethods = () => {
+            paymentMethods.forEach((method) => {
+                const option = document.createElement('option');
+                option.value = method.value;
+                option.textContent = method.label;
+                dom.paymentMethod.appendChild(option);
+            });
+        };
+
+        const initialize = async () => {
+            populatePaymentMethods();
+            dom.productSearchInput.addEventListener('input', handleSearchInput);
+            dom.paymentForm.addEventListener('submit', handleAddPayment);
+            addItemForm.addEventListener('submit', handleAddItem);
+            dom.finalizeButton.addEventListener('click', handleFinalizeSale);
+            dom.previewButton.addEventListener('click', handlePreviewReceipt);
+            dom.shareButton.addEventListener('click', handleShareReceipt);
+            dom.downloadButton.addEventListener('click', handleDownloadReceipt);
+
+            try {
+                await ensureSale();
+                const { products } = await fetchProducts();
+                renderProducts(products);
+            } catch (error) {
+                showFeedback(error.message, 'error');
+            }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && typeof handleSearchInput.cancel === 'function') {
+                handleSearchInput.cancel();
+            }
+        });
+
+        initialize();
+    })();
+</script>
+
+<style>
+    .product-results-list {
+        display: grid;
+        gap: 0.75rem;
+        max-height: 460px;
+        overflow-y: auto;
+        padding-right: 0.25rem;
+    }
+
+    .product-result-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        border: 1px solid rgba(99, 102, 241, 0.15);
+        border-radius: 1rem;
+        padding: 0.9rem 1rem;
+        background: #fff;
+        transition: all 0.2s ease;
+    }
+
+    .product-result-card:hover {
+        background: rgba(99, 102, 241, 0.05);
+        border-color: rgba(99, 102, 241, 0.35);
+    }
+
+    .product-result-card i {
+        font-size: 1.25rem;
+        color: #6366f1;
+    }
+
+    .sale-item-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 0.75rem 1rem;
+        border-radius: 0.85rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+        margin-bottom: 0.75rem;
+    }
+
+    .sale-item-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .sale-item-card .item-name {
+        font-weight: 600;
+        display: block;
+    }
+
+    .sale-item-card .item-meta {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    .sale-item-card .item-total {
+        font-weight: 600;
+    }
+
+    .sale-item-card .item-discount {
+        font-size: 0.75rem;
+        color: #ef4444;
+    }
+
+    .totals-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(129, 140, 248, 0.08));
+    }
+
+    .totals-label {
+        font-size: 0.8rem;
+        color: #6b7280;
+        display: block;
+    }
+
+    .totals-value {
+        font-weight: 600;
+    }
+
+    .totals-highlight {
+        grid-column: span 2;
+    }
+
+    .payment-form .form-control,
+    .payment-form .form-select {
+        background-color: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .payment-item {
+        border-radius: 0.75rem;
+        border: 1px dashed rgba(99, 102, 241, 0.3);
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        background: rgba(99, 102, 241, 0.05);
+    }
+
+    .payment-item:last-child {
+        margin-bottom: 0;
+    }
+
+    @media (max-width: 991.98px) {
+        .totals-grid {
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+        }
+        .totals-highlight {
+            grid-column: span 2;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .totals-grid {
+            grid-template-columns: repeat(1, minmax(140px, 1fr));
+        }
+        .totals-highlight {
+            grid-column: span 1;
+        }
+    }
+</style>
+
+<%- include('../partials/footer') %>

@@ -61,6 +61,10 @@ Object.keys(db).forEach(modelName => {
 // --- Início das associações manuais ---
 const {
     User,
+    Product,
+    Sale,
+    SaleItem,
+    SalePayment,
     Appointment,
     Room,
     Procedure,
