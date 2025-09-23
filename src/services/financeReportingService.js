@@ -731,7 +731,7 @@ const fetchCategoryMonthlyConsumption = async (filters = {}) => {
             [Sequelize.fn('SUM', Sequelize.col('FinanceEntry.value')), 'totalValue']
         ],
         where,
-        group: [Sequelize.literal('month'), 'financeCategoryId'],
+        group: [Sequelize.literal('month'), Sequelize.literal('monthStart'), 'financeCategoryId'],
         raw: true
     });
 };
@@ -1327,6 +1327,7 @@ const getMonthlyProjection = async (filters = {}, options = {}) => {
 const getFinanceSummary = async (filters = {}, options = {}) => {
     const entries = await resolveEntries(filters, options);
     const statusSummary = buildStatusSummaryFromEntries(entries);
+    const monthlySummary = buildMonthlySummaryFromEntries(entries);
     const projectionSettings = resolveProjectionSettings(filters, options);
     const userId = parseIntegerId(options.userId ?? filters.userId);
     const projectionOptions = { ...options, userId };
