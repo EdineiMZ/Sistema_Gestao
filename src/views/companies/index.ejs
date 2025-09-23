@@ -1,0 +1,136 @@
+<%- include('../partials/header') %>
+
+<% const filterState = (filters || {}); %>
+
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Empresas cadastradas</h2>
+                <p class="text-muted mb-0">Gerencie dados cadastrais, integrações fiscais e os times vinculados a cada empresa.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="/admin">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar
+                </a>
+                <a class="btn btn-gradient" href="/admin/companies/new">
+                    <i class="bi bi-plus-lg me-2"></i>Nova empresa
+                </a>
+            </div>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="4000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="6000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <div class="card card-soft p-4 mb-4">
+            <form action="/admin/companies" method="GET" class="row g-3 align-items-end">
+                <div class="col-lg-6">
+                    <label class="form-label">Busca inteligente</label>
+                    <div class="input-group input-group-flat">
+                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control border-start-0"
+                            name="q"
+                            maxlength="180"
+                            placeholder="Pesquise por razão social, fantasia ou CNPJ"
+                            value="<%= filterState.q || '' %>"
+                        />
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="active" <%= filterState.status === 'active' ? 'selected' : '' %>>Ativas</option>
+                        <option value="inactive" <%= filterState.status === 'inactive' ? 'selected' : '' %>>Inativas</option>
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-6 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="bi bi-funnel me-2"></i>Filtrar
+                    </button>
+                    <a class="btn btn-outline-secondary" href="/admin/companies">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="card card-soft p-4">
+            <% if (!companies || !companies.length) { %>
+                <div class="text-center py-5">
+                    <i class="bi bi-buildings text-muted display-5"></i>
+                    <p class="mt-3 mb-1 fw-semibold">Nenhuma empresa encontrada</p>
+                    <p class="text-muted mb-3">Cadastre sua primeira empresa para começar a organizar documentos e equipes.</p>
+                    <a href="/admin/companies/new" class="btn btn-gradient">
+                        <i class="bi bi-plus-circle me-2"></i>Adicionar empresa
+                    </a>
+                </div>
+            <% } else { %>
+                <div class="table-responsive table-modern">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Razão social</th>
+                            <th>Nome fantasia</th>
+                            <th>CNPJ</th>
+                            <th>Status</th>
+                            <th>Contato</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <% companies.forEach((company) => { %>
+                            <% const plain = (typeof company.get === 'function') ? company.get({ plain: true }) : company; %>
+                            <tr>
+                                <td class="fw-semibold"><%= plain.corporateName %></td>
+                                <td><%= plain.tradeName || '—' %></td>
+                                <td><code><%= plain.cnpj || '—' %></code></td>
+                                <td>
+                                    <span class="badge-soft <%= plain.status === 'active' ? 'badge-soft-success' : 'badge-soft-secondary' %>">
+                                        <i class="bi <%= plain.status === 'active' ? 'bi-check-circle' : 'bi-pause-circle' %> me-1"></i>
+                                        <%= plain.status === 'active' ? 'Ativa' : 'Inativa' %>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span><i class="bi bi-envelope me-2 text-muted"></i><%= plain.email || '—' %></span>
+                                        <small class="text-muted"><i class="bi bi-telephone me-2"></i><%= plain.phone || plain.mobilePhone || '—' %></small>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group" role="group">
+                                        <a class="btn btn-sm btn-outline-primary" href="/admin/companies/<%= plain.id %>/edit" title="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a class="btn btn-sm btn-outline-secondary" href="/admin/companies/<%= plain.id %>/users" title="Usuários">
+                                            <i class="bi bi-people"></i>
+                                        </a>
+                                        <form action="/admin/companies/<%= plain.id %>?_method=DELETE" method="POST" class="d-inline">
+                                            <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remover esta empresa?')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

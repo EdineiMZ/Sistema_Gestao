@@ -9,6 +9,12 @@ const {
     ROLE_ORDER,
     getRoleLevel
 } = require('../../src/constants/roles');
+const {
+    COMPANY_ACCESS_LEVELS,
+    COMPANY_ACCESS_LEVEL_LABELS,
+    buildCompanyAccessLevelOptions,
+    DEFAULT_COMPANY_ACCESS_LEVEL
+} = require('../../src/constants/companyAccessLevels');
 
 const DEFAULT_APP_NAME = 'Sistema de Gestão Inteligente';
 
@@ -68,6 +74,7 @@ const createRouterTestApp = ({ routes = [] } = {}) => {
     app.set('views', path.join(__dirname, '..', '..', 'src', 'views'));
 
     const roleOptions = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }));
+    const companyAccessLevelOptions = buildCompanyAccessLevelOptions();
 
     app.use((req, res, next) => {
         res.locals.appName = DEFAULT_APP_NAME;
@@ -75,6 +82,10 @@ const createRouterTestApp = ({ routes = [] } = {}) => {
         res.locals.roles = USER_ROLES;
         res.locals.roleLabels = ROLE_LABELS;
         res.locals.roleOptions = roleOptions;
+        res.locals.companyAccessLevels = COMPANY_ACCESS_LEVELS;
+        res.locals.companyAccessLevelLabels = COMPANY_ACCESS_LEVEL_LABELS;
+        res.locals.companyAccessLevelOptions = companyAccessLevelOptions;
+        res.locals.defaultCompanyAccessLevel = DEFAULT_COMPANY_ACCESS_LEVEL;
         res.locals.success_msg = normalizeFlashMessages(req.flash('success_msg'));
         res.locals.error_msg = normalizeFlashMessages(req.flash('error_msg'));
         res.locals.error = normalizeFlashMessages(req.flash('error'));

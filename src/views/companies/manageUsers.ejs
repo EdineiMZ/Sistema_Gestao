@@ -1,0 +1,126 @@
+<%- include('../partials/header') %>
+
+<% const companyData = (typeof company?.get === 'function') ? company.get({ plain: true }) : (company || {}); %>
+<% const levelOptions = companyAccessLevelOptions || []; %>
+<% const associatedUsers = Array.isArray(companyData.users) ? companyData.users : []; %>
+
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1">Usuários da <%= companyData.tradeName || companyData.corporateName %></h2>
+                <p class="text-muted mb-0">Defina níveis de acesso granulares para equipes atuarem com segurança dentro da empresa selecionada.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="/admin/companies/<%= companyData.id %>/edit">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar ao cadastro
+                </a>
+                <a class="btn btn-outline-secondary" href="/admin/companies">
+                    <i class="bi bi-buildings me-2"></i>Ver empresas
+                </a>
+            </div>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="4000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="6000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <div class="card card-soft p-4 mb-4">
+            <h5 class="card-title mb-3">Vincular novo usuário</h5>
+            <% if (!availableUsers || !availableUsers.length) { %>
+                <p class="text-muted mb-0">Todos os usuários ativos já estão vinculados a alguma empresa. Cadastre novos usuários ou desvincule um existente.</p>
+            <% } else { %>
+                <form action="/admin/companies/<%= companyData.id %>/users" method="POST" class="row g-3 align-items-end">
+                    <div class="col-lg-6">
+                        <label class="form-label">Usuário</label>
+                        <select name="userId" class="form-select" required>
+                            <option value="" selected disabled>Selecione um usuário</option>
+                            <% availableUsers.forEach((user) => { %>
+                                <% const plainUser = (typeof user.get === 'function') ? user.get({ plain: true }) : user; %>
+                                <option value="<%= plainUser.id %>">
+                                    <%= plainUser.name %> — <%= plainUser.email %>
+                                </option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div class="col-lg-4">
+                        <label class="form-label">Nível na empresa</label>
+                        <select name="accessLevel" class="form-select">
+                            <% levelOptions.forEach((option) => { %>
+                                <option value="<%= option.value %>" <%= option.value === defaultCompanyAccessLevel ? 'selected' : '' %>>
+                                    <%= option.label %>
+                                </option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div class="col-lg-2 d-flex">
+                        <button type="submit" class="btn btn-gradient w-100">
+                            <i class="bi bi-link-45deg me-2"></i>Vincular
+                        </button>
+                    </div>
+                </form>
+            <% } %>
+        </div>
+
+        <div class="card card-soft p-4">
+            <h5 class="card-title mb-3">Usuários vinculados</h5>
+            <% if (!associatedUsers.length) { %>
+                <div class="text-center py-4">
+                    <i class="bi bi-people text-muted display-6"></i>
+                    <p class="mt-2 mb-0 text-muted">Nenhum usuário vinculado até o momento.</p>
+                </div>
+            <% } else { %>
+                <div class="table-responsive table-modern">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>E-mail</th>
+                            <th>Nível</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <% associatedUsers.forEach((user) => { %>
+                            <% const plainUser = (typeof user.get === 'function') ? user.get({ plain: true }) : user; %>
+                            <tr>
+                                <td class="fw-semibold"><%= plainUser.name %></td>
+                                <td><%= plainUser.email %></td>
+                                <td>
+                                    <form action="/admin/companies/<%= companyData.id %>/users/<%= plainUser.id %>?_method=PUT" method="POST" class="d-flex align-items-center gap-2">
+                                        <select name="accessLevel" class="form-select form-select-sm" style="max-width: 220px;">
+                                            <% levelOptions.forEach((option) => { %>
+                                                <option value="<%= option.value %>" <%= option.value === plainUser.companyAccessLevel ? 'selected' : '' %>>
+                                                    <%= option.label %>
+                                                </option>
+                                            <% }); %>
+                                        </select>
+                                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                                <td class="text-end">
+                                    <form action="/admin/companies/<%= companyData.id %>/users/<%= plainUser.id %>?_method=DELETE" method="POST" class="d-inline">
+                                        <button class="btn btn-outline-danger btn-sm" type="submit" onclick="return confirm('Deseja desvincular este usuário?')">
+                                            <i class="bi bi-unlink"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>
