@@ -58,6 +58,13 @@ const rawShortcuts = [
         groups: ['menu', 'quick']
     },
     {
+        label: 'Empresas',
+        route: '/admin/companies',
+        icon: 'bi-buildings',
+        minimumRole: USER_ROLES.ADMIN,
+        groups: ['menu']
+    },
+    {
         label: 'Usuários',
         route: '/users/manage',
         icon: 'bi-people',
