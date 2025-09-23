@@ -1,0 +1,812 @@
+<%- include('../partials/header') %>
+
+<%
+    const getError = (field) => {
+        if (!validationErrors || !validationErrors[field]) {
+            return null;
+        }
+        const value = validationErrors[field];
+        return Array.isArray(value) ? value.join(' ') : value;
+    };
+
+    const variations = Array.isArray(product.variations) && product.variations.length
+        ? product.variations
+        : [{}];
+    const suppliers = Array.isArray(product.suppliers) && product.suppliers.length
+        ? product.suppliers
+        : [{}];
+    const mediaItems = Array.isArray(product.media) && product.media.length
+        ? product.media
+        : [{}];
+%>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1"><%= isEdit ? 'Editar produto' : 'Novo produto' %></h1>
+        <p class="text-muted mb-0">Mantenha os dados do produto completos para garantir uma melhor experiência de venda.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/products" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Voltar para a lista
+        </a>
+        <% if (isEdit) { %>
+            <a href="/products/<%= product.id %>" class="btn btn-outline-primary">
+                <i class="bi bi-eye me-2"></i>Visualizar
+            </a>
+        <% } %>
+    </div>
+</div>
+
+<form action="<%= isEdit ? `/products/${product.id}?_method=PUT` : '/products' %>" method="POST" class="needs-validation" novalidate>
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Informações básicas</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <% const nameError = getError('name'); %>
+                            <label class="form-label">Nome do produto *</label>
+                            <input type="text" name="name" class="form-control <%= nameError ? 'is-invalid' : '' %>" value="<%= product.name || '' %>" required>
+                            <% if (nameError) { %>
+                                <div class="invalid-feedback d-block"><%= nameError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const slugError = getError('slug'); %>
+                            <label class="form-label">Slug</label>
+                            <input type="text" name="slug" class="form-control <%= slugError ? 'is-invalid' : '' %>" value="<%= product.slug || '' %>" placeholder="ex: camisa-techfit">
+                            <% if (slugError) { %>
+                                <div class="invalid-feedback d-block"><%= slugError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const skuError = getError('sku'); %>
+                            <label class="form-label">SKU</label>
+                            <input type="text" name="sku" class="form-control <%= skuError ? 'is-invalid' : '' %>" value="<%= product.sku || '' %>">
+                            <% if (skuError) { %>
+                                <div class="invalid-feedback d-block"><%= skuError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const statusError = getError('status'); %>
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select <%= statusError ? 'is-invalid' : '' %>">
+                                <option value="draft" <%= product.status === 'draft' ? 'selected' : '' %>>Rascunho</option>
+                                <option value="active" <%= product.status === 'active' ? 'selected' : '' %>>Ativo</option>
+                                <option value="inactive" <%= product.status === 'inactive' ? 'selected' : '' %>>Inativo</option>
+                                <option value="archived" <%= product.status === 'archived' ? 'selected' : '' %>>Arquivado</option>
+                            </select>
+                            <% if (statusError) { %>
+                                <div class="invalid-feedback d-block"><%= statusError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const visibilityError = getError('visibility'); %>
+                            <label class="form-label">Visibilidade</label>
+                            <select name="visibility" class="form-select <%= visibilityError ? 'is-invalid' : '' %>">
+                                <option value="public" <%= product.visibility === 'public' ? 'selected' : '' %>>Público</option>
+                                <option value="private" <%= product.visibility === 'private' ? 'selected' : '' %>>Privado</option>
+                                <option value="restricted" <%= product.visibility === 'restricted' ? 'selected' : '' %>>Restrito</option>
+                            </select>
+                            <% if (visibilityError) { %>
+                                <div class="invalid-feedback d-block"><%= visibilityError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Tipo</label>
+                            <input type="text" name="type" class="form-control" value="<%= product.type || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Marca</label>
+                            <input type="text" name="brand" class="form-control" value="<%= product.brand || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Código de barras</label>
+                            <input type="text" name="barcode" class="form-control" value="<%= product.barcode || '' %>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Resumo</label>
+                            <textarea name="shortDescription" class="form-control" rows="2"><%= product.shortDescription || '' %></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descrição completa</label>
+                            <textarea name="description" class="form-control" rows="4"><%= product.description || '' %></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Precificação</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <% const priceError = getError('price'); %>
+                            <label class="form-label">Preço de venda</label>
+                            <input type="text" name="price" class="form-control <%= priceError ? 'is-invalid' : '' %>" value="<%= product.price || '' %>">
+                            <% if (priceError) { %>
+                                <div class="invalid-feedback d-block"><%= priceError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const costPriceError = getError('costPrice'); %>
+                            <label class="form-label">Preço de custo</label>
+                            <input type="text" name="costPrice" class="form-control <%= costPriceError ? 'is-invalid' : '' %>" value="<%= product.costPrice || '' %>">
+                            <% if (costPriceError) { %>
+                                <div class="invalid-feedback d-block"><%= costPriceError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const comparePriceError = getError('compareAtPrice'); %>
+                            <label class="form-label">Preço original</label>
+                            <input type="text" name="compareAtPrice" class="form-control <%= comparePriceError ? 'is-invalid' : '' %>" value="<%= product.compareAtPrice || '' %>">
+                            <% if (comparePriceError) { %>
+                                <div class="invalid-feedback d-block"><%= comparePriceError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Moeda</label>
+                            <input type="text" name="currency" class="form-control" value="<%= product.currency || 'BRL' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <% const discountTypeError = getError('discountType'); %>
+                            <label class="form-label">Tipo de desconto</label>
+                            <select name="discountType" class="form-select <%= discountTypeError ? 'is-invalid' : '' %>">
+                                <option value="none" <%= product.discountType === 'none' ? 'selected' : '' %>>Nenhum</option>
+                                <option value="percentage" <%= product.discountType === 'percentage' ? 'selected' : '' %>>Percentual</option>
+                                <option value="fixed" <%= product.discountType === 'fixed' ? 'selected' : '' %>>Valor fixo</option>
+                            </select>
+                            <% if (discountTypeError) { %>
+                                <div class="invalid-feedback d-block"><%= discountTypeError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const discountValueError = getError('discountValue'); %>
+                            <label class="form-label">Valor do desconto</label>
+                            <input type="text" name="discountValue" class="form-control <%= discountValueError ? 'is-invalid' : '' %>" value="<%= product.discountValue || '' %>">
+                            <% if (discountValueError) { %>
+                                <div class="invalid-feedback d-block"><%= discountValueError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const taxRateError = getError('taxRate'); %>
+                            <label class="form-label">Alíquota tributária (%)</label>
+                            <input type="text" name="taxRate" class="form-control <%= taxRateError ? 'is-invalid' : '' %>" value="<%= product.taxRate || '' %>">
+                            <% if (taxRateError) { %>
+                                <div class="invalid-feedback d-block"><%= taxRateError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input type="hidden" name="taxIncluded" value="false">
+                                <input class="form-check-input" type="checkbox" role="switch" id="taxIncludedSwitch" name="taxIncluded" value="true" <%= product.taxIncluded ? 'checked' : '' %>>
+                                <label class="form-check-label" for="taxIncludedSwitch">Preços incluem impostos</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Estoque</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <% const stockQtyError = getError('stockQuantity'); %>
+                            <label class="form-label">Quantidade disponível</label>
+                            <input type="number" min="0" name="stockQuantity" class="form-control <%= stockQtyError ? 'is-invalid' : '' %>" value="<%= product.stockQuantity ?? 0 %>">
+                            <% if (stockQtyError) { %>
+                                <div class="invalid-feedback d-block"><%= stockQtyError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const stockStatusError = getError('stockStatus'); %>
+                            <label class="form-label">Status do estoque</label>
+                            <select name="stockStatus" class="form-select <%= stockStatusError ? 'is-invalid' : '' %>">
+                                <option value="in-stock" <%= product.stockStatus === 'in-stock' ? 'selected' : '' %>>Em estoque</option>
+                                <option value="out-of-stock" <%= product.stockStatus === 'out-of-stock' ? 'selected' : '' %>>Sem estoque</option>
+                                <option value="preorder" <%= product.stockStatus === 'preorder' ? 'selected' : '' %>>Pré-venda</option>
+                                <option value="backorder" <%= product.stockStatus === 'backorder' ? 'selected' : '' %>>Sob encomenda</option>
+                            </select>
+                            <% if (stockStatusError) { %>
+                                <div class="invalid-feedback d-block"><%= stockStatusError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const lowStockError = getError('lowStockThreshold'); %>
+                            <label class="form-label">Estoque mínimo</label>
+                            <input type="number" min="0" name="lowStockThreshold" class="form-control <%= lowStockError ? 'is-invalid' : '' %>" value="<%= product.lowStockThreshold || '' %>">
+                            <% if (lowStockError) { %>
+                                <div class="invalid-feedback d-block"><%= lowStockError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const maxStockError = getError('maxStockThreshold'); %>
+                            <label class="form-label">Estoque máximo</label>
+                            <input type="number" min="0" name="maxStockThreshold" class="form-control <%= maxStockError ? 'is-invalid' : '' %>" value="<%= product.maxStockThreshold || '' %>">
+                            <% if (maxStockError) { %>
+                                <div class="invalid-feedback d-block"><%= maxStockError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input type="hidden" name="allowBackorder" value="false">
+                                <input class="form-check-input" type="checkbox" role="switch" id="backorderSwitch" name="allowBackorder" value="true" <%= product.allowBackorder ? 'checked' : '' %>>
+                                <label class="form-check-label" for="backorderSwitch">Permitir pré-venda / backorder</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Dados fiscais</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">NCM</label>
+                            <input type="text" name="ncmCode" class="form-control" value="<%= product.ncmCode || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">CEST</label>
+                            <input type="text" name="cestCode" class="form-control" value="<%= product.cestCode || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Classe fiscal</label>
+                            <input type="text" name="taxClass" class="form-control" value="<%= product.taxClass || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Benefício fiscal</label>
+                            <input type="text" name="fiscalBenefitCode" class="form-control" value="<%= product.fiscalBenefitCode || '' %>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Origem</label>
+                            <input type="text" name="origin" class="form-control" value="<%= product.origin || '' %>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Logística</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <% const weightError = getError('weight'); %>
+                            <label class="form-label">Peso</label>
+                            <input type="text" name="weight" class="form-control <%= weightError ? 'is-invalid' : '' %>" value="<%= product.weight || '' %>">
+                            <% if (weightError) { %>
+                                <div class="invalid-feedback d-block"><%= weightError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Unidade de peso</label>
+                            <input type="text" name="weightUnit" class="form-control" value="<%= product.weightUnit || 'kg' %>">
+                        </div>
+                        <div class="col-md-2">
+                            <% const lengthError = getError('length'); %>
+                            <label class="form-label">Comprimento</label>
+                            <input type="text" name="length" class="form-control <%= lengthError ? 'is-invalid' : '' %>" value="<%= product.length || '' %>">
+                            <% if (lengthError) { %>
+                                <div class="invalid-feedback d-block"><%= lengthError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-2">
+                            <% const widthError = getError('width'); %>
+                            <label class="form-label">Largura</label>
+                            <input type="text" name="width" class="form-control <%= widthError ? 'is-invalid' : '' %>" value="<%= product.width || '' %>">
+                            <% if (widthError) { %>
+                                <div class="invalid-feedback d-block"><%= widthError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-2">
+                            <% const heightError = getError('height'); %>
+                            <label class="form-label">Altura</label>
+                            <input type="text" name="height" class="form-control <%= heightError ? 'is-invalid' : '' %>" value="<%= product.height || '' %>">
+                            <% if (heightError) { %>
+                                <div class="invalid-feedback d-block"><%= heightError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Unidade dimensões</label>
+                            <input type="text" name="dimensionsUnit" class="form-control" value="<%= product.dimensionsUnit || 'cm' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Classe de envio</label>
+                            <input type="text" name="shippingClass" class="form-control" value="<%= product.shippingClass || '' %>">
+                        </div>
+                        <div class="col-md-3">
+                            <% const deliveryMinError = getError('deliveryTimeMin'); %>
+                            <label class="form-label">Prazo mínimo (dias)</label>
+                            <input type="number" min="0" name="deliveryTimeMin" class="form-control <%= deliveryMinError ? 'is-invalid' : '' %>" value="<%= product.deliveryTimeMin || '' %>">
+                            <% if (deliveryMinError) { %>
+                                <div class="invalid-feedback d-block"><%= deliveryMinError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3">
+                            <% const deliveryMaxError = getError('deliveryTimeMax'); %>
+                            <label class="form-label">Prazo máximo (dias)</label>
+                            <input type="number" min="0" name="deliveryTimeMax" class="form-control <%= deliveryMaxError ? 'is-invalid' : '' %>" value="<%= product.deliveryTimeMax || '' %>">
+                            <% if (deliveryMaxError) { %>
+                                <div class="invalid-feedback d-block"><%= deliveryMaxError %></div>
+                            <% } %>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input type="hidden" name="requiresShipping" value="false">
+                                <input class="form-check-input" type="checkbox" role="switch" id="requiresShippingSwitch" name="requiresShipping" value="true" <%= product.requiresShipping ? 'checked' : '' %>>
+                                <label class="form-check-label" for="requiresShippingSwitch">Requer envio físico</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Marketing</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Título SEO</label>
+                            <input type="text" name="seoTitle" class="form-control" value="<%= product.seoTitle || '' %>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">URL canônica</label>
+                            <input type="url" name="canonicalUrl" class="form-control" value="<%= product.canonicalUrl || '' %>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Descrição SEO</label>
+                            <textarea name="seoDescription" class="form-control" rows="3"><%= product.seoDescription || '' %></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Palavras-chave SEO</label>
+                            <input type="text" name="seoKeywords" class="form-control" value="<%= product.seoKeywords || '' %>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tags</label>
+                            <input type="text" name="tags" class="form-control" value="<%= product.tags || '' %>" placeholder="tag1, tag2">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Data de lançamento</label>
+                            <input type="date" name="releaseDate" class="form-control" value="<%= product.releaseDate || '' %>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Imagem de destaque (URL)</label>
+                            <input type="url" name="metaImageUrl" class="form-control" value="<%= product.metaImageUrl || '' %>">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input type="hidden" name="isFeatured" value="false">
+                                <input class="form-check-input" type="checkbox" role="switch" id="featuredSwitch" name="isFeatured" value="true" <%= product.isFeatured ? 'checked' : '' %>>
+                                <label class="form-check-label" for="featuredSwitch">Destacar produto</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-0">Variações</h2>
+                        <p class="text-muted small mb-0">Use as variações para tamanhos, cores ou outras opções do produto.</p>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" id="add-variation">
+                        <i class="bi bi-plus-lg me-2"></i>Adicionar variação
+                    </button>
+                </div>
+                <div class="card-body">
+                    <% const variationsError = getError('variations'); %>
+                    <% if (variationsError) { %>
+                        <div class="alert alert-warning"><%= variationsError %></div>
+                    <% } %>
+                    <div id="variation-list" class="d-flex flex-column gap-3">
+                        <% variations.forEach((variation, index) => { %>
+                            <div class="border rounded-3 p-3" data-repeater-item>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h3 class="h6 mb-0">Variação <span class="variation-index"><%= index + 1 %></span></h3>
+                                    <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                                        <i class="bi bi-trash me-1"></i>Remover
+                                    </button>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Nome *</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][name]" name="variations[<%= index %>][name]" value="<%= variation.name || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">SKU</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][sku]" name="variations[<%= index %>][sku]" value="<%= variation.sku || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Código de barras</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][barcode]" name="variations[<%= index %>][barcode]" value="<%= variation.barcode || '' %>">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Estoque</label>
+                                        <input type="number" min="0" class="form-control" data-repeater-input data-name="variations[__index__][stockQuantity]" name="variations[<%= index %>][stockQuantity]" value="<%= variation.stockQuantity ?? 0 %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Preço</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][price]" name="variations[<%= index %>][price]" value="<%= variation.price || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Preço de custo</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][costPrice]" name="variations[<%= index %>][costPrice]" value="<%= variation.costPrice || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Peso</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][weight]" name="variations[<%= index %>][weight]" value="<%= variation.weight || '' %>">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Atributos (JSON)</label>
+                                        <textarea class="form-control" rows="2" data-repeater-input data-name="variations[__index__][attributes]" name="variations[<%= index %>][attributes]"><%= variation.attributes ? JSON.stringify(variation.attributes) : '' %></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-0">Mídias</h2>
+                        <p class="text-muted small mb-0">Informe imagens, vídeos ou documentos relacionados ao produto.</p>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" id="add-media">
+                        <i class="bi bi-plus-lg me-2"></i>Adicionar mídia
+                    </button>
+                </div>
+                <div class="card-body">
+                    <% const mediaError = getError('media'); %>
+                    <% if (mediaError) { %>
+                        <div class="alert alert-warning"><%= mediaError %></div>
+                    <% } %>
+                    <div id="media-list" class="d-flex flex-column gap-3">
+                        <% mediaItems.forEach((item, index) => { %>
+                            <div class="border rounded-3 p-3" data-repeater-item>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h3 class="h6 mb-0">Mídia <span class="media-index"><%= index + 1 %></span></h3>
+                                    <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                                        <i class="bi bi-trash me-1"></i>Remover
+                                    </button>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Tipo</label>
+                                        <select class="form-select" data-repeater-input data-name="media[__index__][type]" name="media[<%= index %>][type]">
+                                            <option value="image" <%= item.type === 'image' ? 'selected' : '' %>>Imagem</option>
+                                            <option value="video" <%= item.type === 'video' ? 'selected' : '' %>>Vídeo</option>
+                                            <option value="document" <%= item.type === 'document' ? 'selected' : '' %>>Documento</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label">URL</label>
+                                        <input type="url" class="form-control" data-repeater-input data-name="media[__index__][url]" name="media[<%= index %>][url]" value="<%= item.url || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Posição</label>
+                                        <input type="number" class="form-control" data-repeater-input data-name="media[__index__][position]" name="media[<%= index %>][position]" value="<%= item.position ?? 0 %>">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Texto alternativo</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="media[__index__][altText]" name="media[<%= index %>][altText]" value="<%= item.altText || '' %>">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Metadados (JSON)</label>
+                                        <textarea class="form-control" rows="2" data-repeater-input data-name="media[__index__][metadata]" name="media[<%= index %>][metadata]"><%= item.metadata ? JSON.stringify(item.metadata) : '' %></textarea>
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-center">
+                                        <div class="form-check form-switch">
+                                            <input type="hidden" data-repeater-input data-name="media[__index__][isPrimary]" name="media[<%= index %>][isPrimary]" value="false">
+                                            <input class="form-check-input" type="checkbox" role="switch" data-repeater-input data-name="media[__index__][isPrimary]" name="media[<%= index %>][isPrimary]" value="true" <%= item.isPrimary ? 'checked' : '' %>>
+                                            <label class="form-check-label">Principal</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="h5 mb-0">Fornecedores</h2>
+                        <p class="text-muted small mb-0">Cadastre fornecedores alternativos para controlar custos e prazos.</p>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" id="add-supplier">
+                        <i class="bi bi-plus-lg me-2"></i>Adicionar fornecedor
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="supplier-list" class="d-flex flex-column gap-3">
+                        <% suppliers.forEach((supplier, index) => { %>
+                            <div class="border rounded-3 p-3" data-repeater-item>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h3 class="h6 mb-0">Fornecedor <span class="supplier-index"><%= index + 1 %></span></h3>
+                                    <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                                        <i class="bi bi-trash me-1"></i>Remover
+                                    </button>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Nome *</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierName]" name="suppliers[<%= index %>][supplierName]" value="<%= supplier.supplierName || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">SKU do fornecedor</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierSku]" name="suppliers[<%= index %>][supplierSku]" value="<%= supplier.supplierSku || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Preço negociado</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierPrice]" name="suppliers[<%= index %>][supplierPrice]" value="<%= supplier.supplierPrice || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Prazo (dias)</label>
+                                        <input type="number" min="0" class="form-control" data-repeater-input data-name="suppliers[__index__][leadTimeDays]" name="suppliers[<%= index %>][leadTimeDays]" value="<%= supplier.leadTimeDays || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Pedido mínimo</label>
+                                        <input type="number" min="0" class="form-control" data-repeater-input data-name="suppliers[__index__][minimumOrderQuantity]" name="suppliers[<%= index %>][minimumOrderQuantity]" value="<%= supplier.minimumOrderQuantity || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">E-mail</label>
+                                        <input type="email" class="form-control" data-repeater-input data-name="suppliers[__index__][contactEmail]" name="suppliers[<%= index %>][contactEmail]" value="<%= supplier.contactEmail || '' %>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Telefone</label>
+                                        <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][contactPhone]" name="suppliers[<%= index %>][contactPhone]" value="<%= supplier.contactPhone || '' %>">
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-center">
+                                        <div class="form-check form-switch">
+                                            <input type="hidden" data-repeater-input data-name="suppliers[__index__][isPreferred]" name="suppliers[<%= index %>][isPreferred]" value="false">
+                                            <input class="form-check-input" type="checkbox" role="switch" data-repeater-input data-name="suppliers[__index__][isPreferred]" name="suppliers[<%= index %>][isPreferred]" value="true" <%= supplier.isPreferred ? 'checked' : '' %>>
+                                            <label class="form-check-label">Fornecedor preferencial</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="d-flex justify-content-end gap-2">
+                <a href="/products" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-2"></i><%= isEdit ? 'Atualizar produto' : 'Salvar produto' %>
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<template id="variation-template">
+    <div class="border rounded-3 p-3" data-repeater-item>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="h6 mb-0">Variação <span class="variation-index"></span></h3>
+            <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                <i class="bi bi-trash me-1"></i>Remover
+            </button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Nome *</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][name]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">SKU</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][sku]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Código de barras</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][barcode]">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estoque</label>
+                <input type="number" min="0" class="form-control" data-repeater-input data-name="variations[__index__][stockQuantity]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Preço</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][price]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Preço de custo</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][costPrice]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Peso</label>
+                <input type="text" class="form-control" data-repeater-input data-name="variations[__index__][weight]">
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Atributos (JSON)</label>
+                <textarea class="form-control" rows="2" data-repeater-input data-name="variations[__index__][attributes]"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="media-template">
+    <div class="border rounded-3 p-3" data-repeater-item>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="h6 mb-0">Mídia <span class="media-index"></span></h3>
+            <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                <i class="bi bi-trash me-1"></i>Remover
+            </button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" data-repeater-input data-name="media[__index__][type]">
+                    <option value="image" selected>Imagem</option>
+                    <option value="video">Vídeo</option>
+                    <option value="document">Documento</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">URL</label>
+                <input type="url" class="form-control" data-repeater-input data-name="media[__index__][url]">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Posição</label>
+                <input type="number" class="form-control" data-repeater-input data-name="media[__index__][position]" value="0">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Texto alternativo</label>
+                <input type="text" class="form-control" data-repeater-input data-name="media[__index__][altText]">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Metadados (JSON)</label>
+                <textarea class="form-control" rows="2" data-repeater-input data-name="media[__index__][metadata]"></textarea>
+            </div>
+            <div class="col-md-3 d-flex align-items-center">
+                <div class="form-check form-switch">
+                    <input type="hidden" data-repeater-input data-name="media[__index__][isPrimary]" value="false">
+                    <input class="form-check-input" type="checkbox" role="switch" data-repeater-input data-name="media[__index__][isPrimary]" value="true">
+                    <label class="form-check-label">Principal</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="supplier-template">
+    <div class="border rounded-3 p-3" data-repeater-item>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="h6 mb-0">Fornecedor <span class="supplier-index"></span></h3>
+            <button type="button" class="btn btn-link text-danger p-0" data-remove>
+                <i class="bi bi-trash me-1"></i>Remover
+            </button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Nome *</label>
+                <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierName]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">SKU do fornecedor</label>
+                <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierSku]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Preço negociado</label>
+                <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][supplierPrice]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Prazo (dias)</label>
+                <input type="number" min="0" class="form-control" data-repeater-input data-name="suppliers[__index__][leadTimeDays]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Pedido mínimo</label>
+                <input type="number" min="0" class="form-control" data-repeater-input data-name="suppliers[__index__][minimumOrderQuantity]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">E-mail</label>
+                <input type="email" class="form-control" data-repeater-input data-name="suppliers[__index__][contactEmail]">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Telefone</label>
+                <input type="text" class="form-control" data-repeater-input data-name="suppliers[__index__][contactPhone]">
+            </div>
+            <div class="col-md-3 d-flex align-items-center">
+                <div class="form-check form-switch">
+                    <input type="hidden" data-repeater-input data-name="suppliers[__index__][isPreferred]" value="false">
+                    <input class="form-check-input" type="checkbox" role="switch" data-repeater-input data-name="suppliers[__index__][isPreferred]" value="true">
+                    <label class="form-check-label">Fornecedor preferencial</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+(() => {
+    const createRepeater = (containerId, templateId, addButtonId, indexClass) => {
+        const container = document.getElementById(containerId);
+        const template = document.getElementById(templateId);
+        const addButton = document.getElementById(addButtonId);
+
+        if (!container || !template || !addButton) {
+            return;
+        }
+
+        const updateIndexes = () => {
+            container.querySelectorAll('[data-repeater-item]').forEach((item, index) => {
+                item.querySelectorAll('[data-repeater-input]').forEach((input) => {
+                    const dataName = input.getAttribute('data-name');
+                    if (!dataName) {
+                        return;
+                    }
+                    input.setAttribute('name', dataName.replace('__index__', index));
+                });
+
+                if (indexClass) {
+                    const indicator = item.querySelector(indexClass);
+                    if (indicator) {
+                        indicator.textContent = index + 1;
+                    }
+                }
+            });
+        };
+
+        container.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-remove]');
+            if (trigger) {
+                const item = trigger.closest('[data-repeater-item]');
+                if (item) {
+                    item.remove();
+                    updateIndexes();
+                }
+            }
+        });
+
+        addButton.addEventListener('click', () => {
+            const clone = template.content.firstElementChild.cloneNode(true);
+            container.appendChild(clone);
+            updateIndexes();
+        });
+
+        updateIndexes();
+    };
+
+    createRepeater('variation-list', 'variation-template', 'add-variation', '.variation-index');
+    createRepeater('media-list', 'media-template', 'add-media', '.media-index');
+    createRepeater('supplier-list', 'supplier-template', 'add-supplier', '.supplier-index');
+})();
+</script>
+
+<%- include('../partials/footer') %>

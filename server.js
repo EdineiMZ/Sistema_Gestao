@@ -52,6 +52,7 @@ const auditRoutes = require('./src/routes/auditRoutes');
 const campaignRoutes = require('./src/routes/campaignRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
+const productRoutes = require('./src/routes/productRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -267,6 +268,7 @@ app.use('/notifications', notificationRoutes);
 app.use('/campaigns', campaignRoutes);
 app.use('/audit', auditRoutes);
 app.use('/admin', adminRoutes);
+app.use('/products', productRoutes);
 app.use('/support', supportRoutes);
 
 
