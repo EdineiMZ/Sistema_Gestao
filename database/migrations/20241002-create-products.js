@@ -61,6 +61,19 @@ module.exports = {
                 type: Sequelize.DECIMAL(12, 2),
                 allowNull: true
             },
+            unit: {
+                type: Sequelize.STRING(10),
+                allowNull: false,
+                defaultValue: 'UN'
+            },
+            unitPrice: {
+                type: Sequelize.DECIMAL(12, 2),
+                allowNull: true
+            },
+            taxCode: {
+                type: Sequelize.STRING(20),
+                allowNull: true
+            },
             compareAtPrice: {
                 type: Sequelize.DECIMAL(12, 2),
                 allowNull: true

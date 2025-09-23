@@ -174,7 +174,15 @@ const listProducts = async (req, res) => {
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 10, 50);
 
     try {
-        const whereClauses = { active: true };
+        const whereClauses = {};
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'active')) {
+            whereClauses.active = true;
+        }
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'status')) {
+            whereClauses.status = 'active';
+        }
 
         if (term) {
             const likeTerm = `%${term}%`;
@@ -194,15 +202,22 @@ const listProducts = async (req, res) => {
             order: [['name', 'ASC']]
         });
 
-        const formatted = products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            sku: product.sku,
-            unit: product.unit,
-            unitPrice: Number.parseFloat(product.unitPrice || 0),
-            taxRate: Number.parseFloat(product.taxRate || 0),
-            taxCode: product.taxCode || null
-        }));
+        const formatted = products.map((product) => {
+            const resolvedUnit = product.unit || 'UN';
+            const rawUnitPrice = product.unitPrice ?? product.price ?? 0;
+            const parsedUnitPrice = Number.parseFloat(rawUnitPrice) || 0;
+            const fiscalCode = product.ncmCode || product.taxCode || null;
+
+            return {
+                id: product.id,
+                name: product.name,
+                sku: product.sku,
+                unit: resolvedUnit,
+                unitPrice: parsedUnitPrice,
+                taxRate: Number.parseFloat(product.taxRate || 0),
+                fiscalCode
+            };
+        });
 
         return res.json({ products: formatted });
     } catch (error) {
@@ -241,8 +256,18 @@ const addItem = async (req, res) => {
             return res.status(400).json({ message: 'Apenas vendas em aberto podem receber itens.' });
         }
 
+        const productWhere = { id: productId };
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'active')) {
+            productWhere.active = true;
+        }
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'status')) {
+            productWhere.status = 'active';
+        }
+
         const product = await Product.findOne({
-            where: { id: productId, active: true },
+            where: productWhere,
             transaction,
             lock: transaction.LOCK.SHARE
         });
@@ -258,7 +283,9 @@ const addItem = async (req, res) => {
             return res.status(422).json({ message: 'Quantidade inválida.' });
         }
 
-        const resolvedUnitPrice = unitPrice ? Number.parseFloat(unitPrice) : Number.parseFloat(product.unitPrice || 0);
+        const resolvedUnitPrice = unitPrice
+            ? Number.parseFloat(unitPrice)
+            : Number.parseFloat(product.unitPrice ?? product.price ?? 0);
         const gross = quantityCents * resolvedUnitPrice;
         const discount = Number.parseFloat(discountValue || 0);
         const tax = Number.parseFloat(taxValue || 0);
@@ -269,7 +296,7 @@ const addItem = async (req, res) => {
             productId: product.id,
             productName: product.name,
             sku: product.sku,
-            unitLabel: product.unit,
+            unitLabel: product.unit || 'UN',
             quantity: quantityCents,
             unitPrice: resolvedUnitPrice,
             grossTotal: gross,
@@ -277,7 +304,7 @@ const addItem = async (req, res) => {
             taxValue: tax,
             netTotal: net,
             metadata: {
-                taxCode: product.taxCode || null
+                fiscalCode: product.ncmCode || product.taxCode || null
             }
         }, { transaction });
 
