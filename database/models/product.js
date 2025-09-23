@@ -106,6 +106,31 @@ module.exports = (sequelize, DataTypes) => {
                 }
             }
         },
+        unit: {
+            type: DataTypes.STRING(10),
+            allowNull: false,
+            defaultValue: 'UN',
+            validate: {
+                len: {
+                    args: [1, 10],
+                    msg: 'Unidade deve ter entre 1 e 10 caracteres.'
+                }
+            }
+        },
+        unitPrice: {
+            type: DataTypes.DECIMAL(12, 2),
+            allowNull: true,
+            validate: {
+                min: {
+                    args: [0],
+                    msg: 'Preço unitário deve ser positivo.'
+                }
+            }
+        },
+        taxCode: {
+            type: DataTypes.STRING(20),
+            allowNull: true
+        },
         compareAtPrice: {
             type: DataTypes.DECIMAL(12, 2),
             allowNull: true,
