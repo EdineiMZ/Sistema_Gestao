@@ -24,9 +24,9 @@ const isTableMissingError = (error) => {
         /no description found/i.test(message);
 };
 
-const tableExists = async (queryInterface, tableName) => {
+const tableExists = async (queryInterface, tableName, options = {}) => {
     try {
-        await queryInterface.describeTable(tableName);
+        await queryInterface.describeTable(tableName, options);
         return true;
     } catch (error) {
         if (isTableMissingError(error)) {
@@ -47,9 +47,9 @@ const resolveExistingTableName = async (queryInterface, candidates) => {
     return null;
 };
 
-const columnExists = async (queryInterface, tableName, columnName) => {
+const columnExists = async (queryInterface, tableName, columnName, options = {}) => {
     try {
-        const description = await queryInterface.describeTable(tableName);
+        const description = await queryInterface.describeTable(tableName, options);
         return Object.prototype.hasOwnProperty.call(description, columnName);
     } catch (error) {
         if (isTableMissingError(error)) {
@@ -60,9 +60,9 @@ const columnExists = async (queryInterface, tableName, columnName) => {
     }
 };
 
-const getIndexNames = async (queryInterface, tableName) => {
+const getIndexNames = async (queryInterface, tableName, options = {}) => {
     try {
-        const indexes = await queryInterface.showIndex(tableName);
+        const indexes = await queryInterface.showIndex(tableName, options);
         return indexes.map((index) => index.name);
     } catch (error) {
         if (isTableMissingError(error)) {
@@ -73,10 +73,10 @@ const getIndexNames = async (queryInterface, tableName) => {
     }
 };
 
-const dropIndexIfExists = async (queryInterface, tableName, indexName) => {
-    const indexes = await getIndexNames(queryInterface, tableName);
+const dropIndexIfExists = async (queryInterface, tableName, indexName, options = {}) => {
+    const indexes = await getIndexNames(queryInterface, tableName, options);
     if (indexes.includes(indexName)) {
-        await queryInterface.removeIndex(tableName, indexName);
+        await queryInterface.removeIndex(tableName, indexName, options);
     }
 };
 
@@ -95,7 +95,7 @@ const quoteIdentifier = (queryInterface, identifier) => {
 
 const addUserForeignKey = async (queryInterface, tableName, column, options = {}) => {
     const constraintName = `${tableName}_${column}_fkey`;
-    const constraints = await queryInterface.getForeignKeyReferencesForTable(tableName, options);
+    const constraints = await queryInterface.getForeignKeyReferencesForTable(tableName, { transaction: options.transaction });
     const alreadyExists = constraints.some((constraint) => constraint.columnName === column);
 
     if (!alreadyExists) {
@@ -109,7 +109,7 @@ const addUserForeignKey = async (queryInterface, tableName, column, options = {}
             },
             onUpdate: 'CASCADE',
             onDelete: options.onDelete ?? 'CASCADE'
-        }, options);
+        }, { transaction: options.transaction });
     }
 };
 
@@ -126,35 +126,35 @@ module.exports = {
             const dialect = queryInterface.sequelize.getDialect();
             const quotedTable = quoteIdentifier(queryInterface, tableName);
 
-            if (!await columnExists(queryInterface, tableName, 'creatorId')) {
+            if (!await columnExists(queryInterface, tableName, 'creatorId', { transaction })) {
                 await queryInterface.addColumn(tableName, 'creatorId', {
                     type: Sequelize.INTEGER,
                     allowNull: true
                 }, { transaction });
             }
 
-            if (!await columnExists(queryInterface, tableName, 'assignedToId')) {
+            if (!await columnExists(queryInterface, tableName, 'assignedToId', { transaction })) {
                 await queryInterface.addColumn(tableName, 'assignedToId', {
                     type: Sequelize.INTEGER,
                     allowNull: true
                 }, { transaction });
             }
 
-            if (!await columnExists(queryInterface, tableName, 'lastMessageAt')) {
+            if (!await columnExists(queryInterface, tableName, 'lastMessageAt', { transaction })) {
                 await queryInterface.addColumn(tableName, 'lastMessageAt', {
                     type: Sequelize.DATE,
                     allowNull: true
                 }, { transaction });
             }
 
-            if (!await columnExists(queryInterface, tableName, 'firstResponseAt')) {
+            if (!await columnExists(queryInterface, tableName, 'firstResponseAt', { transaction })) {
                 await queryInterface.addColumn(tableName, 'firstResponseAt', {
                     type: Sequelize.DATE,
                     allowNull: true
                 }, { transaction });
             }
 
-            if (!await columnExists(queryInterface, tableName, 'resolvedAt')) {
+            if (!await columnExists(queryInterface, tableName, 'resolvedAt', { transaction })) {
                 await queryInterface.addColumn(tableName, 'resolvedAt', {
                     type: Sequelize.DATE,
                     allowNull: true
@@ -177,7 +177,7 @@ module.exports = {
                 );
             }
 
-            if (await columnExists(queryInterface, tableName, 'userId')) {
+            if (await columnExists(queryInterface, tableName, 'userId', { transaction })) {
                 const quotedCreator = quoteIdentifier(queryInterface, 'creatorId');
                 const quotedUser = quoteIdentifier(queryInterface, 'userId');
 
@@ -209,9 +209,9 @@ module.exports = {
                 transaction
             });
 
-            await dropIndexIfExists(queryInterface, tableName, OLD_STATUS_INDEX);
+            await dropIndexIfExists(queryInterface, tableName, OLD_STATUS_INDEX, { transaction });
 
-            const existingIndexes = await getIndexNames(queryInterface, tableName);
+            const existingIndexes = await getIndexNames(queryInterface, tableName, { transaction });
             if (!existingIndexes.includes(NEW_STATUS_INDEX)) {
                 await queryInterface.addIndex(tableName, {
                     name: NEW_STATUS_INDEX,
@@ -226,11 +226,11 @@ module.exports = {
                 }, { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'description')) {
+            if (await columnExists(queryInterface, tableName, 'description', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'description', { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'userId')) {
+            if (await columnExists(queryInterface, tableName, 'userId', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'userId', { transaction });
             }
 
@@ -253,17 +253,17 @@ module.exports = {
             const dialect = queryInterface.sequelize.getDialect();
             const quotedTable = quoteIdentifier(queryInterface, tableName);
 
-            await dropIndexIfExists(queryInterface, tableName, NEW_STATUS_INDEX);
-            await dropIndexIfExists(queryInterface, tableName, ASSIGNEE_STATUS_INDEX);
+            await dropIndexIfExists(queryInterface, tableName, NEW_STATUS_INDEX, { transaction });
+            await dropIndexIfExists(queryInterface, tableName, ASSIGNEE_STATUS_INDEX, { transaction });
 
-            if (!await columnExists(queryInterface, tableName, 'description')) {
+            if (!await columnExists(queryInterface, tableName, 'description', { transaction })) {
                 await queryInterface.addColumn(tableName, 'description', {
                     type: Sequelize.TEXT,
                     allowNull: true
                 }, { transaction });
             }
 
-            if (!await columnExists(queryInterface, tableName, 'userId')) {
+            if (!await columnExists(queryInterface, tableName, 'userId', { transaction })) {
                 await queryInterface.addColumn(tableName, 'userId', {
                     type: Sequelize.INTEGER,
                     allowNull: true,
@@ -276,7 +276,7 @@ module.exports = {
                 }, { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'creatorId')) {
+            if (await columnExists(queryInterface, tableName, 'creatorId', { transaction })) {
                 const quotedCreator = quoteIdentifier(queryInterface, 'creatorId');
                 const quotedUser = quoteIdentifier(queryInterface, 'userId');
 
@@ -313,7 +313,7 @@ module.exports = {
                 }, { transaction });
             }
 
-            const indexes = await getIndexNames(queryInterface, tableName);
+            const indexes = await getIndexNames(queryInterface, tableName, { transaction });
             if (!indexes.includes(OLD_STATUS_INDEX)) {
                 await queryInterface.addIndex(tableName, {
                     name: OLD_STATUS_INDEX,
@@ -321,23 +321,23 @@ module.exports = {
                 }, { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'resolvedAt')) {
+            if (await columnExists(queryInterface, tableName, 'resolvedAt', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'resolvedAt', { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'firstResponseAt')) {
+            if (await columnExists(queryInterface, tableName, 'firstResponseAt', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'firstResponseAt', { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'lastMessageAt')) {
+            if (await columnExists(queryInterface, tableName, 'lastMessageAt', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'lastMessageAt', { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'assignedToId')) {
+            if (await columnExists(queryInterface, tableName, 'assignedToId', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'assignedToId', { transaction });
             }
 
-            if (await columnExists(queryInterface, tableName, 'creatorId')) {
+            if (await columnExists(queryInterface, tableName, 'creatorId', { transaction })) {
                 await queryInterface.removeColumn(tableName, 'creatorId', { transaction });
             }
 
