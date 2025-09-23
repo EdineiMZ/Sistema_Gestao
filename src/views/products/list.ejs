@@ -1,0 +1,122 @@
+<%- include('../partials/header') %>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Produtos</h1>
+        <p class="text-muted mb-0">Gerencie o catálogo de produtos, preços, estoque e fornecedores.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/products/new" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i>Novo produto
+        </a>
+    </div>
+</div>
+
+<% if (success_msg) { %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i><%= success_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } %>
+<% if (error_msg) { %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><%= error_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } %>
+
+<% const formatMoney = (value, currency = 'BRL') => {
+    if (value === undefined || value === null || value === '') {
+        return '—';
+    }
+    try {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
+    } catch (error) {
+        return Number(value).toFixed(2);
+    }
+}; %>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Produto</th>
+                        <th>SKU</th>
+                        <th>Status</th>
+                        <th>Estoque</th>
+                        <th>Preço</th>
+                        <th>Atualizado</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (!products.length) { %>
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                Nenhum produto cadastrado até o momento.
+                            </td>
+                        </tr>
+                    <% } %>
+                    <% products.forEach((product) => { %>
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-semibold"><%= product.name %></div>
+                                <small class="text-muted"><%= product.brand || 'Marca não informada' %></small>
+                            </td>
+                            <td><%= product.sku || '—' %></td>
+                            <td>
+                                <% const statusClass = {
+                                    'draft': 'badge bg-secondary',
+                                    'active': 'badge bg-success',
+                                    'inactive': 'badge bg-warning text-dark',
+                                    'archived': 'badge bg-dark'
+                                }[product.status] || 'badge bg-secondary'; %>
+                                <span class="<%= statusClass %>">
+                                    <%= {
+                                        draft: 'Rascunho',
+                                        active: 'Ativo',
+                                        inactive: 'Inativo',
+                                        archived: 'Arquivado'
+                                    }[product.status] || product.status %>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="fw-semibold"><%= product.stockQuantity ?? 0 %></span>
+                                <small class="text-muted d-block"><%= {
+                                    'in-stock': 'Em estoque',
+                                    'out-of-stock': 'Sem estoque',
+                                    'preorder': 'Pré-venda',
+                                    'backorder': 'Sob encomenda'
+                                }[product.stockStatus] || '—' %></small>
+                            </td>
+                            <td><%= formatMoney(product.price, product.currency || 'BRL') %></td>
+                            <td>
+                                <% const updatedAt = product.updatedAt ? new Date(product.updatedAt) : null; %>
+                                <%= updatedAt ? updatedAt.toLocaleDateString('pt-BR', { year: 'numeric', month: 'short', day: 'numeric' }) : '—' %>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group" role="group">
+                                    <a href="/products/<%= product.id %>" class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="/products/<%= product.id %>/edit" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form action="/products/<%= product.id %>?_method=DELETE" method="POST" class="d-inline-block ms-1" onsubmit="return confirm('Confirma a exclusão deste produto? Essa ação não pode ser desfeita.');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

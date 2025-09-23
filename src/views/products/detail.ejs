@@ -1,0 +1,335 @@
+<%- include('../partials/header') %>
+
+<%
+    const formatMoney = (value, currency = 'BRL') => {
+        if (value === undefined || value === null || value === '') {
+            return '—';
+        }
+        try {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
+        } catch (error) {
+            return Number(value).toFixed(2);
+        }
+    };
+%>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1"><%= product.name %></h1>
+        <p class="text-muted mb-0">Visão completa do produto, estoque e desempenho.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/products" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Voltar
+        </a>
+        <a href="/products/<%= product.id %>/edit" class="btn btn-primary">
+            <i class="bi bi-pencil me-2"></i>Editar produto
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Resumo</h2>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <small class="text-muted text-uppercase fw-semibold">Status</small>
+                        <div class="mt-1">
+                            <% const statusLabel = {
+                                draft: 'Rascunho',
+                                active: 'Ativo',
+                                inactive: 'Inativo',
+                                archived: 'Arquivado'
+                            }[product.status] || product.status; %>
+                            <% const statusClass = {
+                                draft: 'badge bg-secondary',
+                                active: 'badge bg-success',
+                                inactive: 'badge bg-warning text-dark',
+                                archived: 'badge bg-dark'
+                            }[product.status] || 'badge bg-secondary'; %>
+                            <span class="<%= statusClass %>"><%= statusLabel %></span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted text-uppercase fw-semibold">Visibilidade</small>
+                        <div class="mt-1 text-capitalize"><%= product.visibility || '—' %></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted text-uppercase fw-semibold">SKU</small>
+                        <div class="mt-1"><%= product.sku || '—' %></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted text-uppercase fw-semibold">Marca</small>
+                        <div class="mt-1"><%= product.brand || '—' %></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted text-uppercase fw-semibold">Tipo</small>
+                        <div class="mt-1"><%= product.type || '—' %></div>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-muted text-uppercase fw-semibold">Descrição</small>
+                        <p class="mt-2 mb-0"><%= product.description || 'Nenhuma descrição informada.' %></p>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-muted text-uppercase fw-semibold">Resumo</small>
+                        <p class="mt-2 mb-0"><%= product.shortDescription || '—' %></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Variantes</h2>
+            </div>
+            <div class="card-body">
+                <% if (!product.variations || !product.variations.length) { %>
+                    <p class="text-muted mb-0">Nenhuma variação cadastrada.</p>
+                <% } else { %>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>SKU</th>
+                                    <th>Estoque</th>
+                                    <th>Preço</th>
+                                    <th>Peso</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% product.variations.forEach((variation) => { %>
+                                    <tr>
+                                        <td><%= variation.name || '—' %></td>
+                                        <td><%= variation.sku || '—' %></td>
+                                        <td><%= variation.stockQuantity ?? 0 %></td>
+                                        <td><%= formatMoney(variation.price || product.price, product.currency || 'BRL') %></td>
+                                        <td><%= variation.weight ? `${variation.weight} ${product.weightUnit || 'kg'}` : '—' %></td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Fornecedores</h2>
+            </div>
+            <div class="card-body">
+                <% if (!product.suppliers || !product.suppliers.length) { %>
+                    <p class="text-muted mb-0">Nenhum fornecedor cadastrado.</p>
+                <% } else { %>
+                    <div class="list-group list-group-flush">
+                        <% product.suppliers.forEach((supplier) => { %>
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h3 class="h6 mb-1"><%= supplier.supplierName %> <%= supplier.isPreferred ? '<span class="badge bg-primary ms-2">Preferencial</span>' : '' %></h3>
+                                        <div class="small text-muted">
+                                            <span>SKU fornecedor: <%= supplier.supplierSku || '—' %></span>
+                                            <% if (supplier.contactEmail) { %>
+                                                <span class="ms-3">Email: <%= supplier.contactEmail %></span>
+                                            <% } %>
+                                            <% if (supplier.contactPhone) { %>
+                                                <span class="ms-3">Telefone: <%= supplier.contactPhone %></span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-semibold"><%= formatMoney(supplier.supplierPrice, product.currency || 'BRL') %></div>
+                                        <div class="small text-muted">
+                                            Prazo: <%= supplier.leadTimeDays ? supplier.leadTimeDays + ' dias' : '—' %>
+                                            <span class="ms-2">Pedido mínimo: <%= supplier.minimumOrderQuantity || '—' %></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Mídias</h2>
+            </div>
+            <div class="card-body">
+                <% if (!product.media || !product.media.length) { %>
+                    <p class="text-muted mb-0">Nenhuma mídia associada.</p>
+                <% } else { %>
+                    <div class="row g-3">
+                        <% product.media.forEach((item) => { %>
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3 h-100">
+                                    <span class="badge bg-light text-dark text-uppercase fw-semibold"><%= item.type %></span>
+                                    <p class="mt-2 mb-1"><strong>URL:</strong> <a href="<%= item.url %>" target="_blank" rel="noopener noreferrer"><%= item.url %></a></p>
+                                    <% if (item.altText) { %>
+                                        <p class="mb-1"><strong>Alt:</strong> <%= item.altText %></p>
+                                    <% } %>
+                                    <p class="mb-1"><strong>Posição:</strong> <%= item.position ?? 0 %></p>
+                                    <p class="mb-0"><strong>Principal:</strong> <%= item.isPrimary ? 'Sim' : 'Não' %></p>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Precificação e estoque</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-6 text-muted">Preço</dt>
+                    <dd class="col-6 text-end"><%= formatMoney(product.price, product.currency || 'BRL') %></dd>
+
+                    <dt class="col-6 text-muted">Preço de custo</dt>
+                    <dd class="col-6 text-end"><%= formatMoney(product.costPrice, product.currency || 'BRL') %></dd>
+
+                    <dt class="col-6 text-muted">Preço original</dt>
+                    <dd class="col-6 text-end"><%= formatMoney(product.compareAtPrice, product.currency || 'BRL') %></dd>
+
+                    <dt class="col-6 text-muted">Desconto</dt>
+                    <dd class="col-6 text-end"><%= formatMoney(product.discountValue, product.currency || 'BRL') %> (<%= product.discountType || '—' %>)</dd>
+
+                    <dt class="col-6 text-muted">Estoque atual</dt>
+                    <dd class="col-6 text-end"><%= product.stockQuantity ?? 0 %> unidades</dd>
+
+                    <dt class="col-6 text-muted">Estoque mínimo</dt>
+                    <dd class="col-6 text-end"><%= product.lowStockThreshold ?? '—' %></dd>
+
+                    <dt class="col-6 text-muted">Estoque máximo</dt>
+                    <dd class="col-6 text-end"><%= product.maxStockThreshold ?? '—' %></dd>
+
+                    <dt class="col-6 text-muted">Status</dt>
+                    <dd class="col-6 text-end text-capitalize"><%= product.stockStatus || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Backorder</dt>
+                    <dd class="col-6 text-end"><%= product.allowBackorder ? 'Permitido' : 'Não permitido' %></dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Logística</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-6 text-muted">Peso</dt>
+                    <dd class="col-6 text-end"><%= product.weight ? `${product.weight} ${product.weightUnit || 'kg'}` : '—' %></dd>
+
+                    <dt class="col-6 text-muted">Dimensões</dt>
+                    <dd class="col-6 text-end">
+                        <% if (product.length || product.width || product.height) { %>
+                            <%= [product.length, product.width, product.height].filter(Boolean).join(' x ') %> <%= product.dimensionsUnit || 'cm' %>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+
+                    <dt class="col-6 text-muted">Classe de envio</dt>
+                    <dd class="col-6 text-end"><%= product.shippingClass || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Prazo de entrega</dt>
+                    <dd class="col-6 text-end">
+                        <% if (product.deliveryTimeMin || product.deliveryTimeMax) { %>
+                            <%= product.deliveryTimeMin ?? '?' %> - <%= product.deliveryTimeMax ?? '?' %> dias
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+
+                    <dt class="col-6 text-muted">Requer envio</dt>
+                    <dd class="col-6 text-end"><%= product.requiresShipping ? 'Sim' : 'Não' %></dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Dados fiscais</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-6 text-muted">NCM</dt>
+                    <dd class="col-6 text-end"><%= product.ncmCode || '—' %></dd>
+
+                    <dt class="col-6 text-muted">CEST</dt>
+                    <dd class="col-6 text-end"><%= product.cestCode || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Classe fiscal</dt>
+                    <dd class="col-6 text-end"><%= product.taxClass || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Alíquota</dt>
+                    <dd class="col-6 text-end"><%= product.taxRate !== null && product.taxRate !== undefined ? product.taxRate + '%' : '—' %></dd>
+
+                    <dt class="col-6 text-muted">Benefício</dt>
+                    <dd class="col-6 text-end"><%= product.fiscalBenefitCode || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Origem</dt>
+                    <dd class="col-6 text-end"><%= product.origin || '—' %></dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h2 class="h5 mb-0">Marketing</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-6 text-muted">Tags</dt>
+                    <dd class="col-6 text-end"><%= product.tags || '—' %></dd>
+
+                    <dt class="col-6 text-muted">Lançamento</dt>
+                    <dd class="col-6 text-end">
+                        <% if (product.releaseDate) { %>
+                            <%= new Date(product.releaseDate).toLocaleDateString('pt-BR') %>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+
+                    <dt class="col-6 text-muted">Destacado</dt>
+                    <dd class="col-6 text-end"><%= product.isFeatured ? 'Sim' : 'Não' %></dd>
+
+                    <dt class="col-6 text-muted">URL canônica</dt>
+                    <dd class="col-6 text-end">
+                        <% if (product.canonicalUrl) { %>
+                            <a href="<%= product.canonicalUrl %>" target="_blank" rel="noopener noreferrer">Abrir</a>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+                </dl>
+                <% if (product.seoTitle) { %>
+                    <div class="mt-3">
+                        <small class="text-muted text-uppercase fw-semibold">SEO Title</small>
+                        <p class="mb-1"><%= product.seoTitle %></p>
+                    </div>
+                <% } %>
+                <% if (product.seoDescription) { %>
+                    <div class="mt-2">
+                        <small class="text-muted text-uppercase fw-semibold">SEO Description</small>
+                        <p class="mb-0"><%= product.seoDescription %></p>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>
