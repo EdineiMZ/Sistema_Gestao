@@ -42,9 +42,10 @@ describe('Integração PDV - fluxo completo', () => {
             sku: 'SKU-PDV-001',
             unit: 'un',
             unitPrice: '120.00',
+            price: '120.00',
             taxRate: '5.00',
             taxCode: '1234.56.78',
-            active: true
+            status: 'active'
         });
         ({ agent } = await authenticateTestUser(app, {
             id: operator.id,
