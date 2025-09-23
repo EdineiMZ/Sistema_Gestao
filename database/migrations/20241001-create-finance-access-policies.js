@@ -18,8 +18,7 @@ module.exports = {
                 policyKey: {
                     type: Sequelize.STRING(100),
                     allowNull: false,
-                    defaultValue: POLICY_KEY,
-                    unique: true
+                    defaultValue: POLICY_KEY
                 },
                 allowedRoles: {
                     type: Sequelize.TEXT,
