@@ -1,0 +1,298 @@
+<%- include('../partials/header') %>
+
+<% const editing = mode === 'edit'; %>
+<% const formAction = editing ? `/admin/companies/${company.id}?_method=PUT` : '/admin/companies'; %>
+<% const title = editing ? 'Editar empresa' : 'Nova empresa'; %>
+
+<div class="row gy-4 fade-in">
+    <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="fw-semibold mb-1"><%= title %></h2>
+                <p class="text-muted mb-0">Mantenha o cadastro empresarial completo para automatizar obrigações fiscais e integrações.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="/admin/companies">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar
+                </a>
+                <% if (editing) { %>
+                    <a class="btn btn-outline-secondary" href="/admin/companies/<%= company.id %>/users">
+                        <i class="bi bi-people me-2"></i>Usuários vinculados
+                    </a>
+                <% } %>
+            </div>
+        </div>
+
+        <% if (success_msg) { %>
+            <div class="alert alert-success alert-auto" data-auto-dismiss="4000">
+                <i class="bi bi-check-circle me-2"></i><%= success_msg %>
+            </div>
+        <% } else if (error_msg) { %>
+            <div class="alert alert-danger alert-auto" data-auto-dismiss="6000">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error_msg %>
+            </div>
+        <% } %>
+
+        <form action="<%= formAction %>" method="POST" class="card card-soft p-4" id="company-form" novalidate>
+            <% if (editing) { %>
+                <input type="hidden" name="_method" value="PUT" />
+            <% } %>
+
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm h-100 bg-light-subtle">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+                                <div>
+                                    <h5 class="card-title mb-1">Identificação</h5>
+                                    <p class="text-muted mb-0">Utilize a busca automática para preencher dados diretamente do cadastro da Receita Federal.</p>
+                                </div>
+                                <div class="d-flex gap-2 flex-wrap" data-cnpj-tools>
+                                    <div class="input-group input-group-flat">
+                                        <span class="input-group-text bg-transparent border-end-0 text-muted">
+                                            <i class="bi bi-upc-scan"></i>
+                                        </span>
+                                        <input
+                                            type="text"
+                                            name="cnpj"
+                                            maxlength="18"
+                                            placeholder="00.000.000/0000-00"
+                                            class="form-control border-start-0"
+                                            value="<%= company.cnpj || '' %>"
+                                            data-cnpj-input
+                                        />
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary" data-cnpj-lookup>
+                                        <i class="bi bi-magic me-2"></i>Buscar dados
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-lg-6">
+                                    <label class="form-label required">Razão social</label>
+                                    <input type="text" class="form-control" name="corporateName" maxlength="180" value="<%= company.corporateName || '' %>" required />
+                                </div>
+                                <div class="col-lg-6">
+                                    <label class="form-label">Nome fantasia</label>
+                                    <input type="text" class="form-control" name="tradeName" maxlength="180" value="<%= company.tradeName || '' %>" />
+                                </div>
+                                <div class="col-lg-4">
+                                    <label class="form-label">Inscrição estadual</label>
+                                    <input type="text" class="form-control" name="stateRegistration" maxlength="30" value="<%= company.stateRegistration || '' %>" />
+                                </div>
+                                <div class="col-lg-4">
+                                    <label class="form-label">Inscrição municipal</label>
+                                    <input type="text" class="form-control" name="municipalRegistration" maxlength="30" value="<%= company.municipalRegistration || '' %>" />
+                                </div>
+                                <div class="col-lg-4">
+                                    <label class="form-label">Regime tributário</label>
+                                    <input type="text" class="form-control" name="taxRegime" maxlength="60" value="<%= company.taxRegime || '' %>" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Contatos</h5>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">E-mail principal</label>
+                                    <input type="email" class="form-control" name="email" maxlength="160" value="<%= company.email || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Telefone comercial</label>
+                                    <input type="text" class="form-control" name="phone" maxlength="20" value="<%= company.phone || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Celular</label>
+                                    <input type="text" class="form-control" name="mobilePhone" maxlength="20" value="<%= company.mobilePhone || '' %>" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Website</label>
+                                    <input type="url" class="form-control" name="website" maxlength="200" value="<%= company.website || '' %>" placeholder="https://empresa.com.br" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Localização</h5>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">CEP</label>
+                                    <input type="text" class="form-control" name="zipCode" maxlength="9" value="<%= company.zipCode || '' %>" />
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Endereço</label>
+                                    <input type="text" class="form-control" name="addressLine" maxlength="200" value="<%= company.addressLine || '' %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Número</label>
+                                    <input type="text" class="form-control" name="number" maxlength="20" value="<%= company.number || '' %>" />
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Complemento</label>
+                                    <input type="text" class="form-control" name="complement" maxlength="100" value="<%= company.complement || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Bairro</label>
+                                    <input type="text" class="form-control" name="neighborhood" maxlength="120" value="<%= company.neighborhood || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Cidade</label>
+                                    <input type="text" class="form-control" name="city" maxlength="120" value="<%= company.city || '' %>" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">UF</label>
+                                    <input type="text" class="form-control text-uppercase" name="state" maxlength="2" value="<%= company.state || '' %>" />
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">País</label>
+                                    <input type="text" class="form-control" name="country" maxlength="60" value="<%= company.country || 'Brasil' %>" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Configurações</h5>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Data de abertura</label>
+                                    <input type="date" class="form-control" name="openingDate" value="<%= company.openingDate || '' %>" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Status</label>
+                                    <select name="status" class="form-select">
+                                        <option value="active" <%= (company.status || 'active') === 'active' ? 'selected' : '' %>>Ativa</option>
+                                        <option value="inactive" <%= company.status === 'inactive' ? 'selected' : '' %>>Inativa</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Observações</label>
+                                    <textarea class="form-control" name="notes" rows="4" maxlength="500"><%= company.notes || '' %></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 text-end">
+                    <button type="submit" class="btn btn-gradient btn-lg">
+                        <i class="bi bi-save me-2"></i><%= editing ? 'Atualizar empresa' : 'Cadastrar empresa' %>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(() => {
+    const form = document.getElementById('company-form');
+    const lookupButton = form?.querySelector('[data-cnpj-lookup]');
+    const cnpjInput = form?.querySelector('[data-cnpj-input]');
+    const toastContainer = document.createElement('div');
+    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+    document.body.appendChild(toastContainer);
+
+    const showToast = (message, variant = 'danger') => {
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${variant} border-0 show`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>`;
+        toastContainer.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    };
+
+    const fillField = (name, value) => {
+        const field = form?.querySelector(`[name="${name}"]`);
+        if (!field || value === undefined || value === null) return;
+        field.value = value;
+        field.dispatchEvent(new Event('change'));
+    };
+
+    const applyCompanyData = (data) => {
+        fillField('corporateName', data.corporateName);
+        fillField('tradeName', data.tradeName);
+        fillField('stateRegistration', data.stateRegistration);
+        fillField('municipalRegistration', data.municipalRegistration);
+        fillField('taxRegime', data.taxRegime);
+        fillField('email', data.email);
+        fillField('phone', data.phone);
+        fillField('mobilePhone', data.mobilePhone);
+        fillField('website', data.website);
+        fillField('openingDate', data.openingDate);
+        fillField('zipCode', data.zipCode);
+        fillField('addressLine', data.addressLine);
+        fillField('number', data.number);
+        fillField('complement', data.complement);
+        fillField('neighborhood', data.neighborhood);
+        fillField('city', data.city);
+        fillField('state', data.state);
+        fillField('country', data.country);
+        fillField('notes', data.notes);
+    };
+
+    lookupButton?.addEventListener('click', async () => {
+        const rawCnpj = cnpjInput?.value || '';
+        const digits = rawCnpj.replace(/\D+/g, '');
+        if (digits.length !== 14) {
+            showToast('Informe um CNPJ válido para realizar a busca.', 'warning');
+            return;
+        }
+
+        lookupButton.disabled = true;
+        lookupButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Consultando...';
+
+        try {
+            const response = await fetch('/admin/companies/lookup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ cnpj: digits })
+            });
+
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                throw new Error(errorPayload.message || 'Não foi possível consultar o CNPJ.');
+            }
+
+            const { data } = await response.json();
+            if (data?.cnpj) {
+                if (cnpjInput) {
+                    cnpjInput.value = data.cnpj;
+                }
+                applyCompanyData(data);
+                showToast('Dados carregados com sucesso.', 'success');
+            } else {
+                showToast('A API não retornou informações para este CNPJ.', 'warning');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast(error.message || 'Erro ao consultar CNPJ.');
+        } finally {
+            lookupButton.disabled = false;
+            lookupButton.innerHTML = '<i class="bi bi-magic me-2"></i>Buscar dados';
+        }
+    });
+})();
+</script>
+
+<%- include('../partials/footer') %>

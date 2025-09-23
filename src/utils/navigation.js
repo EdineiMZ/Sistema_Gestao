@@ -44,6 +44,13 @@ const rawShortcuts = [
         groups: ['menu']
     },
     {
+        label: 'PDV',
+        route: '/pos',
+        icon: 'bi-bag-check',
+        minimumRole: USER_ROLES.MANAGER,
+        groups: ['menu', 'quick']
+    },
+    {
         label: 'Salas',
         route: '/rooms',
         icon: 'bi-door-open',
@@ -56,6 +63,13 @@ const rawShortcuts = [
         icon: 'bi-shield-check',
         minimumRole: USER_ROLES.ADMIN,
         groups: ['menu', 'quick']
+    },
+    {
+        label: 'Empresas',
+        route: '/admin/companies',
+        icon: 'bi-buildings',
+        minimumRole: USER_ROLES.ADMIN,
+        groups: ['menu']
     },
     {
         label: 'Usuários',
