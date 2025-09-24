@@ -8,7 +8,8 @@ const {
     Product,
     Sale,
     SaleItem,
-    SalePayment
+    SalePayment,
+    Company
 } = require('../../../database/models');
 const posRoutes = require('../../../src/routes/posRoutes');
 const { USER_ROLES } = require('../../../src/constants/roles');
@@ -26,6 +27,7 @@ describe('Integração PDV - fluxo completo', () => {
     let agent;
     let operator;
     let product;
+    let company;
 
     beforeAll(async () => {
         await sequelize.sync({ force: true });
@@ -34,12 +36,19 @@ describe('Integração PDV - fluxo completo', () => {
     beforeEach(async () => {
         await sequelize.sync({ force: true });
         app = createRouterTestApp({ routes: [['/pos', posRoutes]] });
+        company = await Company.create({
+            cnpj: '11222333000199',
+            corporateName: 'Beleza Inteligente LTDA',
+            tradeName: 'Studio Beleza',
+            email: 'contato@studiobeleza.com'
+        });
         operator = await User.create({
             name: 'Operador PDV',
             email: 'operador@example.com',
             password: 'SenhaSegura123',
             role: USER_ROLES.MANAGER,
-            active: true
+            active: true,
+            companyId: company.id
         });
         product = await Product.create({
             name: 'Sérum facial luminoso',
@@ -48,13 +57,15 @@ describe('Integração PDV - fluxo completo', () => {
             unit: 'un',
             price: '120.00',
             taxRate: '5.00',
-            taxCode: '1234.56.78'
+            taxCode: '1234.56.78',
+            companyId: company.id
         });
         ({ agent } = await authenticateTestUser(app, {
             id: operator.id,
             role: operator.role,
             name: operator.name,
-            email: operator.email
+            email: operator.email,
+            companyId: company.id
         }));
     });
 

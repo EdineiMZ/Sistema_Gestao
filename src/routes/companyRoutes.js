@@ -16,6 +16,8 @@ router.get('/:id/edit', companyController.showEditForm);
 router.put('/:id', companyController.update);
 router.delete('/:id', companyController.remove);
 
+router.post('/:id/tokens', companyController.savePaymentToken);
+
 router.post('/lookup', companyController.lookupByCnpj);
 router.get('/:id/users', companyController.manageUsers);
 router.post('/:id/users', companyController.attachUser);

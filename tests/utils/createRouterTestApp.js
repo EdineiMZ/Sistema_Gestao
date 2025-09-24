@@ -24,7 +24,8 @@ const sanitizeUser = (user = {}) => ({
     email: user.email || 'usuario@example.com',
     role: user.role || USER_ROLES.ADMIN,
     active: user.active !== false,
-    profileImage: user.profileImage || null
+    profileImage: user.profileImage || null,
+    companyId: Number.isInteger(user.companyId) ? user.companyId : null
 });
 
 const normalizeFlashMessages = (messages) => {

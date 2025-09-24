@@ -8,7 +8,8 @@ const {
     Product,
     Sale,
     SaleItem,
-    SalePayment
+    SalePayment,
+    Company
 } = require('../../../database/models');
 const posRoutes = require('../../../src/routes/posRoutes');
 const { USER_ROLES } = require('../../../src/constants/roles');
@@ -21,6 +22,7 @@ describe('Relatórios do PDV - integração', () => {
     let app;
     let agent;
     let operator;
+    let company;
 
     const seedSales = async () => {
         const now = new Date();
@@ -35,7 +37,8 @@ describe('Relatórios do PDV - integração', () => {
             stockQuantity: 5,
             lowStockThreshold: 4,
             stockStatus: 'in-stock',
-            allowBackorder: false
+            allowBackorder: false,
+            companyId: company.id
         });
 
         const productB = await Product.create({
@@ -46,7 +49,8 @@ describe('Relatórios do PDV - integração', () => {
             stockQuantity: 0,
             lowStockThreshold: 3,
             stockStatus: 'out-of-stock',
-            allowBackorder: true
+            allowBackorder: true,
+            companyId: company.id
         });
 
         const saleOne = await Sale.create({
@@ -125,19 +129,27 @@ describe('Relatórios do PDV - integração', () => {
     beforeEach(async () => {
         await sequelize.sync({ force: true });
         app = createRouterTestApp({ routes: [['/pos', posRoutes]] });
+        company = await Company.create({
+            cnpj: '44555666000155',
+            corporateName: 'Estética Moderna LTDA',
+            tradeName: 'Estética Moderna',
+            email: 'contato@esteticamoderna.com'
+        });
         operator = await User.create({
             name: 'Operador PDV',
             email: 'operador@empresa.com',
             password: 'SenhaForte123',
             role: USER_ROLES.MANAGER,
-            active: true
+            active: true,
+            companyId: company.id
         });
 
         ({ agent } = await authenticateTestUser(app, {
             id: operator.id,
             role: operator.role,
             name: operator.name,
-            email: operator.email
+            email: operator.email,
+            companyId: company.id
         }));
 
         await seedSales();
