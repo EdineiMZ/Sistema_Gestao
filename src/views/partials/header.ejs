@@ -195,42 +195,7 @@
                         </a>
                     </li>
                 <% } else { %>
-                    <% if (navMenuItems.length) { %>
-                        <% navMenuItems.forEach((item) => { %>
-                            <% if (Array.isArray(item.children) && item.children.length) { %>
-                                <li class="nav-item dropdown">
-                                    <a
-                                        class="nav-link dropdown-toggle d-flex align-items-center gap-2"
-                                        href="#"
-                                        id="navDropdown-<%= item.label.replace(/\s+/g, '-') %>"
-                                        role="button"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
-                                        <i class="bi <%= item.icon %>" aria-hidden="true"></i>
-                                        <span><%= item.label %></span>
-                                    </a>
-                                    <ul class="dropdown-menu shadow" aria-labelledby="navDropdown-<%= item.label.replace(/\s+/g, '-') %>">
-                                        <% item.children.forEach((child) => { %>
-                                            <li>
-                                                <a class="dropdown-item d-flex align-items-center gap-2" href="<%= child.route %>" data-nav-close="true">
-                                                    <i class="bi <%= child.icon %>" aria-hidden="true"></i>
-                                                    <span><%= child.label %></span>
-                                                </a>
-                                            </li>
-                                        <% }); %>
-                                    </ul>
-                                </li>
-                            <% } else { %>
-                                <li class="nav-item">
-                                    <a class="nav-link d-flex align-items-center gap-2" href="<%= item.route %>" data-nav-close="true">
-                                        <i class="bi <%= item.icon %>" aria-hidden="true"></i>
-                                        <span><%= item.label %></span>
-                                    </a>
-                                </li>
-                            <% } %>
-                        <% }); %>
-                    <% } %>
+                    <% /* Links principais permanecem disponíveis apenas no menu do usuário */ %>
                     <li class="nav-item dropdown user-menu-item">
                         <a
                             class="nav-link dropdown-toggle d-flex align-items-center"
@@ -284,6 +249,19 @@
                             <% } %>
                             <% if (navMenuItems.length) { %>
                                 <li class="dropdown-header text-muted text-uppercase small">Navegação principal</li>
+                                <% const managerLevel = fallbackRoleOrder.indexOf('manager'); %>
+                                <% if (computedUserLevel >= (managerLevel === -1 ? 0 : managerLevel)) { %>
+                                    <li>
+                                        <a
+                                            class="dropdown-item user-menu-link d-flex align-items-center gap-2"
+                                            href="/products/new"
+                                            data-nav-close="true"
+                                        >
+                                            <i class="bi bi-box-seam me-2"></i>
+                                            <span>Cadastro de produtos</span>
+                                        </a>
+                                    </li>
+                                <% } %>
                                 <% navMenuItems.forEach((item) => { %>
                                     <% if (Array.isArray(item.children) && item.children.length) { %>
                                         <li><span class="dropdown-item-text text-muted fw-semibold"><%= item.label %></span></li>
