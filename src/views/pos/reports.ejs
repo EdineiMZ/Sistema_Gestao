@@ -1,0 +1,520 @@
+<%- include('../partials/header') %>
+
+<main class="app-main py-5">
+    <div class="container-xl">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+            <div>
+                <h1 class="page-title mb-2">Relatórios inteligentes do PDV</h1>
+                <p class="text-muted mb-2">
+                    Monitore desempenho de vendas, horários de pico e níveis de estoque em tempo real para decisões mais rápidas.
+                </p>
+                <div class="text-muted small">
+                    Última atualização: <span data-last-updated>--</span>
+                </div>
+            </div>
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+                <div class="w-100 w-sm-auto">
+                    <label class="form-label small text-muted mb-1" for="posReportsRange">Período</label>
+                    <select id="posReportsRange" class="form-select rounded-pill" data-range-select>
+                        <% (Array.isArray(rangeOptions) ? rangeOptions : ['7d','14d','30d','90d']).forEach(function(option) { %>
+                            <option value="<%= option %>" <%= option === defaultRange ? 'selected' : '' %>>
+                                <% if (option === '7d') { %>Últimos 7 dias<% } else if (option === '14d') { %>Últimos 14 dias<% } else if (option === '90d') { %>Últimos 90 dias<% } else { %>Últimos 30 dias<% } %>
+                            </option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="w-100 w-sm-auto">
+                    <label class="form-label small text-muted mb-1" for="posReportsRefresh">&nbsp;</label>
+                    <button id="posReportsRefresh" class="btn btn-gradient w-100" type="button" data-refresh>
+                        <i class="bi bi-arrow-repeat me-2"></i>Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-4" role="alert" data-reports-alert></div>
+
+        <div
+            id="posReportsRoot"
+            class="pos-reports mt-4"
+            data-default-range="<%= defaultRange %>"
+            data-range-options='<%- JSON.stringify(rangeOptions || []) %>'
+            data-payment-methods='<%- JSON.stringify(paymentMethods || []) %>'
+        >
+            <div class="card border-0 shadow-sm overflow-hidden">
+                <div class="pos-reports__tabs-wrapper">
+                    <ul class="nav nav-pills pos-reports__tabs" id="posReportsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button
+                                class="nav-link active"
+                                id="tab-overview"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-overview"
+                                type="button"
+                                role="tab"
+                                aria-controls="pane-overview"
+                                aria-selected="true"
+                            >
+                                <i class="bi bi-speedometer2 me-2"></i>Visão geral
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button
+                                class="nav-link"
+                                id="tab-products"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-products"
+                                type="button"
+                                role="tab"
+                                aria-controls="pane-products"
+                                aria-selected="false"
+                            >
+                                <i class="bi bi-stars me-2"></i>Produtos mais vendidos
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button
+                                class="nav-link"
+                                id="tab-hourly"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-hourly"
+                                type="button"
+                                role="tab"
+                                aria-controls="pane-hourly"
+                                aria-selected="false"
+                            >
+                                <i class="bi bi-clock-history me-2"></i>Movimento por horário
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button
+                                class="nav-link"
+                                id="tab-daily"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-daily"
+                                type="button"
+                                role="tab"
+                                aria-controls="pane-daily"
+                                aria-selected="false"
+                            >
+                                <i class="bi bi-calendar3 me-2"></i>Movimento por dia
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button
+                                class="nav-link"
+                                id="tab-stock"
+                                data-bs-toggle="pill"
+                                data-bs-target="#pane-stock"
+                                type="button"
+                                role="tab"
+                                aria-controls="pane-stock"
+                                aria-selected="false"
+                            >
+                                <i class="bi bi-box-seam me-2"></i>Estoque
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="tab-content p-4" id="posReportsContent">
+                    <div class="tab-pane fade show active" id="pane-overview" role="tabpanel" aria-labelledby="tab-overview">
+                        <div class="row g-4" data-overview-cards>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Receita líquida</span>
+                                        <h3 class="summary-card__value" data-overview-metric="net">--</h3>
+                                        <span class="summary-card__variation badge" data-overview-variation="revenue">--</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Pedidos concluídos</span>
+                                        <h3 class="summary-card__value" data-overview-metric="orders">--</h3>
+                                        <span class="summary-card__variation badge" data-overview-variation="orders">--</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Ticket médio</span>
+                                        <h3 class="summary-card__value" data-overview-metric="averageTicket">--</h3>
+                                        <span class="summary-card__variation badge" data-overview-variation="averageTicket">--</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Receita bruta</span>
+                                        <h3 class="summary-card__value" data-overview-metric="gross">--</h3>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Tributos</span>
+                                        <h3 class="summary-card__value" data-overview-metric="taxes">--</h3>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <article class="card summary-card border-0 shadow-sm h-100" data-overview-card>
+                                    <div class="card-body">
+                                        <span class="summary-card__label text-muted">Descontos</span>
+                                        <h3 class="summary-card__value text-danger" data-overview-metric="discounts">--</h3>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-xl-8">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body">
+                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-sm-between gap-3 mb-3">
+                                            <div>
+                                                <h2 class="h5 mb-1">Tendência de receita diária</h2>
+                                                <p class="text-muted small mb-0">Receita e pedidos no período selecionado.</p>
+                                            </div>
+                                            <span class="badge bg-primary-subtle text-primary" data-overview-best-day>Melhor dia: --</span>
+                                        </div>
+                                        <div class="chart-area" data-chart-container>
+                                            <canvas
+                                                id="overviewTrendChart"
+                                                class="chart-canvas"
+                                                aria-label="Gráfico de receita diária"
+                                                role="img"
+                                            ></canvas>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-xl-4">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body d-flex flex-column">
+                                        <h2 class="h5 mb-1">Métodos de pagamento</h2>
+                                        <p class="text-muted small mb-3">Participação por volume recebido.</p>
+                                        <div class="chart-area flex-grow-1" data-chart-container>
+                                            <canvas
+                                                id="paymentBreakdownChart"
+                                                class="chart-canvas"
+                                                aria-label="Distribuição de pagamentos"
+                                                role="img"
+                                            ></canvas>
+                                        </div>
+                                        <ul class="list-unstyled small mt-3 mb-0" data-payment-list>
+                                            <li class="text-muted">Aguardando dados...</li>
+                                        </ul>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-products" role="tabpanel" aria-labelledby="tab-products">
+                        <div class="row g-4">
+                            <div class="col-lg-5">
+                                <article class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h2 class="h5 mb-1">Resumo de vendas</h2>
+                                        <p class="text-muted small mb-3">Top produtos do período selecionado.</p>
+                                        <dl class="row g-2 mb-0 small" data-top-products-summary>
+                                            <div class="col-6">
+                                                <dt class="text-muted">Itens vendidos</dt>
+                                                <dd class="fw-semibold" data-top-total-quantity>--</dd>
+                                            </div>
+                                            <div class="col-6">
+                                                <dt class="text-muted">Receita líquida</dt>
+                                                <dd class="fw-semibold" data-top-total-revenue>--</dd>
+                                            </div>
+                                        </dl>
+                                        <div class="mt-4">
+                                            <div class="table-responsive rounded-3 border">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Produto</th>
+                                                            <th class="text-end">Qtd.</th>
+                                                            <th class="text-end">Receita</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody data-top-products-body>
+                                                        <tr>
+                                                            <td colspan="3" class="text-center text-muted py-4">Aguardando dados...</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-lg-7">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body">
+                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-sm-between gap-3 mb-3">
+                                            <div>
+                                                <h2 class="h5 mb-1">Receita por produto</h2>
+                                                <p class="text-muted small mb-0">Top 10 produtos mais relevantes.</p>
+                                            </div>
+                                        </div>
+                                        <div class="chart-area" data-chart-container>
+                                            <canvas
+                                                id="topProductsChart"
+                                                class="chart-canvas"
+                                                aria-label="Gráfico de receita por produto"
+                                                role="img"
+                                            ></canvas>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-hourly" role="tabpanel" aria-labelledby="tab-hourly">
+                        <div class="row g-4">
+                            <div class="col-xl-8">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body">
+                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-sm-between gap-3 mb-3">
+                                            <div>
+                                                <h2 class="h5 mb-1">Intensidade por hora</h2>
+                                                <p class="text-muted small mb-0">Receita e pedidos concluídos por faixa horária.</p>
+                                            </div>
+                                            <span class="badge bg-info-subtle text-info" data-hourly-highlight>Horário de pico: --</span>
+                                        </div>
+                                        <div class="chart-area" data-chart-container>
+                                            <canvas
+                                                id="hourlyMovementChart"
+                                                class="chart-canvas"
+                                                aria-label="Gráfico de movimento por hora"
+                                                role="img"
+                                            ></canvas>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-xl-4">
+                                <article class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h2 class="h5 mb-1">Dicas operacionais</h2>
+                                        <p class="text-muted small mb-3">Ajuste a escala da equipe com base nos horários de pico.</p>
+                                        <ul class="list-unstyled small mb-0" data-hourly-insights>
+                                            <li class="text-muted">Aguardando dados para recomendações.</li>
+                                        </ul>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-daily" role="tabpanel" aria-labelledby="tab-daily">
+                        <div class="row g-4">
+                            <div class="col-xl-8">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body">
+                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-sm-between gap-3 mb-3">
+                                            <div>
+                                                <h2 class="h5 mb-1">Evolução diária de pedidos</h2>
+                                                <p class="text-muted small mb-0">Tendência de pedidos concluídos no período.</p>
+                                            </div>
+                                            <span class="badge bg-success-subtle text-success" data-daily-highlight>Dia de maior receita: --</span>
+                                        </div>
+                                        <div class="chart-area" data-chart-container>
+                                            <canvas
+                                                id="dailyMovementChart"
+                                                class="chart-canvas"
+                                                aria-label="Gráfico de movimento por dia"
+                                                role="img"
+                                            ></canvas>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-xl-4">
+                                <article class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h2 class="h5 mb-1">Insights rápidos</h2>
+                                        <ul class="list-unstyled small mb-0" data-daily-insights>
+                                            <li class="text-muted">Aguardando dados para calcular insights.</li>
+                                        </ul>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-stock" role="tabpanel" aria-labelledby="tab-stock">
+                        <div class="row g-4">
+                            <div class="col-xl-4">
+                                <div class="row g-3" data-stock-summary>
+                                    <div class="col-sm-6 col-xl-12">
+                                        <article class="card border-0 shadow-sm h-100">
+                                            <div class="card-body">
+                                                <span class="summary-card__label text-muted">Produtos ativos</span>
+                                                <h3 class="summary-card__value" data-stock-metric="totalActive">--</h3>
+                                            </div>
+                                        </article>
+                                    </div>
+                                    <div class="col-sm-6 col-xl-12">
+                                        <article class="card border-0 shadow-sm h-100">
+                                            <div class="card-body">
+                                                <span class="summary-card__label text-muted">Baixo estoque</span>
+                                                <h3 class="summary-card__value text-warning" data-stock-metric="lowStock">--</h3>
+                                            </div>
+                                        </article>
+                                    </div>
+                                    <div class="col-sm-6 col-xl-12">
+                                        <article class="card border-0 shadow-sm h-100">
+                                            <div class="card-body">
+                                                <span class="summary-card__label text-muted">Sem estoque</span>
+                                                <h3 class="summary-card__value text-danger" data-stock-metric="outOfStock">--</h3>
+                                            </div>
+                                        </article>
+                                    </div>
+                                    <div class="col-sm-6 col-xl-12">
+                                        <article class="card border-0 shadow-sm h-100">
+                                            <div class="card-body">
+                                                <span class="summary-card__label text-muted">Estoque saudável</span>
+                                                <h3 class="summary-card__value text-success" data-stock-metric="adequateStock">--</h3>
+                                            </div>
+                                        </article>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-8">
+                                <article class="card border-0 shadow-sm h-100" data-chart-surface>
+                                    <div class="card-body">
+                                        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-sm-between gap-3 mb-3">
+                                            <div>
+                                                <h2 class="h5 mb-1">Produtos com atenção imediata</h2>
+                                                <p class="text-muted small mb-0">Reforce pedidos antes de rupturas.</p>
+                                            </div>
+                                        </div>
+                                        <div class="table-responsive rounded-3 border">
+                                            <table class="table table-sm align-middle mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Produto</th>
+                                                        <th class="text-end">Estoque</th>
+                                                        <th class="text-end">Mínimo</th>
+                                                        <th class="text-center">Backorder</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody data-stock-body>
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted py-4">Aguardando dados...</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pos-reports__backdrop d-none" data-loading-backdrop>
+                <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                <span class="visually-hidden">Carregando relatórios...</span>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" referrerpolicy="no-referrer" defer></script>
+<script src="/js/posReports.js" defer></script>
+
+<style>
+    .pos-reports {
+        position: relative;
+    }
+
+    .pos-reports__tabs-wrapper {
+        background: linear-gradient(90deg, rgba(13, 110, 253, 0.08), rgba(111, 66, 193, 0.1));
+        padding: 1rem 1.5rem 0.75rem;
+    }
+
+    .pos-reports__tabs {
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        white-space: nowrap;
+    }
+
+    .pos-reports__tabs .nav-link {
+        border-radius: 999px;
+        font-weight: 500;
+        color: var(--bs-gray-700);
+    }
+
+    .pos-reports__tabs .nav-link.active {
+        background: linear-gradient(135deg, #0d6efd, #6f42c1);
+        color: #fff;
+        box-shadow: 0 0.5rem 1.5rem rgba(13, 110, 253, 0.25);
+    }
+
+    .summary-card__label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .summary-card__value {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-top: 0.25rem;
+        margin-bottom: 0;
+    }
+
+    .summary-card__variation {
+        margin-top: 0.75rem;
+        font-size: 0.8rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .chart-area {
+        position: relative;
+        min-height: 260px;
+    }
+
+    .pos-reports__backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 0.75rem;
+        z-index: 10;
+    }
+
+    @media (max-width: 991.98px) {
+        .chart-area {
+            min-height: 220px;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .pos-reports__tabs-wrapper {
+            padding: 0.75rem 1rem 0.5rem;
+        }
+    }
+</style>
+
+<%- include('../partials/footer') %>

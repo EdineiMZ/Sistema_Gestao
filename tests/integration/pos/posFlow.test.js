@@ -40,11 +40,11 @@ describe('Integração PDV - fluxo completo', () => {
         product = await Product.create({
             name: 'Sérum facial luminoso',
             sku: 'SKU-PDV-001',
+            status: 'active',
             unit: 'un',
-            unitPrice: '120.00',
+            price: '120.00',
             taxRate: '5.00',
-            taxCode: '1234.56.78',
-            active: true
+            taxCode: '1234.56.78'
         });
         ({ agent } = await authenticateTestUser(app, {
             id: operator.id,
