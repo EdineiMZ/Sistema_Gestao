@@ -34,6 +34,30 @@ const state = {
 
 const socket = typeof io === 'function' ? io() : null;
 
+function refreshPermissionState(permissions = {}) {
+    if (!permissions || typeof permissions !== 'object') {
+        return;
+    }
+
+    state.permissions = { ...state.permissions, ...permissions };
+    state.isAdmin = Boolean(state.permissions.isAdmin || config?.user?.role === 'admin');
+    state.isAgent = Boolean(state.permissions.isAgent);
+    state.isAssigned = Boolean(state.permissions.isAssigned);
+    state.isOwner = Boolean(state.permissions.isOwner);
+}
+
+function updateAdminButtonVisibility() {
+    if (!elements.adminEntryButton) {
+        return;
+    }
+
+    if (state.isAdmin) {
+        elements.adminEntryButton.classList.remove('d-none');
+    } else {
+        elements.adminEntryButton.classList.add('d-none');
+    }
+}
+
 const getAttachmentName = (attachment) => {
     if (!attachment) {
         return 'arquivo';
@@ -442,27 +466,3 @@ const init = () => {
 };
 
 init();
-const refreshPermissionState = (permissions = {}) => {
-    if (!permissions || typeof permissions !== 'object') {
-        return;
-    }
-
-    state.permissions = { ...state.permissions, ...permissions };
-    state.isAdmin = Boolean(state.permissions.isAdmin || config?.user?.role === 'admin');
-    state.isAgent = Boolean(state.permissions.isAgent);
-    state.isAssigned = Boolean(state.permissions.isAssigned);
-    state.isOwner = Boolean(state.permissions.isOwner);
-};
-
-const updateAdminButtonVisibility = () => {
-    if (!elements.adminEntryButton) {
-        return;
-    }
-
-    if (state.isAdmin) {
-        elements.adminEntryButton.classList.remove('d-none');
-    } else {
-        elements.adminEntryButton.classList.add('d-none');
-    }
-};
-
