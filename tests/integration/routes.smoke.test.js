@@ -42,6 +42,8 @@ const authRoutes = require('../../src/routes/authRoutes');
 const dashboardRoutes = require('../../src/routes/dashboardRoutes');
 const financeRoutes = require('../../src/routes/financeRoutes');
 const notificationRoutes = require('../../src/routes/notificationRoutes');
+const posRoutes = require('../../src/routes/posRoutes');
+const { USER_ROLES } = require('../../src/constants/roles');
 
 describe('Smoke tests das rotas principais', () => {
     let app;
@@ -119,7 +121,8 @@ describe('Smoke tests das rotas principais', () => {
                 ['/', authRoutes],
                 ['/dashboard', dashboardRoutes],
                 ['/finance', financeRoutes],
-                ['/notifications', notificationRoutes]
+                ['/notifications', notificationRoutes],
+                ['/pos', posRoutes]
             ]
         });
     });
@@ -209,5 +212,14 @@ describe('Smoke tests das rotas principais', () => {
         expect(response.status).toBe(200);
         expect(response.text).toContain('Campanhas e notificações');
         expect(response.text).toContain('Boas-vindas');
+    });
+
+    it('permite que usuários autorizados acessem o PDV', async () => {
+        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
+
+        const response = await agent.get('/pos');
+
+        expect(response.status).toBe(200);
+        expect(response.text).toContain('Ponto de Venda Inteligente');
     });
 });
