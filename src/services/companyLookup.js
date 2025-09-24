@@ -45,28 +45,84 @@ const normalizeStatus = (rawStatus) => {
     return 'inactive';
 };
 
-const mapApiResponse = (payload = {}) => ({
-    cnpj: sanitizeCnpj(payload.cnpj || payload.numero || payload.cnpj_raiz),
-    corporateName: payload.razao_social || payload.nome || null,
-    tradeName: payload.nome_fantasia || payload.fantasia || null,
-    stateRegistration: payload.inscricao_estadual || null,
-    municipalRegistration: payload.inscricao_municipal || null,
-    taxRegime: payload.regime_tributario || payload.tipo || null,
-    email: payload.email || null,
-    phone: payload.telefone || payload.telefone1 || null,
-    mobilePhone: payload.telefone2 || null,
-    website: payload.site || null,
-    openingDate: payload.abertura || payload.data_abertura || null,
-    zipCode: sanitizeZipCode(payload.cep) || null,
-    addressLine: payload.logradouro || payload.endereco || null,
-    number: payload.numero || null,
-    complement: payload.complemento || null,
-    neighborhood: payload.bairro || null,
-    city: payload.municipio || payload.cidade || null,
-    state: payload.uf || null,
-    country: 'Brasil',
-    status: normalizeStatus(payload.situacao || payload.status)
-});
+const resolvePrimaryActivity = (activity) => {
+    if (!activity) {
+        return null;
+    }
+
+    const entry = Array.isArray(activity) ? activity[0] : activity;
+    if (entry && typeof entry === 'object') {
+        return {
+            code: entry.codigo || entry.code || null,
+            description: entry.descricao || entry.description || null
+        };
+    }
+
+    return {
+        code: null,
+        description: String(entry)
+    };
+};
+
+const mapApiResponse = (payload = {}) => {
+    const endereco = payload.endereco || payload.address || {};
+    const situacao = payload.situacao || payload.status_info || {};
+    const regimeTributario = payload.regime_tributario || payload.regimeTributario || null;
+    const primaryActivity = resolvePrimaryActivity(payload.atividade_principal);
+
+    const city =
+        endereco.municipio?.nome ||
+        endereco.municipio ||
+        endereco.cidade ||
+        payload.municipio ||
+        payload.cidade ||
+        null;
+
+    const state =
+        endereco.estado?.sigla ||
+        endereco.estado?.uf ||
+        (typeof endereco.estado === 'string' ? endereco.estado : null) ||
+        endereco.uf ||
+        payload.uf ||
+        null;
+
+    const country =
+        endereco.pais?.nome ||
+        endereco.pais ||
+        payload.pais ||
+        'Brasil';
+
+    let taxRegime = regimeTributario;
+    if (taxRegime && typeof taxRegime === 'object') {
+        taxRegime = taxRegime.nome || taxRegime.descricao || taxRegime.description || null;
+    }
+
+    const statusSource = typeof situacao === 'object' && situacao !== null ? situacao.nome || situacao.descricao : situacao;
+
+    return {
+        cnpj: sanitizeCnpj(payload.cnpj || payload.numero || payload.cnpj_raiz),
+        corporateName: payload.razao_social || payload.nome || null,
+        tradeName: payload.nome_fantasia || payload.fantasia || null,
+        stateRegistration: payload.inscricao_estadual || null,
+        municipalRegistration: payload.inscricao_municipal || null,
+        taxRegime: taxRegime || payload.tipo || null,
+        email: payload.email || null,
+        phone: payload.telefone || payload.telefone1 || null,
+        mobilePhone: payload.telefone2 || null,
+        website: payload.site || null,
+        openingDate: payload.data_inicio || payload.abertura || payload.data_abertura || null,
+        zipCode: sanitizeZipCode(endereco.cep || payload.cep) || null,
+        addressLine: endereco.logradouro || payload.logradouro || payload.endereco || null,
+        number: endereco.numero || payload.numero || null,
+        complement: endereco.complemento || payload.complemento || null,
+        neighborhood: endereco.bairro || payload.bairro || null,
+        city,
+        state,
+        country,
+        status: normalizeStatus(statusSource || payload.status),
+        primaryActivity
+    };
+};
 
 const setCacheValue = (cnpj, data) => {
     cacheStore.set(cnpj, {
