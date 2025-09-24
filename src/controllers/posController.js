@@ -9,6 +9,19 @@ const {
 } = require('../../database/models');
 const { SALE_STATUSES, PAYMENT_METHODS, PAYMENT_METHOD_VALUES } = require('../constants/pos');
 const { generateReceiptPdf } = require('../services/posReceiptService');
+const {
+    getReports: getPosReportsService,
+    getTopProducts: getTopProductsService,
+    getTrafficReport: getTrafficReportService,
+    getInventoryReport: getInventoryReportService,
+    buildLimit: buildReportLimit,
+    resolveRange: resolveReportRange,
+    MAX_LIMIT: REPORT_MAX_LIMIT,
+    MAX_RANGE_DAYS: REPORT_MAX_RANGE_DAYS,
+    DEFAULT_RANGE_DAYS: REPORT_DEFAULT_RANGE_DAYS,
+    DEFAULT_INVENTORY_LIMIT,
+    MAX_INVENTORY_LIMIT
+} = require('../services/posReportingService');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 const COMPANY_NAME = process.env.COMPANY_NAME || APP_NAME;
@@ -72,6 +85,350 @@ const safeRollback = async (transaction) => {
         } catch (rollbackError) {
             console.error('Falha ao desfazer transação do PDV:', rollbackError);
         }
+    }
+};
+
+const normalizeDecimal = (value, precision = 2) => {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return Number((0).toFixed(precision));
+    }
+    return Number(parsed.toFixed(precision));
+};
+
+const normalizeQuantity = (value) => {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+    return Number(parsed.toFixed(3));
+};
+
+const normalizeInteger = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeWeekdayIndex = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+    if (parsed >= 0 && parsed <= 6) {
+        return parsed;
+    }
+    if (parsed >= 1 && parsed <= 7) {
+        return parsed % 7;
+    }
+    return 0;
+};
+
+const toIsoStringSafe = (value) => {
+    if (!value) {
+        return null;
+    }
+    const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    return date.toISOString();
+};
+
+const normalizePeriod = (period) => {
+    if (!period) {
+        return null;
+    }
+    const start = toIsoStringSafe(period.start);
+    const end = toIsoStringSafe(period.end);
+    if (!start || !end) {
+        return null;
+    }
+    return { start, end };
+};
+
+const parseDateParam = (value, { endOfDay = false } = {}) => {
+    if (!value) {
+        return null;
+    }
+    const trimmed = String(value).trim();
+    if (!trimmed) {
+        return null;
+    }
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        if (endOfDay) {
+            parsed.setHours(23, 59, 59, 999);
+        } else {
+            parsed.setHours(0, 0, 0, 0);
+        }
+    }
+
+    return parsed;
+};
+
+const resolveReportParameters = (query = {}) => {
+    const startRaw = typeof query.startDate === 'string' ? query.startDate.trim() : '';
+    const endRaw = typeof query.endDate === 'string' ? query.endDate.trim() : '';
+
+    const startDate = startRaw ? parseDateParam(startRaw) : null;
+    if (startRaw && !startDate) {
+        return { error: 'Data inicial inválida.' };
+    }
+
+    const endDate = endRaw ? parseDateParam(endRaw, { endOfDay: true }) : null;
+    if (endRaw && !endDate) {
+        return { error: 'Data final inválida.' };
+    }
+
+    let range;
+
+    try {
+        range = resolveReportRange({
+            start: startDate || undefined,
+            end: endDate || undefined
+        });
+    } catch (rangeError) {
+        return { error: rangeError.message || 'Período inválido.' };
+    }
+
+    const limit = buildReportLimit(query.limit);
+    const inventoryLimit = buildReportLimit(query.inventoryLimit, {
+        defaultValue: DEFAULT_INVENTORY_LIMIT,
+        maxValue: MAX_INVENTORY_LIMIT
+    });
+
+    return {
+        range,
+        limit,
+        inventoryLimit
+    };
+};
+
+const normalizeTopProductsReport = (report) => {
+    if (!report) {
+        return {
+            period: null,
+            limit: 0,
+            byQuantity: [],
+            byRevenue: []
+        };
+    }
+
+    const toEntry = (entry) => ({
+        productId: entry.productId ?? null,
+        name: entry.name || 'Produto',
+        sku: entry.sku || null,
+        totalQuantity: normalizeQuantity(entry.totalQuantity ?? 0),
+        totalRevenue: normalizeDecimal(entry.totalRevenue ?? 0),
+        totalGross: normalizeDecimal(entry.totalGross ?? 0),
+        totalDiscount: normalizeDecimal(entry.totalDiscount ?? 0),
+        averageTicket: normalizeDecimal(entry.averageTicket ?? 0)
+    });
+
+    return {
+        period: normalizePeriod(report.period),
+        limit: normalizeInteger(report.limit),
+        byQuantity: Array.isArray(report.byQuantity) ? report.byQuantity.map(toEntry) : [],
+        byRevenue: Array.isArray(report.byRevenue) ? report.byRevenue.map(toEntry) : []
+    };
+};
+
+const normalizeTrafficReport = (report) => {
+    if (!report) {
+        return {
+            period: null,
+            totals: { salesCount: 0, totalRevenue: 0 },
+            byHour: [],
+            byWeekday: [],
+            byDay: []
+        };
+    }
+
+    const parseSalesCount = (value) => {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return {
+        period: normalizePeriod(report.period),
+        totals: {
+            salesCount: parseSalesCount(report.totals?.salesCount),
+            totalRevenue: normalizeDecimal(report.totals?.totalRevenue ?? 0)
+        },
+        byHour: Array.isArray(report.byHour)
+            ? report.byHour.map((entry) => ({
+                hour: entry.hour || null,
+                salesCount: parseSalesCount(entry.salesCount),
+                totalRevenue: normalizeDecimal(entry.totalRevenue ?? 0)
+            }))
+            : [],
+        byWeekday: Array.isArray(report.byWeekday)
+            ? report.byWeekday.map((entry) => ({
+                weekday: normalizeWeekdayIndex(entry.weekday),
+                salesCount: parseSalesCount(entry.salesCount),
+                totalRevenue: normalizeDecimal(entry.totalRevenue ?? 0)
+            }))
+            : [],
+        byDay: Array.isArray(report.byDay)
+            ? report.byDay.map((entry) => ({
+                day: entry.day || null,
+                salesCount: parseSalesCount(entry.salesCount),
+                totalRevenue: normalizeDecimal(entry.totalRevenue ?? 0)
+            }))
+            : []
+    };
+};
+
+const normalizeInventoryReport = (report) => {
+    if (!report) {
+        return {
+            limit: 0,
+            items: [],
+            lowStockAlerts: []
+        };
+    }
+
+    const parseOptionalInteger = (value) => {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        const parsed = Number.parseInt(value, 10);
+        return Number.isInteger(parsed) ? parsed : null;
+    };
+
+    return {
+        limit: normalizeInteger(report.limit),
+        items: Array.isArray(report.items)
+            ? report.items.map((item) => ({
+                productId: item.productId,
+                name: item.name,
+                sku: item.sku,
+                stockQuantity: normalizeInteger(item.stockQuantity),
+                lowStockThreshold: parseOptionalInteger(item.lowStockThreshold),
+                maxStockThreshold: parseOptionalInteger(item.maxStockThreshold),
+                stockStatus: item.stockStatus,
+                unitPrice: normalizeDecimal(item.unitPrice ?? 0),
+                lowStock: Boolean(item.lowStock)
+            }))
+            : [],
+        lowStockAlerts: Array.isArray(report.lowStockAlerts)
+            ? report.lowStockAlerts.map((alert) => ({
+                productId: alert.productId,
+                name: alert.name,
+                stockQuantity: normalizeInteger(alert.stockQuantity),
+                lowStockThreshold: parseOptionalInteger(alert.lowStockThreshold)
+            }))
+            : []
+    };
+};
+
+const getPosReports = async (req, res) => {
+    const params = resolveReportParameters(req.query);
+    if (params.error) {
+        return res.status(400).json({ message: params.error });
+    }
+
+    try {
+        const reports = await getPosReportsService({
+            start: params.range.start,
+            end: params.range.end,
+            limit: params.limit,
+            inventoryLimit: params.inventoryLimit
+        });
+
+        return res.json({
+            metadata: {
+                maxLimit: REPORT_MAX_LIMIT,
+                maxRangeDays: REPORT_MAX_RANGE_DAYS,
+                defaultRangeDays: REPORT_DEFAULT_RANGE_DAYS
+            },
+            topProducts: normalizeTopProductsReport(reports.topProducts),
+            traffic: normalizeTrafficReport(reports.traffic),
+            inventory: normalizeInventoryReport(reports.inventory)
+        });
+    } catch (error) {
+        console.error('Erro ao gerar relatórios do PDV:', error);
+        return res.status(500).json({ message: 'Não foi possível gerar os relatórios do PDV.' });
+    }
+};
+
+const getTopProductsReport = async (req, res) => {
+    const params = resolveReportParameters(req.query);
+    if (params.error) {
+        return res.status(400).json({ message: params.error });
+    }
+
+    try {
+        const report = await getTopProductsService({
+            start: params.range.start,
+            end: params.range.end,
+            limit: params.limit
+        });
+
+        return res.json({
+            metadata: {
+                maxLimit: REPORT_MAX_LIMIT,
+                maxRangeDays: REPORT_MAX_RANGE_DAYS,
+                defaultRangeDays: REPORT_DEFAULT_RANGE_DAYS
+            },
+            report: normalizeTopProductsReport(report)
+        });
+    } catch (error) {
+        console.error('Erro ao gerar ranking de produtos do PDV:', error);
+        return res.status(500).json({ message: 'Não foi possível gerar o ranking de produtos.' });
+    }
+};
+
+const getTrafficReport = async (req, res) => {
+    const params = resolveReportParameters(req.query);
+    if (params.error) {
+        return res.status(400).json({ message: params.error });
+    }
+
+    try {
+        const report = await getTrafficReportService({
+            start: params.range.start,
+            end: params.range.end
+        });
+
+        return res.json({
+            metadata: {
+                maxRangeDays: REPORT_MAX_RANGE_DAYS,
+                defaultRangeDays: REPORT_DEFAULT_RANGE_DAYS
+            },
+            report: normalizeTrafficReport(report)
+        });
+    } catch (error) {
+        console.error('Erro ao gerar relatório de fluxo do PDV:', error);
+        return res.status(500).json({ message: 'Não foi possível gerar o relatório de fluxo.' });
+    }
+};
+
+const getInventoryReport = async (req, res) => {
+    const params = resolveReportParameters(req.query);
+    if (params.error) {
+        return res.status(400).json({ message: params.error });
+    }
+
+    try {
+        const report = await getInventoryReportService({
+            limit: params.inventoryLimit
+        });
+
+        return res.json({
+            metadata: {
+                maxLimit: MAX_INVENTORY_LIMIT,
+                defaultLimit: DEFAULT_INVENTORY_LIMIT
+            },
+            report: normalizeInventoryReport(report)
+        });
+    } catch (error) {
+        console.error('Erro ao gerar relatório de estoque do PDV:', error);
+        return res.status(500).json({ message: 'Não foi possível gerar o relatório de estoque.' });
     }
 };
 
@@ -174,7 +531,7 @@ const listProducts = async (req, res) => {
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 10, 50);
 
     try {
-        const whereClauses = { active: true };
+        const whereClauses = { status: 'active' };
 
         if (term) {
             const likeTerm = `%${term}%`;
@@ -199,7 +556,7 @@ const listProducts = async (req, res) => {
             name: product.name,
             sku: product.sku,
             unit: product.unit,
-            unitPrice: Number.parseFloat(product.unitPrice || 0),
+            unitPrice: Number.parseFloat(product.price || product.unitPrice || 0),
             taxRate: Number.parseFloat(product.taxRate || 0),
             taxCode: product.taxCode || null
         }));
@@ -242,7 +599,7 @@ const addItem = async (req, res) => {
         }
 
         const product = await Product.findOne({
-            where: { id: productId, active: true },
+            where: { id: productId, status: 'active' },
             transaction,
             lock: transaction.LOCK.SHARE
         });
@@ -539,5 +896,9 @@ module.exports = {
     addPayment,
     finalizeSale,
     getSale,
-    downloadReceipt
+    downloadReceipt,
+    getPosReports,
+    getTopProductsReport,
+    getTrafficReport,
+    getInventoryReport
 };

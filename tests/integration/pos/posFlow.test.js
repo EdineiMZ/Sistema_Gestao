@@ -15,6 +15,10 @@ const { USER_ROLES } = require('../../../src/constants/roles');
 const { createRouterTestApp } = require('../../utils/createRouterTestApp');
 const { authenticateTestUser } = require('../../utils/authTestUtils');
 
+jest.mock('qrcode', () => ({
+    toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=')
+}), { virtual: true });
+
 jest.setTimeout(15000);
 
 describe('Integração PDV - fluxo completo', () => {
@@ -40,8 +44,9 @@ describe('Integração PDV - fluxo completo', () => {
         product = await Product.create({
             name: 'Sérum facial luminoso',
             sku: 'SKU-PDV-001',
+            status: 'active',
+            price: '120.00',
             unit: 'un',
-            unitPrice: '120.00',
             taxRate: '5.00',
             taxCode: '1234.56.78',
             active: true
