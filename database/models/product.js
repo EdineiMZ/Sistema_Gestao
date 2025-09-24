@@ -78,6 +78,16 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(120),
             allowNull: true
         },
+        category: {
+            type: DataTypes.STRING(150),
+            allowNull: true,
+            validate: {
+                len: {
+                    args: [0, 150],
+                    msg: 'Categoria deve ter no máximo 150 caracteres.'
+                }
+            }
+        },
         shortDescription: {
             type: DataTypes.TEXT,
             allowNull: true
@@ -390,6 +400,13 @@ module.exports = (sequelize, DataTypes) => {
             onDelete: 'CASCADE',
             hooks: true
         });
+        if (models.Promotion) {
+            Product.hasMany(models.Promotion, {
+                as: 'promotions',
+                foreignKey: 'targetProductId',
+                onDelete: 'SET NULL'
+            });
+        }
     };
 
     Product.prototype.toSafeJSON = function toSafeJSON() {

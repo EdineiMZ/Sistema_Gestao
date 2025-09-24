@@ -1,0 +1,278 @@
+<%- include('../partials/header') %>
+
+<%
+    const errorBag = validationErrors && typeof validationErrors === 'object' ? validationErrors : {};
+%>
+
+<main class="app-main py-5">
+    <div class="container-xl">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-1"><%= isEdit ? 'Editar promoção' : 'Nova promoção' %></h1>
+                <p class="text-muted mb-0">Defina o escopo e o tipo de desconto para impulsionar as vendas com controle total.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/promotions" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar para a lista
+                </a>
+            </div>
+        </div>
+
+        <form
+            action="<%= isEdit ? `/promotions/${promotion.id}?_method=PUT` : '/promotions' %>"
+            method="POST"
+            class="card shadow-sm border-0"
+        >
+            <div class="card-body p-4 p-lg-5">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Nome da promoção *</label>
+                        <input
+                            type="text"
+                            name="name"
+                            class="form-control <%= errorBag.name ? 'is-invalid' : '' %>"
+                            value="<%= promotion.name || '' %>"
+                            maxlength="180"
+                            required
+                        />
+                        <% if (errorBag.name) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.name.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Tipo de promoção *</label>
+                        <select
+                            name="type"
+                            class="form-select <%= errorBag.type ? 'is-invalid' : '' %>"
+                            data-field="promotion-type"
+                            required
+                        >
+                            <% Object.entries(typeLabels).forEach(([value, label]) => { %>
+                                <option value="<%= value %>" <%= promotion.type === value ? 'selected' : '' %>>
+                                    <%= label %>
+                                </option>
+                            <% }) %>
+                        </select>
+                        <% if (errorBag.type) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.type.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Descrição</label>
+                        <textarea
+                            name="description"
+                            rows="3"
+                            class="form-control"
+                            placeholder="Contextualize a campanha para sua equipe"
+                        ><%= promotion.description || '' %></textarea>
+                    </div>
+                </div>
+
+                <hr class="my-4" />
+
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo de desconto *</label>
+                        <select
+                            name="discountType"
+                            class="form-select <%= errorBag.discountType ? 'is-invalid' : '' %>"
+                            required
+                        >
+                            <% Object.entries(discountLabels).forEach(([value, label]) => { %>
+                                <option value="<%= value %>" <%= promotion.discountType === value ? 'selected' : '' %>>
+                                    <%= label %>
+                                </option>
+                            <% }) %>
+                        </select>
+                        <% if (errorBag.discountType) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.discountType.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Valor do desconto *</label>
+                        <div class="input-group">
+                            <span class="input-group-text" data-prefix-fixed>R$</span>
+                            <span class="input-group-text d-none" data-prefix-percentage>%</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="discountValue"
+                                class="form-control <%= errorBag.discountValue ? 'is-invalid' : '' %>"
+                                value="<%= promotion.discountValue === null ? '' : promotion.discountValue %>"
+                                required
+                            />
+                        </div>
+                        <% if (errorBag.discountValue) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.discountValue.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ativa</label>
+                        <div class="form-switch mt-2">
+                            <input
+                                type="checkbox"
+                                class="form-check-input"
+                                id="promotion-active"
+                                name="isActive"
+                                value="true"
+                                <%= promotion.isActive ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="promotion-active">Disponível para uso imediato</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">Data inicial</label>
+                        <input
+                            type="date"
+                            name="startDate"
+                            class="form-control <%= errorBag.startDate ? 'is-invalid' : '' %>"
+                            value="<%= promotion.startDate || '' %>"
+                        />
+                        <% if (errorBag.startDate) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.startDate.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Data final</label>
+                        <input
+                            type="date"
+                            name="endDate"
+                            class="form-control <%= errorBag.endDate ? 'is-invalid' : '' %>"
+                            value="<%= promotion.endDate || '' %>"
+                        />
+                        <% if (errorBag.endDate) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.endDate.join(' ') %></div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <hr class="my-4" />
+
+                <div class="row g-4" data-scope-fields>
+                    <div class="col-md-6" data-scope="brand">
+                        <label class="form-label">Marca alvo *</label>
+                        <input
+                            type="text"
+                            name="targetBrand"
+                            class="form-control <%= errorBag.targetBrand ? 'is-invalid' : '' %>"
+                            value="<%= promotion.targetBrand || '' %>"
+                            maxlength="150"
+                        />
+                        <% if (errorBag.targetBrand) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.targetBrand.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-6" data-scope="category">
+                        <label class="form-label">Categoria alvo *</label>
+                        <input
+                            type="text"
+                            name="targetCategory"
+                            class="form-control <%= errorBag.targetCategory ? 'is-invalid' : '' %>"
+                            value="<%= promotion.targetCategory || '' %>"
+                            maxlength="150"
+                        />
+                        <% if (errorBag.targetCategory) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.targetCategory.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-md-6" data-scope="product">
+                        <label class="form-label">Produto específico *</label>
+                        <select
+                            name="targetProductId"
+                            class="form-select <%= errorBag.targetProductId ? 'is-invalid' : '' %>"
+                        >
+                            <option value="">Selecione um produto</option>
+                            <% productOptions.forEach((product) => { %>
+                                <option value="<%= product.id %>" <%= Number(promotion.targetProductId) === Number(product.id) ? 'selected' : '' %>>
+                                    <%= product.name %>
+                                    <% if (product.sku) { %> · SKU <%= product.sku %> <% } %>
+                                </option>
+                            <% }) %>
+                        </select>
+                        <% if (errorBag.targetProductId) { %>
+                            <div class="invalid-feedback d-block"><%= errorBag.targetProductId.join(' ') %></div>
+                        <% } %>
+                    </div>
+                    <div class="col-12" data-scope="store">
+                        <div class="alert alert-info d-flex align-items-center gap-2 mb-0">
+                            <i class="bi bi-megaphone"></i>
+                            <div>
+                                Esta promoção será aplicada em todos os produtos da loja ativa.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-0 py-4 text-end">
+                <button type="submit" class="btn btn-gradient px-4">
+                    <i class="bi bi-check2-circle me-2"></i><%= isEdit ? 'Salvar alterações' : 'Criar promoção' %>
+                </button>
+            </div>
+        </form>
+    </div>
+</main>
+
+<script>
+    (function () {
+        const typeField = document.querySelector('[data-field="promotion-type"]');
+        if (!typeField) {
+            return;
+        }
+
+        const scopeGroups = document.querySelectorAll('[data-scope]');
+        const currencyPrefix = document.querySelector('[data-prefix-fixed]');
+        const percentagePrefix = document.querySelector('[data-prefix-percentage]');
+        const discountTypeField = document.querySelector('select[name="discountType"]');
+
+        const toggleScopeFields = () => {
+            const type = typeField.value;
+            scopeGroups.forEach((group) => {
+                const shouldShow = group.getAttribute('data-scope') === type;
+                group.classList.toggle('d-none', !shouldShow);
+                group.querySelectorAll('input, select').forEach((input) => {
+                    if (shouldShow) {
+                        input.removeAttribute('disabled');
+                    } else {
+                        input.setAttribute('disabled', 'disabled');
+                        if (group.getAttribute('data-scope') === 'store') {
+                            input.removeAttribute('disabled');
+                        }
+                    }
+                });
+            });
+
+            const storeNotice = document.querySelector('[data-scope="store"]');
+            if (storeNotice) {
+                storeNotice.classList.toggle('d-none', type !== 'store');
+            }
+        };
+
+        const updateDiscountPrefix = () => {
+            const type = discountTypeField?.value || 'percentage';
+            if (!currencyPrefix || !percentagePrefix) {
+                return;
+            }
+            if (type === 'percentage') {
+                currencyPrefix.classList.add('d-none');
+                percentagePrefix.classList.remove('d-none');
+            } else {
+                percentagePrefix.classList.add('d-none');
+                currencyPrefix.classList.remove('d-none');
+            }
+        };
+
+        typeField.addEventListener('change', toggleScopeFields);
+        if (discountTypeField) {
+            discountTypeField.addEventListener('change', updateDiscountPrefix);
+        }
+
+        toggleScopeFields();
+        updateDiscountPrefix();
+    })();
+</script>
+
+<%- include('../partials/footer') %>

@@ -178,6 +178,8 @@
                         <label class="form-label small text-muted">Produto</label>
                         <div id="selectedProductName" class="fw-semibold"></div>
                         <div id="selectedProductSku" class="text-muted small"></div>
+                        <div id="selectedProductPricing" class="text-success small fw-semibold"></div>
+                        <div id="selectedProductPromotion" class="text-primary small"></div>
                     </div>
                     <div class="row g-3">
                         <div class="col-sm-6">
@@ -451,10 +453,24 @@
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'product-result-card';
+                const hasPromotion = Number(product.promotionDiscount || 0) > 0;
+                const promoBadge = hasPromotion && product.promotion
+                    ? `<span class="badge bg-success-subtle text-success ms-2">${product.promotion.discountLabel}</span>`
+                    : '';
+                const pricingMarkup = hasPromotion
+                    ? `
+                        <div class="d-flex align-items-baseline gap-2">
+                            <span class="fw-semibold text-success">${currencyFormatter.format(product.unitPrice)}</span>
+                            <span class="text-muted small text-decoration-line-through">${currencyFormatter.format(product.originalUnitPrice)}</span>
+                        </div>
+                    `
+                    : `<div class="fw-semibold">${currencyFormatter.format(product.unitPrice)}</div>`;
+                const skuLabel = product.sku ? `SKU ${product.sku}` : 'Sem SKU';
                 button.innerHTML = `
                     <div>
-                        <span class="fw-semibold d-block">${product.name}</span>
-                        <span class="text-muted small">SKU ${product.sku} • ${currencyFormatter.format(product.unitPrice)}</span>
+                        <span class="fw-semibold d-block">${product.name}${promoBadge}</span>
+                        <span class="text-muted small">${skuLabel}</span>
+                        ${pricingMarkup}
                     </div>
                     <i class="bi bi-plus-circle"></i>
                 `;
@@ -487,10 +503,23 @@
             state.selectedProduct = product;
             selectedProductName.textContent = product.name;
             selectedProductSku.textContent = product.sku ? `SKU ${product.sku}` : '';
+            const pricing = document.getElementById('selectedProductPricing');
+            const promoInfo = document.getElementById('selectedProductPromotion');
+            const finalPrice = Number.parseFloat(product.unitPrice || 0) || 0;
+            const originalPrice = Number.parseFloat(product.originalUnitPrice || finalPrice) || 0;
+            const discountValue = Number.parseFloat(product.promotionDiscount || 0) || 0;
+            if (pricing) {
+                pricing.textContent = discountValue > 0
+                    ? `${currencyFormatter.format(finalPrice)} · ${currencyFormatter.format(originalPrice)} sem desconto`
+                    : currencyFormatter.format(finalPrice);
+            }
+            if (promoInfo) {
+                promoInfo.textContent = product.promotion ? product.promotion.discountLabel : '';
+            }
             itemQuantity.value = 1;
-            itemUnitPrice.value = product.unitPrice;
-            itemDiscount.value = 0;
-            itemTax.value = ((product.unitPrice || 0) * ((product.taxRate || 0) / 100)).toFixed(2);
+            itemUnitPrice.value = originalPrice.toFixed(2);
+            itemDiscount.value = discountValue > 0 ? discountValue.toFixed(2) : '0';
+            itemTax.value = (finalPrice * ((product.taxRate || 0) / 100)).toFixed(2);
             addItemModal.show();
         };
 

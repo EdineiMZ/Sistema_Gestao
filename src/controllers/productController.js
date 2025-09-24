@@ -30,7 +30,8 @@ const DEFAULT_FORM_STATE = {
     dimensionsUnit: 'cm',
     variations: [],
     media: [],
-    suppliers: []
+    suppliers: [],
+    category: ''
 };
 
 const wantsJson = (req) => {
@@ -307,6 +308,7 @@ const mapProductPayload = (body) => {
         visibility: PRODUCT_VISIBILITY.includes(body.visibility) ? body.visibility : 'public',
         type: sanitizeString(body.type),
         brand: sanitizeString(body.brand),
+        category: sanitizeString(body.category),
         shortDescription: sanitizeString(body.shortDescription),
         description: sanitizeString(body.description),
         costPrice: parseDecimal(body.costPrice),

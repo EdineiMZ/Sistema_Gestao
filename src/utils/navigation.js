@@ -51,6 +51,13 @@ const rawShortcuts = [
         groups: ['menu', 'quick']
     },
     {
+        label: 'Promoções',
+        route: '/promotions',
+        icon: 'bi-gift',
+        minimumRole: USER_ROLES.MANAGER,
+        groups: ['menu']
+    },
+    {
         label: 'Relatórios PDV',
         route: '/pos/reports',
         icon: 'bi-bar-chart-line',
