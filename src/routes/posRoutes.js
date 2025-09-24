@@ -17,6 +17,12 @@ router.use(authMiddleware);
 router.use(authorize([USER_ROLES.MANAGER, USER_ROLES.SPECIALIST]));
 
 router.get('/', posController.renderPosPage);
+router.get('/reports', posController.renderReportsPage);
+router.get('/reports/overview', posController.getOverviewReport);
+router.get('/reports/top-products', posController.getTopProductsReport);
+router.get('/reports/movements/hourly', posController.getHourlyMovementReport);
+router.get('/reports/movements/daily', posController.getDailyMovementReport);
+router.get('/reports/stock', posController.getStockSnapshot);
 router.get('/products', productSearchValidation, posController.listProducts);
 router.post('/sales', openSaleValidation, posController.openSale);
 router.get('/sales/:saleId', finalizeSaleValidation, posController.getSale);
@@ -24,5 +30,9 @@ router.post('/sales/:saleId/items', addItemValidation, posController.addItem);
 router.post('/sales/:saleId/payments', addPaymentValidation, posController.addPayment);
 router.post('/sales/:saleId/finalize', finalizeSaleValidation, posController.finalizeSale);
 router.get('/sales/:saleId/receipt', finalizeSaleValidation, posController.downloadReceipt);
+router.get('/reports', posController.getPosReports);
+router.get('/reports/top-products', posController.getTopProductsReport);
+router.get('/reports/traffic', posController.getTrafficReport);
+router.get('/reports/inventory', posController.getInventoryReport);
 
 module.exports = router;
