@@ -17,6 +17,7 @@ const PRODUCT_STOCK_STATUS = ['in-stock', 'out-of-stock', 'preorder', 'backorder
 const MEDIA_TYPES = ['image', 'video', 'document'];
 
 const DEFAULT_FORM_STATE = {
+    companyId: null,
     status: 'draft',
     visibility: 'public',
     discountType: 'none',
@@ -37,6 +38,22 @@ const wantsJson = (req) => {
     const acceptHeader = (req.headers.accept || '').toLowerCase();
     const contentType = (req.headers['content-type'] || '').toLowerCase();
     return req.xhr || acceptHeader.includes('application/json') || contentType.includes('application/json');
+};
+
+const resolveCompanyIdFromRequest = (req) => {
+    const directCompanyId = req.user && req.user.companyId !== undefined ? req.user.companyId : null;
+    const sessionCompanyId = req.session && req.session.user
+        ? req.session.user.companyId
+        : null;
+
+    const candidate = directCompanyId ?? sessionCompanyId;
+    const parsed = Number.parseInt(candidate, 10);
+
+    if (Number.isInteger(parsed) && parsed > 0) {
+        return parsed;
+    }
+
+    return null;
 };
 
 const hasValue = (value) => {
@@ -297,7 +314,7 @@ const buildFormStateFromPayload = (productData, variations, media, suppliers, ex
     return formState;
 };
 
-const mapProductPayload = (body) => {
+const mapProductPayload = (body, { companyId } = {}) => {
     const productData = {
         name: sanitizeString(body.name),
         slug: sanitizeSlug(body.slug),
@@ -346,6 +363,11 @@ const mapProductPayload = (body) => {
         canonicalUrl: sanitizeString(body.canonicalUrl),
         metaImageUrl: sanitizeString(body.metaImageUrl)
     };
+
+    const normalizedCompanyId = Number.isInteger(companyId) ? companyId : Number.parseInt(companyId, 10);
+    if (Number.isInteger(normalizedCompanyId) && normalizedCompanyId > 0) {
+        productData.companyId = normalizedCompanyId;
+    }
 
     if (productData.stockQuantity === null || Number.isNaN(productData.stockQuantity)) {
         productData.stockQuantity = 0;
@@ -644,8 +666,15 @@ const productValidationRules = [
     })
 ];
 
-const fetchProductWithRelations = async (productId, transaction) => {
-    return Product.findByPk(productId, {
+const fetchProductWithRelations = async (productId, companyId, transaction) => {
+    const where = { id: productId };
+
+    if (Number.isInteger(companyId) && companyId > 0) {
+        where.companyId = companyId;
+    }
+
+    return Product.findOne({
+        where,
         include: [
             { model: ProductVariation, as: 'variations' },
             { model: ProductMedia, as: 'media' },
@@ -662,7 +691,15 @@ const fetchProductWithRelations = async (productId, transaction) => {
 
 const listProducts = async (req, res) => {
     try {
+        const companyId = resolveCompanyIdFromRequest(req);
+        const where = {};
+
+        if (Number.isInteger(companyId) && companyId > 0) {
+            where.companyId = companyId;
+        }
+
         const products = await Product.findAll({
+            where,
             include: [
                 { model: ProductVariation, as: 'variations' },
                 { model: ProductMedia, as: 'media' },
@@ -694,9 +731,10 @@ const listProducts = async (req, res) => {
 };
 
 const renderCreateForm = (req, res) => {
+    const companyId = resolveCompanyIdFromRequest(req);
     res.locals.pageTitle = 'Novo produto';
     return res.render('products/form', {
-        product: { ...DEFAULT_FORM_STATE },
+        product: { ...DEFAULT_FORM_STATE, companyId },
         isEdit: false,
         validationErrors: {}
     });
@@ -704,7 +742,8 @@ const renderCreateForm = (req, res) => {
 
 const renderEditForm = async (req, res) => {
     try {
-        const product = await fetchProductWithRelations(req.params.id);
+        const companyId = resolveCompanyIdFromRequest(req);
+        const product = await fetchProductWithRelations(req.params.id, companyId);
 
         if (!product) {
             req.flash('error_msg', 'Produto não encontrado.');
@@ -730,7 +769,8 @@ const renderEditForm = async (req, res) => {
 
 const showProductDetail = async (req, res) => {
     try {
-        const product = await fetchProductWithRelations(req.params.id);
+        const companyId = resolveCompanyIdFromRequest(req);
+        const product = await fetchProductWithRelations(req.params.id, companyId);
 
         if (!product) {
             if (wantsJson(req)) {
@@ -762,8 +802,9 @@ const showProductDetail = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
+    const companyId = resolveCompanyIdFromRequest(req);
     const validation = validationResult(req);
-    const { productData, variations, media, suppliers } = mapProductPayload(req.body);
+    const { productData, variations, media, suppliers } = mapProductPayload(req.body, { companyId });
     const formState = buildFormStateFromPayload(productData, variations, media, suppliers);
 
     if (!validation.isEmpty()) {
@@ -798,7 +839,7 @@ const createProduct = async (req, res) => {
             }
         });
 
-        const freshProduct = await fetchProductWithRelations(createdProduct.id);
+        const freshProduct = await fetchProductWithRelations(createdProduct.id, productData.companyId);
         const mapped = mapProductInstance(freshProduct);
 
         if (wantsJson(req)) {
@@ -813,7 +854,8 @@ const createProduct = async (req, res) => {
 };
 
 const updateProduct = async (req, res) => {
-    const product = await fetchProductWithRelations(req.params.id);
+    const companyId = resolveCompanyIdFromRequest(req);
+    const product = await fetchProductWithRelations(req.params.id, companyId);
 
     if (!product) {
         if (wantsJson(req)) {
@@ -824,7 +866,7 @@ const updateProduct = async (req, res) => {
     }
 
     const validation = validationResult(req);
-    const { productData, variations, media, suppliers } = mapProductPayload(req.body);
+    const { productData, variations, media, suppliers } = mapProductPayload(req.body, { companyId });
     const formState = buildFormStateFromPayload({ ...mapProductInstance(product), ...productData }, variations, media, suppliers, { id: product.id });
 
     if (!validation.isEmpty()) {
@@ -861,7 +903,7 @@ const updateProduct = async (req, res) => {
             }
         });
 
-        const freshProduct = await fetchProductWithRelations(product.id);
+        const freshProduct = await fetchProductWithRelations(product.id, companyId);
         const mapped = mapProductInstance(freshProduct);
 
         if (wantsJson(req)) {
@@ -877,7 +919,14 @@ const updateProduct = async (req, res) => {
 
 const deleteProduct = async (req, res) => {
     try {
-        const product = await Product.findByPk(req.params.id);
+        const companyId = resolveCompanyIdFromRequest(req);
+        const where = { id: req.params.id };
+
+        if (Number.isInteger(companyId) && companyId > 0) {
+            where.companyId = companyId;
+        }
+
+        const product = await Product.findOne({ where });
 
         if (!product) {
             if (wantsJson(req)) {
