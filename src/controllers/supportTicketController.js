@@ -1,6 +1,7 @@
 const { TICKET_STATUSES, isSupportAgentRole } = require('../constants/support');
 const { ROLE_LABELS, USER_ROLES, roleAtLeast } = require('../constants/roles');
 const supportTicketService = require('../services/supportTicketService');
+const supportChatbotService = require('../services/supportChatbotService');
 
 const STATUS_LABELS = Object.freeze({
     [TICKET_STATUSES.PENDING]: 'Pendente',
@@ -231,6 +232,7 @@ const supportTicketController = {
             const tickets = await supportTicketService.listTicketsForUser({ user });
             const isAgent = isSupportAgentRole(user.role);
             const isAdmin = roleAtLeast(user.role, USER_ROLES.ADMIN);
+            const chatbotTopics = supportChatbotService.listTopics();
 
             res.render('support/tickets', {
                 tickets,
@@ -238,6 +240,7 @@ const supportTicketController = {
                 isAgent,
                 isAdmin,
                 user,
+                chatbotTopics,
                 appName: req.app?.locals?.appName || 'Sistema de Gestão',
                 roleLabels: ROLE_LABELS,
                 notifications: [],

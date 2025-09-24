@@ -38,5 +38,10 @@ router.get(
     authMiddleware,
     supportController.downloadAttachment
 );
+router.post(
+    '/chatbot/start-chat',
+    authMiddleware,
+    supportController.startChatFromChatbot
+);
 
 module.exports = router;
