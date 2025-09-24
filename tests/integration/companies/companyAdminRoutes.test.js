@@ -81,11 +81,34 @@ describe('Rotas administrativas de empresas', () => {
     });
 
     it('retorna dados preenchidos automaticamente via API', async () => {
-        lookupCompanyByCnpj.mockResolvedValueOnce({
+        const lookupPayload = {
             cnpj: '12345678000199',
             corporateName: 'Empresa API SA',
-            tradeName: 'Empresa API'
-        });
+            tradeName: 'Empresa API',
+            stateRegistration: '123.456.789.000',
+            municipalRegistration: '987654',
+            taxRegime: 'Simples Nacional',
+            email: 'contato@empresaapi.com',
+            phone: '1133224455',
+            mobilePhone: '11987654321',
+            website: 'https://empresaapi.com',
+            openingDate: '2020-01-01',
+            zipCode: '12345678',
+            addressLine: 'Rua das Flores',
+            number: '100',
+            complement: 'Sala 2',
+            neighborhood: 'Centro',
+            city: 'São Paulo',
+            state: 'SP',
+            country: 'Brasil',
+            status: 'active',
+            primaryActivity: {
+                code: '62.01-5-01',
+                description: 'Desenvolvimento de programas de computador sob encomenda'
+            }
+        };
+
+        lookupCompanyByCnpj.mockResolvedValueOnce(lookupPayload);
 
         const agent = await buildAgent();
         const response = await agent
@@ -94,14 +117,7 @@ describe('Rotas administrativas de empresas', () => {
             .set('Accept', 'application/json');
 
         expect(response.status).toBe(200);
-        expect(response.body).toEqual({
-            success: true,
-            data: {
-                cnpj: '12345678000199',
-                corporateName: 'Empresa API SA',
-                tradeName: 'Empresa API'
-            }
-        });
+        expect(response.body).toEqual({ success: true, data: lookupPayload });
         expect(lookupCompanyByCnpj).toHaveBeenCalledWith('12.345.678/0001-99', { forceRefresh: false });
     });
 
