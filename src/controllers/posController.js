@@ -22,6 +22,7 @@ const {
     DEFAULT_INVENTORY_LIMIT,
     MAX_INVENTORY_LIMIT
 } = require('../services/posReportingService');
+const { applyPromotionsToProducts } = require('../services/promotionService');
 
 const APP_NAME = process.env.APP_NAME || 'Sistema de Gestão Inteligente';
 const COMPANY_NAME = process.env.COMPANY_NAME || APP_NAME;
@@ -1055,25 +1056,41 @@ const listProducts = async (req, res) => {
             limit,
             order: [['name', 'ASC']]
         });
-        const formatted = products.map((product) => {
-            const normalizedUnitPrice =
-                product.unitPrice !== undefined && product.unitPrice !== null
-                    ? product.unitPrice
-                    : product.price;
 
+        const productsWithPromotions = await applyPromotionsToProducts(products);
+
+        const formatted = productsWithPromotions.map(({ product, finalPrice, originalPrice, discountAmount, promotion }) => {
             const rawUnit = typeof product.unit === 'string' ? product.unit.trim() : null;
             const normalizedUnit = rawUnit ? rawUnit.toUpperCase() : null;
             const unit = normalizedUnit && normalizedUnit !== 'UN' ? normalizedUnit : DEFAULT_POS_UNIT_LABEL;
+            const resolvedOriginal = Number.parseFloat(originalPrice ?? 0) || 0;
+            const resolvedFinal = Number.parseFloat(finalPrice ?? resolvedOriginal) || 0;
+            const resolvedDiscount = Number.parseFloat(
+                discountAmount !== undefined && discountAmount !== null
+                    ? discountAmount
+                    : resolvedOriginal - resolvedFinal
+            ) || 0;
 
             return {
                 id: product.id,
                 name: product.name,
                 sku: product.sku,
                 unit,
-                unitPrice: Number.parseFloat(normalizedUnitPrice || 0),
+                unitPrice: Number(resolvedFinal.toFixed(2)),
+                originalUnitPrice: Number(resolvedOriginal.toFixed(2)),
+                promotionDiscount: resolvedDiscount > 0 ? Number(resolvedDiscount.toFixed(2)) : 0,
                 taxRate: Number.parseFloat(product.taxRate || 0),
                 fiscalCode: product.ncmCode || DEFAULT_POS_FISCAL_CODE,
-                taxCode: product.taxCode || null
+                taxCode: product.taxCode || null,
+                promotion: promotion
+                    ? {
+                        id: promotion.id,
+                        name: promotion.name,
+                        type: promotion.type,
+                        targetLabel: promotion.targetLabel,
+                        discountLabel: promotion.discountLabel
+                    }
+                    : null
             };
         });
 

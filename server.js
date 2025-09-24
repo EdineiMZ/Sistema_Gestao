@@ -61,7 +61,7 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const posRoutes = require('./src/routes/posRoutes');
-const storeRoutes = require('./src/routes/storeRoutes');
+const promotionRoutes = require('./src/routes/promotionRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -288,7 +288,8 @@ app.use('/admin', adminRoutes);
 app.use('/products', productRoutes);
 app.use('/support', supportRoutes);
 app.use('/pos', posRoutes);
-app.use('/store', storeRoutes);
+app.use('/promotions', promotionRoutes);
+
 
 
 // Conexão DB
