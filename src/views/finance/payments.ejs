@@ -445,7 +445,8 @@
                                         </span>
                                     </td>
                                     <td class="text-center">
-                                        <div class="btn-group btn-group-sm" role="group">
+                                        <% const canMarkAsPaid = entry.status !== 'paid' && entry.status !== 'cancelled'; %>
+                                        <div class="btn-group btn-group-sm flex-wrap" role="group">
                                             <button
                                                 class="btn btn-outline-primary"
                                                 type="button"
@@ -466,6 +467,30 @@
                                             >
                                                 <i class="bi bi-pencil-square" aria-hidden="true"></i>
                                             </button>
+                                            <% if (canMarkAsPaid) { %>
+                                                <form
+                                                    action="/finance/pay/<%= entry.id %>"
+                                                    method="POST"
+                                                    class="d-inline"
+                                                    data-finance-pay-form
+                                                    data-entry-id="<%= entry.id %>"
+                                                    data-entry-description="<%= entry.description %>"
+                                                >
+                                                    <% if (resolvedCsrfToken) { %>
+                                                        <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />
+                                                    <% } %>
+                                                    <button
+                                                        class="btn btn-outline-success d-inline-flex align-items-center gap-1"
+                                                        type="submit"
+                                                        data-finance-pay-submit
+                                                        title="Marcar lançamento como pago"
+                                                        aria-label="Marcar lançamento como pago"
+                                                    >
+                                                        <i class="bi bi-cash-coin" aria-hidden="true"></i>
+                                                        <span class="d-none d-md-inline">Pagar</span>
+                                                    </button>
+                                                </form>
+                                            <% } %>
                                             <form action="/finance/delete/<%= entry.id %>?_method=DELETE" method="POST" class="d-inline">
                                                 <% if (resolvedCsrfToken) { %>
                                                     <input type="hidden" name="_csrf" value="<%= resolvedCsrfToken %>" />

@@ -20,6 +20,7 @@ const buildFinanceRoutes = () => {
         commitFinanceImport: jest.fn((req, res) => res.status(201).json({ ok: true, route: 'finance.commit' })),
         createFinanceEntry: jest.fn((req, res) => res.status(201).json({ ok: true, route: 'finance.create' })),
         updateFinanceEntry: jest.fn((req, res) => res.json({ ok: true, route: 'finance.update', id: req.params.id })),
+        markFinanceEntryAsPaid: jest.fn((req, res) => res.json({ ok: true, route: 'finance.pay', id: req.params.id })),
         deleteFinanceEntry: jest.fn((req, res) => res.status(204).end()),
         updateBudgetThresholds: jest.fn((req, res) => res.json({ ok: true, route: 'finance.thresholds' })),
         saveFinanceGoal: jest.fn((req, res) => res.json({ ok: true, route: 'finance.goal.save' })),

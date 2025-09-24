@@ -9,6 +9,7 @@ const reportChartService = require('../services/reportChartService');
 const financeImportService = require('../services/financeImportService');
 const investmentSimulationService = require('../services/investmentSimulationService');
 const fileStorageService = require('../services/fileStorageService');
+const csrfProtection = require('../middlewares/csrfProtection');
 const { getBudgetThresholdDefaults, isBudgetAlertEnabled } = require('../../config/default');
 const { utils: reportingUtils, constants: financeConstants } = financeReportingService;
 const { DEFAULT_STATUS_META: SERVICE_STATUS_META, normalizeThresholdList } = reportingUtils;
@@ -1432,6 +1433,10 @@ const renderPaymentsPage = async (req, res) => {
             req.session.financeImportPreview = null;
         }
 
+        const csrfToken = typeof csrfProtection?.ensureCsrfToken === 'function'
+            ? csrfProtection.ensureCsrfToken(req, res)
+            : null;
+
         res.render('finance/payments', {
             pageTitle: 'Financeiro • Pagamentos',
             entries: safeEntries,
@@ -1446,7 +1451,8 @@ const renderPaymentsPage = async (req, res) => {
             contributionFrequencyLabels: CONTRIBUTION_FREQUENCY_LABELS,
             importPreview,
             pagination: paginationMeta,
-            formatCurrency
+            formatCurrency,
+            csrfToken
         });
     } catch (error) {
         console.error('Erro ao listar lançamentos financeiros:', error);
@@ -1551,6 +1557,114 @@ module.exports = {
     renderPaymentsPage,
     renderInvestmentsPage,
     listFinanceEntries: renderPaymentsPage,
+    markFinanceEntryAsPaid: async (req, res) => {
+        try {
+            const currentUserId = resolveCurrentUserId(req);
+            if (currentUserId === null) {
+                const message = 'Usuário não autenticado.';
+                if (wantsJsonResponse(req)) {
+                    return res.status(403).json({ ok: false, message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance/payments');
+            }
+
+            const entryId = parsePositiveInteger(req.params?.id);
+            if (!entryId) {
+                const message = 'Identificador do lançamento inválido.';
+                if (wantsJsonResponse(req)) {
+                    return res.status(400).json({ ok: false, message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance/payments');
+            }
+
+            if (!FinanceEntry || typeof FinanceEntry.findOne !== 'function') {
+                const message = 'Recurso de lançamentos indisponível no momento.';
+                if (wantsJsonResponse(req)) {
+                    return res.status(503).json({ ok: false, message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance/payments');
+            }
+
+            const entry = await FinanceEntry.findOne({
+                where: { id: entryId, userId: currentUserId }
+            });
+
+            if (!entry) {
+                const message = 'Lançamento não encontrado ou sem permissão de acesso.';
+                if (wantsJsonResponse(req)) {
+                    return res.status(404).json({ ok: false, message });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance/payments');
+            }
+
+            const currentStatus = typeof entry.status === 'string' ? entry.status : 'pending';
+            const allowedStatuses = new Set(['pending', 'overdue']);
+
+            if (!allowedStatuses.has(currentStatus)) {
+                const message = currentStatus === 'paid'
+                    ? 'Este lançamento já foi marcado como pago.'
+                    : 'O status atual do lançamento não permite quitação.';
+                if (wantsJsonResponse(req)) {
+                    return res.status(400).json({ ok: false, message, status: currentStatus });
+                }
+                req.flash('error_msg', message);
+                return res.redirect('/finance/payments');
+            }
+
+            let resolvedPaymentDate = null;
+            if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'paymentDate')) {
+                const rawPaymentDate = req.body.paymentDate;
+                if (rawPaymentDate !== undefined && rawPaymentDate !== null && String(rawPaymentDate).trim()) {
+                    const normalizedPaymentDate = normalizeDateOnlyInput(rawPaymentDate);
+                    if (!normalizedPaymentDate) {
+                        const message = 'Data de pagamento informada é inválida.';
+                        if (wantsJsonResponse(req)) {
+                            return res.status(400).json({ ok: false, message });
+                        }
+                        req.flash('error_msg', message);
+                        return res.redirect('/finance/payments');
+                    }
+                    resolvedPaymentDate = normalizedPaymentDate;
+                }
+            }
+
+            if (!resolvedPaymentDate) {
+                const now = new Date();
+                resolvedPaymentDate = formatDateOnly(
+                    now.getFullYear(),
+                    now.getMonth() + 1,
+                    now.getDate()
+                );
+            }
+
+            entry.status = 'paid';
+            entry.paymentDate = resolvedPaymentDate;
+
+            await entry.save({ fields: ['status', 'paymentDate'] });
+
+            const serializedEntry = serializeEntryForView(entry);
+            const message = 'Lançamento marcado como pago com sucesso.';
+
+            if (wantsJsonResponse(req)) {
+                return res.json({ ok: true, message, entry: serializedEntry });
+            }
+
+            req.flash('success_msg', message);
+            return res.redirect('/finance/payments');
+        } catch (error) {
+            console.error('Erro ao marcar lançamento financeiro como pago:', error);
+            const message = 'Erro ao marcar lançamento como pago.';
+            if (wantsJsonResponse(req)) {
+                return res.status(500).json({ ok: false, message });
+            }
+            req.flash('error_msg', message);
+            return res.redirect('/finance/payments');
+        }
+    },
 
     updateBudgetThresholds: async (req, res) => {
         try {
