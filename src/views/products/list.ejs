@@ -25,7 +25,8 @@
     </div>
 <% } %>
 
-<% const formatMoney = (value, currency = 'BRL') => {
+<%
+const formatMoney = (value, currency = 'BRL') => {
     if (value === undefined || value === null || value === '') {
         return '—';
     }
@@ -34,9 +35,83 @@
     } catch (error) {
         return Number(value).toFixed(2);
     }
-}; %>
+};
+
+const currentFilters = (typeof filters === 'object' && filters) ? filters : {};
+const brandOptions = (availableFilters && Array.isArray(availableFilters.brands)) ? availableFilters.brands : [];
+const typeOptions = (availableFilters && Array.isArray(availableFilters.types)) ? availableFilters.types : [];
+const sortOptionsList = Array.isArray(sortOptions) && sortOptions.length ? sortOptions : [
+    { value: 'created-desc', label: 'Mais recentes' },
+    { value: 'price-asc', label: 'Menor preço → Maior preço' },
+    { value: 'price-desc', label: 'Maior preço → Menor preço' },
+    { value: 'name-asc', label: 'Nome (A → Z)' },
+    { value: 'name-desc', label: 'Nome (Z → A)' }
+];
+const activeBadges = [];
+if (currentFilters.description) {
+    activeBadges.push({ label: 'Descrição', value: currentFilters.description });
+}
+if (currentFilters.brand) {
+    activeBadges.push({ label: 'Marca', value: currentFilters.brand });
+}
+if (currentFilters.type) {
+    activeBadges.push({ label: 'Categoria', value: currentFilters.type });
+}
+if (currentFilters.sort && currentFilters.sort !== 'created-desc') {
+    const activeSort = sortOptionsList.find((option) => option.value === currentFilters.sort);
+    if (activeSort) {
+        activeBadges.push({ label: 'Ordenação', value: activeSort.label });
+    }
+}
+%>
 
 <div class="card shadow-sm border-0">
+    <div class="card-body border-bottom bg-light-subtle">
+        <form class="row g-3 g-md-4 align-items-end" method="GET">
+            <div class="col-12 col-md-6 col-lg-4">
+                <label for="description" class="form-label small text-uppercase text-muted">Descrição</label>
+                <input type="text" class="form-control" id="description" name="description" placeholder="Buscar termos da descrição" value="<%= currentFilters.description || '' %>" autocomplete="off">
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <label for="brand" class="form-label small text-uppercase text-muted">Marca</label>
+                <input type="text" class="form-control" id="brand" name="brand" placeholder="Todas" value="<%= currentFilters.brand || '' %>" list="brand-options" autocomplete="off">
+                <datalist id="brand-options">
+                    <% brandOptions.forEach((brand) => { %>
+                        <option value="<%= brand %>"></option>
+                    <% }) %>
+                </datalist>
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <label for="type" class="form-label small text-uppercase text-muted">Tipo de produto</label>
+                <input type="text" class="form-control" id="type" name="type" placeholder="Todas" value="<%= currentFilters.type || '' %>" list="type-options" autocomplete="off">
+                <datalist id="type-options">
+                    <% typeOptions.forEach((type) => { %>
+                        <option value="<%= type %>"></option>
+                    <% }) %>
+                </datalist>
+            </div>
+            <div class="col-12 col-lg-2">
+                <label for="sort" class="form-label small text-uppercase text-muted">Ordenar por</label>
+                <select class="form-select" id="sort" name="sort">
+                    <% sortOptionsList.forEach((option) => { %>
+                        <option value="<%= option.value %>" <%= (currentFilters.sort || 'created-desc') === option.value ? 'selected' : '' %>><%= option.label %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="col-12 col-lg-12 d-flex gap-2 justify-content-end">
+                <a href="/products" class="btn btn-outline-secondary">Limpar filtros</a>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-2"></i>Aplicar</button>
+            </div>
+        </form>
+        <% if (activeBadges.length) { %>
+            <div class="mt-3">
+                <span class="text-muted small me-2">Filtros ativos:</span>
+                <% activeBadges.forEach((badge) => { %>
+                    <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis me-2 mb-1"><%= badge.label %>: <%= badge.value %></span>
+                <% }) %>
+            </div>
+        <% } %>
+    </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -55,7 +130,10 @@
                     <% if (!products.length) { %>
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">
-                                Nenhum produto cadastrado até o momento.
+                                <div class="mb-2">Nenhum produto encontrado para os filtros selecionados.</div>
+                                <a href="/products" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtros
+                                </a>
                             </td>
                         </tr>
                     <% } %>

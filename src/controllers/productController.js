@@ -9,12 +9,20 @@ const {
     ProductSupplier,
     Sequelize
 } = require('../../database/models');
+const { Op } = Sequelize;
 
 const PRODUCT_STATUS = ['draft', 'active', 'inactive', 'archived'];
 const PRODUCT_VISIBILITY = ['public', 'private', 'restricted'];
 const PRODUCT_DISCOUNT_TYPES = ['none', 'percentage', 'fixed'];
 const PRODUCT_STOCK_STATUS = ['in-stock', 'out-of-stock', 'preorder', 'backorder'];
 const MEDIA_TYPES = ['image', 'video', 'document'];
+const SORT_OPTIONS = [
+    { value: 'created-desc', label: 'Mais recentes' },
+    { value: 'price-asc', label: 'Menor preço → Maior preço' },
+    { value: 'price-desc', label: 'Maior preço → Menor preço' },
+    { value: 'name-asc', label: 'Nome (A → Z)' },
+    { value: 'name-desc', label: 'Nome (Z → A)' }
+];
 
 const DEFAULT_FORM_STATE = {
     status: 'draft',
@@ -193,6 +201,50 @@ const normalizeArrayPayload = (value) => {
     }
 
     return [];
+};
+
+const sanitizeFilterValue = (value) => {
+    const sanitized = sanitizeString(value);
+    if (!sanitized) {
+        return null;
+    }
+
+    return sanitized.slice(0, 180);
+};
+
+const escapeLikeWildcards = (value) => value.replace(/[\\%_]/g, (match) => `\\${match}`);
+
+const buildFuzzyPattern = (value) => {
+    if (!value) {
+        return '%';
+    }
+
+    const escaped = escapeLikeWildcards(value);
+    return `%${escaped.replace(/\s+/g, '%')}%`;
+};
+
+const collectUniqueValues = (records, key) => {
+    const unique = new Map();
+
+    records.forEach((record) => {
+        if (!record || typeof record[key] !== 'string') {
+            return;
+        }
+
+        const trimmed = record[key].trim();
+        if (!trimmed) {
+            return;
+        }
+
+        const normalized = trimmed.toLowerCase();
+        if (!unique.has(normalized)) {
+            unique.set(normalized, trimmed);
+        }
+    });
+
+    return Array.from(unique.values()).sort((a, b) =>
+        a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    );
 };
 
 const parseJSONField = (value) => {
@@ -662,26 +714,113 @@ const fetchProductWithRelations = async (productId, transaction) => {
 
 const listProducts = async (req, res) => {
     try {
-        const products = await Product.findAll({
-            include: [
-                { model: ProductVariation, as: 'variations' },
-                { model: ProductMedia, as: 'media' },
-                { model: ProductSupplier, as: 'suppliers' }
-            ],
-            order: [['createdAt', 'DESC']],
-            limit: 100
-        });
+        const filters = {
+            description: sanitizeFilterValue(req.query?.description),
+            brand: sanitizeFilterValue(req.query?.brand),
+            type: sanitizeFilterValue(req.query?.type)
+        };
+
+        const requestedSort = sanitizeFilterValue(req.query?.sort) || 'created-desc';
+        const selectedSort = SORT_OPTIONS.some((option) => option.value === requestedSort)
+            ? requestedSort
+            : 'created-desc';
+
+        const likeOperator = sequelize.getDialect() === 'postgres' ? Op.iLike : Op.like;
+        const conditions = [];
+
+        if (filters.description) {
+            const pattern = buildFuzzyPattern(filters.description);
+            conditions.push({
+                [Op.or]: [
+                    { description: { [likeOperator]: pattern } },
+                    { shortDescription: { [likeOperator]: pattern } }
+                ]
+            });
+        }
+
+        if (filters.brand) {
+            conditions.push({
+                brand: { [likeOperator]: buildFuzzyPattern(filters.brand) }
+            });
+        }
+
+        if (filters.type) {
+            conditions.push({
+                type: { [likeOperator]: buildFuzzyPattern(filters.type) }
+            });
+        }
+
+        const where = conditions.length ? { [Op.and]: conditions } : undefined;
+
+        const order = [];
+        switch (selectedSort) {
+            case 'price-asc':
+                order.push(['price', 'ASC']);
+                break;
+            case 'price-desc':
+                order.push(['price', 'DESC']);
+                break;
+            case 'name-asc':
+                order.push([sequelize.fn('lower', sequelize.col('name')), 'ASC']);
+                order.push(['name', 'ASC']);
+                break;
+            case 'name-desc':
+                order.push([sequelize.fn('lower', sequelize.col('name')), 'DESC']);
+                order.push(['name', 'DESC']);
+                break;
+            default:
+                order.push(['createdAt', 'DESC']);
+                break;
+        }
+
+        if (selectedSort !== 'created-desc') {
+            order.push(['createdAt', 'DESC']);
+        }
+
+        const [products, brandRecords, typeRecords] = await Promise.all([
+            Product.findAll({
+                where,
+                include: [
+                    { model: ProductVariation, as: 'variations' },
+                    { model: ProductMedia, as: 'media' },
+                    { model: ProductSupplier, as: 'suppliers' }
+                ],
+                order,
+                limit: 100
+            }),
+            Product.findAll({
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('brand')), 'brand']],
+                raw: true
+            }),
+            Product.findAll({
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('type')), 'type']],
+                raw: true
+            })
+        ]);
 
         const formatted = products.map(mapProductInstance);
+        const availableFilters = {
+            brands: collectUniqueValues(brandRecords, 'brand'),
+            types: collectUniqueValues(typeRecords, 'type')
+        };
+
+        const responsePayload = {
+            data: formatted,
+            filters: { ...filters, sort: selectedSort },
+            availableFilters
+        };
 
         if (wantsJson(req)) {
-            return res.json({ data: formatted });
+            return res.json(responsePayload);
         }
 
         res.locals.pageTitle = 'Produtos';
 
         return res.render('products/list', {
-            products: formatted
+            products: formatted,
+            filters: responsePayload.filters,
+            availableFilters,
+            sortOptions: SORT_OPTIONS
         });
     } catch (error) {
         console.error('[productController] Falha ao listar produtos:', error);
