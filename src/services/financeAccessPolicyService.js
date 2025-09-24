@@ -1,7 +1,17 @@
 const { FinanceAccessPolicy } = require('../../database/models');
-const { USER_ROLES, parseRole, sortRolesByHierarchy } = require('../constants/roles');
+const {
+    USER_ROLES,
+    parseRole,
+    sortRolesByHierarchy,
+    roleAtLeast
+} = require('../constants/roles');
 
-const DEFAULT_ALLOWED_ROLES = [USER_ROLES.CLIENT];
+const INTERNAL_MINIMUM_ROLE = USER_ROLES.MANAGER;
+
+const DEFAULT_ALLOWED_ROLES = sortRolesByHierarchy([
+    USER_ROLES.MANAGER,
+    USER_ROLES.ADMIN
+]);
 const POLICY_KEY = FinanceAccessPolicy?.DEFAULT_POLICY_KEY || 'finance_access';
 
 let cachedPolicy = null;
@@ -40,13 +50,23 @@ const sanitizeRoles = (roles) => sortRolesByHierarchy(
     toArray(roles).map((role) => parseRole(role)).filter(Boolean)
 );
 
+const filterInternalRoles = (roles) =>
+    sanitizeRoles(roles).filter((role) => roleAtLeast(role, INTERNAL_MINIMUM_ROLE));
+
 const resolveEnvFallbackRoles = () => {
     const envValue = process.env.FINANCE_ALLOWED_ROLES;
-    const resolved = sanitizeRoles(envValue);
+    const resolved = filterInternalRoles(envValue);
     if (resolved.length) {
         return resolved;
     }
-    return [...DEFAULT_ALLOWED_ROLES];
+
+    if (DEFAULT_ALLOWED_ROLES.length) {
+        return [...DEFAULT_ALLOWED_ROLES];
+    }
+
+    const error = new Error('Finance allowed roles fallback is not properly configured.');
+    error.code = 'FINANCE_FALLBACK_MISCONFIGURED';
+    throw error;
 };
 
 const buildPolicy = ({

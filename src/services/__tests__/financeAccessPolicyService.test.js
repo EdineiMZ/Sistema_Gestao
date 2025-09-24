@@ -63,6 +63,44 @@ test('getAllowedRoles usa fallback do ambiente quando não há política persist
     assert.deepStrictEqual(roles, [USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
 });
 
+test('getAllowedRoles aplica fallback seguro quando nenhuma role interna é configurada', async (t) => {
+    process.env.FINANCE_ALLOWED_ROLES = `${USER_ROLES.CLIENT},invalid-role`;
+    const restoreModels = mockModels({
+        FinanceAccessPolicy: {
+            findOne: async () => null
+        }
+    });
+
+    t.teardown(() => {
+        restoreModels();
+        resetEnv();
+    });
+
+    const service = loadService();
+    const roles = await service.getAllowedRoles();
+
+    assert.deepStrictEqual(roles, [USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
+});
+
+test('getAllowedRoles falha de forma segura quando nenhuma configuração está disponível', async (t) => {
+    delete process.env.FINANCE_ALLOWED_ROLES;
+    const restoreModels = mockModels({
+        FinanceAccessPolicy: {
+            findOne: async () => null
+        }
+    });
+
+    t.teardown(() => {
+        restoreModels();
+        resetEnv();
+    });
+
+    const service = loadService();
+    const roles = await service.getAllowedRoles();
+
+    assert.deepStrictEqual(roles, [USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
+});
+
 test('getFinanceAccessPolicy retorna perfis persistidos e metadados', async (t) => {
     const updatedAt = new Date('2024-10-01T10:15:00Z');
     const restoreModels = mockModels({
@@ -136,11 +174,11 @@ test('saveFinanceAccessPolicy persiste, invalida cache e ordena perfis', async (
     });
 
     const initialRoles = await service.getAllowedRoles();
-    assert.deepStrictEqual(initialRoles, [USER_ROLES.CLIENT]);
+    assert.deepStrictEqual(initialRoles, [USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
     assert.equal(findOneCalls, 1);
 
     const cachedRoles = await service.getAllowedRoles();
-    assert.deepStrictEqual(cachedRoles, [USER_ROLES.CLIENT]);
+    assert.deepStrictEqual(cachedRoles, [USER_ROLES.MANAGER, USER_ROLES.ADMIN]);
     assert.equal(findOneCalls, 1);
 
     const policy = await service.saveFinanceAccessPolicy({
