@@ -3,6 +3,7 @@ const { Company, User, sequelize } = require('../../database/models');
 const logger = require('../utils/logger');
 const { DEFAULT_COMPANY_ACCESS_LEVEL, normalizeCompanyAccessLevel } = require('../constants/companyAccessLevels');
 const { lookupCompanyByCnpj, CompanyLookupError } = require('../services/companyLookup');
+const paymentTokenService = require('../services/paymentTokenService');
 
 const STATUS_VALUES = ['active', 'inactive'];
 const LIKE_OPERATOR =
@@ -165,7 +166,9 @@ const companyController = {
                 status: 'active',
                 companyAccessLevel: DEFAULT_COMPANY_ACCESS_LEVEL
             },
-            mode: 'create'
+            mode: 'create',
+            paymentTokens: [],
+            tokenSecretConfigured: paymentTokenService.isSecretConfigured()
         });
     },
 
@@ -196,15 +199,57 @@ const companyController = {
                 return res.redirect('/admin/companies');
             }
 
+            const plainCompany = toPlainCompany(company);
+            const paymentTokens = await paymentTokenService.listTokens(company.id).catch((error) => {
+                logger.error('Erro ao listar tokens de pagamento', error);
+                return [];
+            });
+
             res.render('companies/form', {
                 pageTitle: 'Editar empresa',
-                company: toPlainCompany(company),
-                mode: 'edit'
+                company: plainCompany,
+                mode: 'edit',
+                paymentTokens,
+                tokenSecretConfigured: paymentTokenService.isSecretConfigured(),
+                normalizedCompanyCnpj: paymentTokenService.normalizeCnpj(plainCompany.cnpj)
             });
         } catch (error) {
             logger.error('Erro ao exibir formulário de empresa', error);
             req.flash('error_msg', 'Não foi possível carregar a empresa.');
             res.redirect('/admin/companies');
+        }
+    },
+
+    savePaymentToken: async (req, res) => {
+        const { id } = req.params;
+        const { apiName, bankName, provider, token } = req.body || {};
+
+        try {
+            await paymentTokenService.saveToken({
+                companyId: id,
+                apiName,
+                bankName,
+                provider,
+                token
+            });
+
+            req.flash('success_msg', 'Token de pagamento salvo com sucesso.');
+            res.redirect(`/admin/companies/${id}/edit`);
+        } catch (error) {
+            if (error.status === 404) {
+                req.flash('error_msg', 'Empresa não encontrada.');
+                return res.redirect('/admin/companies');
+            }
+
+            logger.error('Erro ao salvar token de pagamento', error);
+
+            if (error.code === 'TOKEN_SECRET_MISSING') {
+                req.flash('error_msg', 'Configure a variável PAYMENT_TOKEN_SECRET para salvar tokens com segurança.');
+            } else {
+                req.flash('error_msg', error.message || 'Não foi possível salvar o token de pagamento.');
+            }
+
+            res.redirect(`/admin/companies/${id}/edit`);
         }
     },
 
