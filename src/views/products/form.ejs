@@ -18,6 +18,133 @@
     const mediaItems = Array.isArray(product.media) && product.media.length
         ? product.media
         : [{}];
+
+    const resolveCurrency = (value) => {
+        if (typeof value === 'string' && value.trim().length) {
+            return value.trim().toUpperCase();
+        }
+        return 'BRL';
+    };
+
+    const defaultCurrency = resolveCurrency(product.currency);
+
+    const formatMoney = (value, currency = defaultCurrency) => {
+        const parsed = Number.parseFloat(value);
+        const amount = Number.isFinite(parsed) ? parsed : 0;
+
+        try {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount);
+        } catch (error) {
+            return amount.toFixed(2);
+        }
+    };
+
+    const formatDate = (value) => {
+        if (!value) {
+            return '—';
+        }
+
+        try {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return '—';
+            }
+
+            return date.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (error) {
+            return '—';
+        }
+    };
+
+    const statusMetaMap = {
+        draft: { label: 'Rascunho', className: 'bg-secondary-subtle text-secondary' },
+        active: { label: 'Ativo', className: 'bg-success-subtle text-success' },
+        inactive: { label: 'Inativo', className: 'bg-warning-subtle text-warning' },
+        archived: { label: 'Arquivado', className: 'bg-dark text-white' },
+        default: { label: 'Não informado', className: 'bg-secondary-subtle text-secondary' }
+    };
+
+    const statusMeta = statusMetaMap[product.status] || statusMetaMap.default;
+
+    const visibilityLabels = {
+        public: 'Público',
+        private: 'Privado',
+        restricted: 'Restrito',
+        default: 'Público'
+    };
+
+    const stockStatusLabels = {
+        'in-stock': 'Em estoque',
+        'out-of-stock': 'Sem estoque',
+        preorder: 'Pré-venda',
+        backorder: 'Sob encomenda',
+        default: 'Não informado'
+    };
+
+    const parseInteger = (value) => {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const stockQuantity = parseInteger(product.stockQuantity);
+
+    const hasValue = (entry, key) => {
+        if (!entry || typeof entry !== 'object') {
+            return false;
+        }
+
+        const value = entry[key];
+        if (value === undefined || value === null) {
+            return false;
+        }
+
+        if (typeof value === 'number') {
+            return !Number.isNaN(value);
+        }
+
+        if (typeof value === 'boolean') {
+            return value;
+        }
+
+        if (typeof value === 'object') {
+            return Object.keys(value).length > 0;
+        }
+
+        return String(value).trim() !== '';
+    };
+
+    const countFilledEntries = (entries, keys) => {
+        if (!Array.isArray(entries)) {
+            return 0;
+        }
+
+        return entries.reduce((total, entry) => {
+            const filled = keys.some((key) => hasValue(entry, key));
+            return filled ? total + 1 : total;
+        }, 0);
+    };
+
+    const filledVariationsCount = countFilledEntries(variations, [
+        'name',
+        'sku',
+        'barcode',
+        'stockQuantity',
+        'price',
+        'costPrice'
+    ]);
+    const filledMediaCount = countFilledEntries(mediaItems, ['url', 'type', 'altText']);
+    const filledSuppliersCount = countFilledEntries(suppliers, [
+        'supplierName',
+        'supplierSku',
+        'supplierPrice',
+        'contactEmail'
+    ]);
 %>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -38,9 +165,10 @@
 </div>
 
 <form action="<%= isEdit ? `/products/${product.id}?_method=PUT` : '/products' %>" method="POST" class="needs-validation" novalidate>
-    <div class="row g-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
+    <div class="row g-4 align-items-start">
+        <div class="col-12 col-xxl-9">
+            <div class="d-flex flex-column gap-4">
+                <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Informações básicas</h2>
                 </div>
@@ -120,7 +248,6 @@
             </div>
         </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Precificação</h2>
@@ -193,9 +320,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Estoque</h2>
@@ -249,9 +374,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Dados fiscais</h2>
@@ -281,9 +404,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Logística</h2>
@@ -360,9 +481,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3">
                     <h2 class="h5 mb-0">Marketing</h2>
@@ -407,9 +526,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <div>
@@ -473,9 +590,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <div>
@@ -538,9 +653,7 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <div>
@@ -603,14 +716,73 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
-
-        <div class="col-12">
-            <div class="d-flex justify-content-end gap-2">
-                <a href="/products" class="btn btn-outline-secondary">Cancelar</a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save me-2"></i><%= isEdit ? 'Atualizar produto' : 'Salvar produto' %>
-                </button>
+        <div class="col-12 col-xxl-3">
+            <div class="card border-0 shadow-sm position-sticky top-0" style="top: 6.5rem;">
+                <div class="card-header bg-white border-0 py-3">
+                    <h2 class="h5 mb-0">Resumo do produto</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="text-muted text-uppercase small">Status atual</span>
+                        <span class="badge <%= statusMeta.className %>"><%= statusMeta.label %></span>
+                    </div>
+                    <dl class="row gy-2 small mb-0">
+                        <dt class="col-6 text-muted">Visibilidade</dt>
+                        <dd class="col-6 text-end fw-semibold"><%= visibilityLabels[product.visibility] || visibilityLabels.default %></dd>
+                        <dt class="col-6 text-muted">Situação estoque</dt>
+                        <dd class="col-6 text-end fw-semibold"><%= stockStatusLabels[product.stockStatus] || stockStatusLabels.default %></dd>
+                        <dt class="col-6 text-muted">Preço</dt>
+                        <dd class="col-6 text-end fw-semibold"><%= formatMoney(product.price, product.currency) %></dd>
+                        <dt class="col-6 text-muted">Estoque atual</dt>
+                        <dd class="col-6 text-end fw-semibold"><%= stockQuantity %> <span class="text-muted">un</span></dd>
+                        <% if (product.lowStockThreshold) { %>
+                            <dt class="col-6 text-muted">Estoque mínimo</dt>
+                            <dd class="col-6 text-end"><%= Number.parseInt(product.lowStockThreshold, 10) || 0 %> un</dd>
+                        <% } %>
+                        <% if (product.deliveryTimeMin || product.deliveryTimeMax) { %>
+                            <dt class="col-6 text-muted">Prazo de envio</dt>
+                            <dd class="col-6 text-end">
+                                <% if (product.deliveryTimeMin && product.deliveryTimeMax) { %>
+                                    <%= product.deliveryTimeMin %> - <%= product.deliveryTimeMax %> dias
+                                <% } else if (product.deliveryTimeMin) { %>
+                                    <%= product.deliveryTimeMin %> dias
+                                <% } else { %>
+                                    <%= product.deliveryTimeMax %> dias
+                                <% } %>
+                            </dd>
+                        <% } %>
+                    </dl>
+                    <div class="border-top pt-3 mt-3">
+                        <ul class="list-unstyled small mb-0">
+                            <li class="d-flex justify-content-between">
+                                <span>Variações</span>
+                                <span class="fw-semibold"><%= filledVariationsCount %></span>
+                            </li>
+                            <li class="d-flex justify-content-between">
+                                <span>Mídias</span>
+                                <span class="fw-semibold"><%= filledMediaCount %></span>
+                            </li>
+                            <li class="d-flex justify-content-between">
+                                <span>Fornecedores</span>
+                                <span class="fw-semibold"><%= filledSuppliersCount %></span>
+                            </li>
+                        </ul>
+                    </div>
+                    <% if (isEdit && product.updatedAt) { %>
+                        <div class="alert alert-light border mt-3 small mb-0">
+                            <i class="bi bi-clock-history me-2"></i>
+                            Atualizado em <strong><%= formatDate(product.updatedAt) %></strong>
+                        </div>
+                    <% } %>
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i><%= isEdit ? 'Atualizar produto' : 'Salvar produto' %>
+                        </button>
+                        <a href="/products" class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

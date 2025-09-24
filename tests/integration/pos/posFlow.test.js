@@ -93,6 +93,9 @@ describe('Integração PDV - fluxo completo', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.sale.totalPaid).toBeCloseTo(240);
+        expect(response.body.sale.status).toBe('open');
+        expect(response.body.sale.changeDue).toBeCloseTo(5);
+        expect(response.body.sale.payments).toHaveLength(1);
 
         response = await agent.post(`/pos/sales/${saleId}/finalize`).send({});
 
