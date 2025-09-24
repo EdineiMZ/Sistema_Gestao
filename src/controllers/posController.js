@@ -532,7 +532,6 @@ const listProducts = async (req, res) => {
 
     try {
         const whereClauses = { status: 'active' };
-
         if (term) {
             const likeTerm = `%${term}%`;
             whereClauses[Op.or] = [
@@ -550,6 +549,7 @@ const listProducts = async (req, res) => {
             limit,
             order: [['name', 'ASC']]
         });
+
 
         const formatted = products.map((product) => ({
             id: product.id,
@@ -598,8 +598,19 @@ const addItem = async (req, res) => {
             return res.status(400).json({ message: 'Apenas vendas em aberto podem receber itens.' });
         }
 
+        const productWhere = { id: productId };
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'active')) {
+            productWhere.active = true;
+        }
+
+        if (Product.rawAttributes && Object.prototype.hasOwnProperty.call(Product.rawAttributes, 'status')) {
+            productWhere.status = 'active';
+        }
+
         const product = await Product.findOne({
             where: { id: productId, status: 'active' },
+
             transaction,
             lock: transaction.LOCK.SHARE
         });
@@ -615,7 +626,9 @@ const addItem = async (req, res) => {
             return res.status(422).json({ message: 'Quantidade inválida.' });
         }
 
-        const resolvedUnitPrice = unitPrice ? Number.parseFloat(unitPrice) : Number.parseFloat(product.unitPrice || 0);
+        const resolvedUnitPrice = unitPrice
+            ? Number.parseFloat(unitPrice)
+            : Number.parseFloat(product.unitPrice ?? product.price ?? 0);
         const gross = quantityCents * resolvedUnitPrice;
         const discount = Number.parseFloat(discountValue || 0);
         const tax = Number.parseFloat(taxValue || 0);
@@ -626,7 +639,7 @@ const addItem = async (req, res) => {
             productId: product.id,
             productName: product.name,
             sku: product.sku,
-            unitLabel: product.unit,
+            unitLabel: product.unit || 'UN',
             quantity: quantityCents,
             unitPrice: resolvedUnitPrice,
             grossTotal: gross,
@@ -634,7 +647,7 @@ const addItem = async (req, res) => {
             taxValue: tax,
             netTotal: net,
             metadata: {
-                taxCode: product.taxCode || null
+                fiscalCode: product.ncmCode || product.taxCode || null
             }
         }, { transaction });
 
