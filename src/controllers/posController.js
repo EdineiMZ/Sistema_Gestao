@@ -1246,13 +1246,17 @@ const addPayment = async (req, res) => {
             transactionReference: transactionReference || null
         }, { transaction });
 
+        const totalNetCents = toCents(sale.totalNet);
         const newTotalPaidCents = sumCents(sale.totalPaid, paymentAmount);
         sale.totalPaid = centsToDecimalString(newTotalPaidCents);
 
-        if (newTotalPaidCents >= toCents(sale.totalNet)) {
+        if (newTotalPaidCents >= totalNetCents) {
             sale.status = SALE_STATUSES.OPEN;
+            const changeDueCents = newTotalPaidCents - totalNetCents;
+            sale.changeDue = centsToDecimalString(changeDueCents);
         } else {
             sale.status = SALE_STATUSES.PENDING_PAYMENT;
+            sale.changeDue = centsToDecimalString(0);
         }
 
         await sale.save({ transaction });
