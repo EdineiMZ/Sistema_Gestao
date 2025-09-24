@@ -17,6 +17,12 @@ router.use(authMiddleware);
 router.use(authorize([USER_ROLES.MANAGER, USER_ROLES.SPECIALIST]));
 
 router.get('/', posController.renderPosPage);
+router.get('/reports', posController.renderReportsPage);
+router.get('/reports/overview', posController.getOverviewReport);
+router.get('/reports/top-products', posController.getTopProductsReport);
+router.get('/reports/movements/hourly', posController.getHourlyMovementReport);
+router.get('/reports/movements/daily', posController.getDailyMovementReport);
+router.get('/reports/stock', posController.getStockSnapshot);
 router.get('/products', productSearchValidation, posController.listProducts);
 router.post('/sales', openSaleValidation, posController.openSale);
 router.get('/sales/:saleId', finalizeSaleValidation, posController.getSale);
