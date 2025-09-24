@@ -29,6 +29,8 @@ const COMPANY_TAX_ID = process.env.COMPANY_TAX_ID || '00.000.000/0000-00';
 const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || 'Endereço não configurado';
 const COMPANY_CITY = process.env.COMPANY_CITY || 'Cidade';
 const COMPANY_STATE = process.env.COMPANY_STATE || 'UF';
+const DEFAULT_POS_UNIT_LABEL = process.env.POS_DEFAULT_UNIT_LABEL || 'CX';
+const DEFAULT_POS_FISCAL_CODE = process.env.POS_DEFAULT_FISCAL_CODE || '3304.99.90';
 
 const includeSaleAssociations = [
     {
@@ -89,10 +91,20 @@ const safeRollback = async (transaction) => {
 };
 
 const normalizeDecimal = (value, precision = 2) => {
-    const parsed = Number.parseFloat(value);
+    if (value === null || value === undefined) {
+        return Number((0).toFixed(precision));
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? Number(value.toFixed(precision)) : Number((0).toFixed(precision));
+    }
+
+    const normalized = String(value).trim().replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
     if (!Number.isFinite(parsed)) {
         return Number((0).toFixed(precision));
     }
+
     return Number(parsed.toFixed(precision));
 };
 
@@ -369,13 +381,46 @@ const getTopProductsReport = async (req, res) => {
             limit: params.limit
         });
 
+        const normalizedReport = normalizeTopProductsReport(report);
+        const revenueEntries = normalizedReport.byRevenue;
+        const totals = revenueEntries.reduce(
+            (acc, entry) => {
+                acc.quantity += entry.totalQuantity;
+                acc.revenue += entry.totalRevenue;
+                return acc;
+            },
+            { quantity: 0, revenue: 0 }
+        );
+
+        const items = revenueEntries.map((entry) => ({
+            productId: entry.productId,
+            name: entry.name,
+            sku: entry.sku,
+            quantity: entry.totalQuantity,
+            gross: entry.totalGross,
+            discount: entry.totalDiscount,
+            revenue: entry.totalRevenue,
+            quantityShare: totals.quantity ? (entry.totalQuantity / totals.quantity) * 100 : 0,
+            revenueShare: totals.revenue ? (entry.totalRevenue / totals.revenue) * 100 : 0
+        }));
+
         return res.json({
             metadata: {
                 maxLimit: REPORT_MAX_LIMIT,
                 maxRangeDays: REPORT_MAX_RANGE_DAYS,
                 defaultRangeDays: REPORT_DEFAULT_RANGE_DAYS
             },
-            report: normalizeTopProductsReport(report)
+            report: normalizedReport,
+            range: normalizedReport.period || {
+                start: params.range.start.toISOString(),
+                end: params.range.end.toISOString()
+            },
+            generatedAt: new Date().toISOString(),
+            totals: {
+                quantity: totals.quantity,
+                revenue: totals.revenue
+            },
+            items
         });
     } catch (error) {
         console.error('Erro ao gerar ranking de produtos do PDV:', error);
@@ -503,20 +548,6 @@ const REPORT_RANGE_PRESETS = Object.freeze({
 const DEFAULT_REPORT_RANGE = '30d';
 
 const paymentLabelMap = new Map(PAYMENT_METHODS.map((method) => [method.value, method.label]));
-
-const normalizeDecimal = (value) => {
-    if (value === null || value === undefined) {
-        return 0;
-    }
-
-    if (typeof value === 'number') {
-        return Number.isFinite(value) ? value : 0;
-    }
-
-    const normalized = String(value).replace(',', '.');
-    const parsed = Number.parseFloat(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-};
 
 const computeVariation = (current, previous) => {
     if (!Number.isFinite(previous) || previous === 0) {
@@ -765,110 +796,6 @@ const getOverviewReport = async (req, res) => {
     } catch (error) {
         console.error('Erro ao gerar visão geral de relatórios do PDV:', error);
         return res.status(500).json({ message: 'Não foi possível carregar a visão geral de relatórios.' });
-    }
-};
-
-const getTopProductsReport = async (req, res) => {
-    const user = resolveUserFromRequest(req);
-
-    if (!user) {
-        return res.status(401).json({ message: 'Sessão expirada. Faça login novamente.' });
-    }
-
-    const range = resolveRange(req.query.range);
-    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 10, 25);
-
-    const saleWhere = {
-        status: SALE_STATUSES.COMPLETED,
-        closedAt: {
-            [Op.between]: [range.start, range.end]
-        }
-    };
-
-    try {
-        const rows = await SaleItem.findAll({
-            where: {
-                '$sale.status$': SALE_STATUSES.COMPLETED
-            },
-            attributes: [
-                'productId',
-                'productName',
-                'sku',
-                [fn('sum', col('SaleItem.quantity')), 'totalQuantity'],
-                [fn('sum', col('SaleItem.netTotal')), 'totalNet'],
-                [fn('sum', col('SaleItem.grossTotal')), 'totalGross'],
-                [fn('sum', col('SaleItem.discountValue')), 'totalDiscount']
-            ],
-            include: [
-                {
-                    model: Sale,
-                    as: 'sale',
-                    attributes: [],
-                    required: true,
-                    where: saleWhere
-                },
-                {
-                    model: Product,
-                    as: 'product',
-                    attributes: ['id', 'name', 'sku'],
-                    required: false
-                }
-            ],
-            group: [
-                'SaleItem.productId',
-                'SaleItem.productName',
-                'SaleItem.sku',
-                'product.id',
-                'product.name',
-                'product.sku'
-            ],
-            order: [[fn('sum', col('SaleItem.netTotal')), 'DESC']],
-            limit,
-            raw: true
-        });
-
-        const items = rows.map((row) => {
-            const quantity = normalizeDecimal(row.totalQuantity);
-            const net = normalizeDecimal(row.totalNet);
-            const gross = normalizeDecimal(row.totalGross);
-            const discount = normalizeDecimal(row.totalDiscount);
-
-            return {
-                productId: row.productId,
-                name: row['product.name'] || row.productName,
-                sku: row['product.sku'] || row.sku,
-                quantity,
-                gross,
-                discount,
-                revenue: net
-            };
-        });
-
-        const totalQuantity = items.reduce((acc, item) => acc + item.quantity, 0);
-        const totalRevenue = items.reduce((acc, item) => acc + item.revenue, 0);
-
-        const itemsWithShare = items.map((item) => ({
-            ...item,
-            quantityShare: totalQuantity ? (item.quantity / totalQuantity) * 100 : 0,
-            revenueShare: totalRevenue ? (item.revenue / totalRevenue) * 100 : 0
-        }));
-
-        return res.json({
-            range: {
-                preset: range.preset,
-                start: range.start.toISOString(),
-                end: range.end.toISOString()
-            },
-            generatedAt: new Date().toISOString(),
-            totals: {
-                quantity: totalQuantity,
-                revenue: totalRevenue
-            },
-            items: itemsWithShare
-        });
-    } catch (error) {
-        console.error('Erro ao gerar relatório de produtos mais vendidos:', error);
-        return res.status(500).json({ message: 'Não foi possível carregar os produtos mais vendidos.' });
     }
 };
 
@@ -1134,13 +1061,18 @@ const listProducts = async (req, res) => {
                     ? product.unitPrice
                     : product.price;
 
+            const rawUnit = typeof product.unit === 'string' ? product.unit.trim() : null;
+            const normalizedUnit = rawUnit ? rawUnit.toUpperCase() : null;
+            const unit = normalizedUnit && normalizedUnit !== 'UN' ? normalizedUnit : DEFAULT_POS_UNIT_LABEL;
+
             return {
                 id: product.id,
                 name: product.name,
                 sku: product.sku,
-                unit: product.unit || 'un',
+                unit,
                 unitPrice: Number.parseFloat(normalizedUnitPrice || 0),
                 taxRate: Number.parseFloat(product.taxRate || 0),
+                fiscalCode: product.ncmCode || DEFAULT_POS_FISCAL_CODE,
                 taxCode: product.taxCode || null
             };
         });
@@ -1500,7 +1432,6 @@ module.exports = {
     getSale,
     downloadReceipt,
     getPosReports,
-    getTopProductsReport,
     getTrafficReport,
     getInventoryReport
 };
