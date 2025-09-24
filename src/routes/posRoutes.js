@@ -30,5 +30,9 @@ router.post('/sales/:saleId/items', addItemValidation, posController.addItem);
 router.post('/sales/:saleId/payments', addPaymentValidation, posController.addPayment);
 router.post('/sales/:saleId/finalize', finalizeSaleValidation, posController.finalizeSale);
 router.get('/sales/:saleId/receipt', finalizeSaleValidation, posController.downloadReceipt);
+router.get('/reports', posController.getPosReports);
+router.get('/reports/top-products', posController.getTopProductsReport);
+router.get('/reports/traffic', posController.getTrafficReport);
+router.get('/reports/inventory', posController.getInventoryReport);
 
 module.exports = router;

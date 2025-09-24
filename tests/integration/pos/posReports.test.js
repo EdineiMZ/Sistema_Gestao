@@ -146,7 +146,7 @@ describe('Relatórios do PDV - integração', () => {
     afterAll(async () => {
         await sequelize.close();
     });
-
+  
     it('renderiza a página de relatórios do PDV com layout base', async () => {
         const response = await agent.get('/pos/reports');
 

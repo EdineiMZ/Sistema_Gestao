@@ -15,6 +15,10 @@ const { USER_ROLES } = require('../../../src/constants/roles');
 const { createRouterTestApp } = require('../../utils/createRouterTestApp');
 const { authenticateTestUser } = require('../../utils/authTestUtils');
 
+jest.mock('qrcode', () => ({
+    toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=')
+}), { virtual: true });
+
 jest.setTimeout(15000);
 
 describe('Integração PDV - fluxo completo', () => {
@@ -121,5 +125,7 @@ describe('Integração PDV - fluxo completo', () => {
         expect(Array.isArray(response.body.products)).toBe(true);
         expect(response.body.products[0].id).toBe(product.id);
         expect(response.body.products[0].unitPrice).toBeCloseTo(120);
+        expect(response.body.products[0].unit).toBe('CX');
+        expect(response.body.products[0].fiscalCode).toBe('3304.99.90');
     });
 });
