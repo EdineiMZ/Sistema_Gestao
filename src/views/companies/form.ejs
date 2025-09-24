@@ -3,6 +3,7 @@
 <% const editing = mode === 'edit'; %>
 <% const formAction = editing ? `/admin/companies/${company.id}?_method=PUT` : '/admin/companies'; %>
 <% const title = editing ? 'Editar empresa' : 'Nova empresa'; %>
+<% const normalizedCnpj = normalizedCompanyCnpj || (company.cnpj ? String(company.cnpj).replace(/\D+/g, '') : ''); %>
 
 <div class="row gy-4 fade-in">
     <div class="col-12">
@@ -194,6 +195,131 @@
                 </div>
             </div>
         </form>
+
+        <% if (editing) { %>
+            <div class="card card-soft p-4 mt-4 border-0 shadow-sm">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <h5 class="card-title mb-1">Tokens de pagamento</h5>
+                        <p class="text-muted mb-2">
+                            Cadastre credenciais de APIs como Mercado Pago ou Google Pay. Tokens definidos no arquivo
+                            <code>.env</code> substituem automaticamente os valores salvos no painel.
+                        </p>
+                        <p class="text-muted small mb-0">
+                            Formato recomendado: <code><%= normalizedCnpj || 'CNPJ' %>_API_NOME_DO_BANCO</code>
+                            (exemplo: <code><%= normalizedCnpj || '00000000000000' %>_API_MERCADO_PAGO</code>).
+                        </p>
+                    </div>
+                    <% if (!tokenSecretConfigured) { %>
+                        <div class="alert alert-warning border-0 shadow-sm mb-0" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Defina <code>PAYMENT_TOKEN_SECRET</code> no ambiente para habilitar a criptografia dos tokens.
+                        </div>
+                    <% } %>
+                </div>
+
+                <div class="mt-4">
+                    <% if (paymentTokens && paymentTokens.length) { %>
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">API</th>
+                                        <th scope="col">Banco</th>
+                                        <th scope="col">Provedor</th>
+                                        <th scope="col">Fonte</th>
+                                        <th scope="col">Prévia</th>
+                                        <th scope="col">Atualizado em</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% paymentTokens.forEach((token) => { %>
+                                        <tr>
+                                            <td class="fw-semibold"><%= token.apiName %></td>
+                                            <td><%= token.bankName %></td>
+                                            <td><%= token.provider %></td>
+                                            <td>
+                                                <% if (token.source === 'env') { %>
+                                                    <span class="badge text-bg-success">.env</span>
+                                                <% } else { %>
+                                                    <span class="badge text-bg-primary">Banco de dados</span>
+                                                <% } %>
+                                            </td>
+                                            <td class="text-muted"><%= token.preview %></td>
+                                            <td class="text-muted small">
+                                                <%= token.updatedAt ? new Date(token.updatedAt).toLocaleString('pt-BR') : '—' %>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    <% } else { %>
+                        <div class="bg-light rounded-3 p-4 text-center text-muted border border-dashed">
+                            <i class="bi bi-shield-lock mb-2 d-block fs-4"></i>
+                            Nenhum token cadastrado para esta empresa ainda.
+                        </div>
+                    <% } %>
+                </div>
+
+                <form
+                    action="/admin/companies/<%= company.id %>/tokens"
+                    method="POST"
+                    class="row gy-3 mt-4"
+                    autocomplete="off"
+                >
+                    <div class="col-md-4">
+                        <label class="form-label">API / Serviço</label>
+                        <input
+                            type="text"
+                            name="apiName"
+                            class="form-control text-uppercase"
+                            placeholder="MERCADO_PAGO"
+                            required
+                        />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Banco vinculado</label>
+                        <input
+                            type="text"
+                            name="bankName"
+                            class="form-control text-uppercase"
+                            placeholder="ITAU"
+                            required
+                        />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Provedor (opcional)</label>
+                        <input
+                            type="text"
+                            name="provider"
+                            class="form-control text-uppercase"
+                            placeholder="MERCADO_PAGO"
+                        />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Token seguro</label>
+                        <input
+                            type="password"
+                            name="token"
+                            class="form-control"
+                            placeholder="Cole o token gerado pelo provedor"
+                            required
+                            minlength="8"
+                        />
+                        <div class="form-text">
+                            Ao salvar, o token é criptografado com AES-256-GCM. Configure um valor no .env para priorizar
+                            integrações em pipelines automatizados.
+                        </div>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-shield-lock me-2"></i>Salvar token seguro
+                        </button>
+                    </div>
+                </form>
+            </div>
+        <% } %>
     </div>
 </div>
 

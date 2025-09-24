@@ -7,6 +7,23 @@ const PRODUCT_STOCK_STATUS = ['in-stock', 'out-of-stock', 'preorder', 'backorder
 
 module.exports = (sequelize, DataTypes) => {
     const Product = sequelize.define('Product', {
+        companyId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: 'Companies',
+                key: 'id'
+            },
+            validate: {
+                isInt: {
+                    msg: 'Empresa inválida para o produto.'
+                },
+                min: {
+                    args: [1],
+                    msg: 'Empresa inválida para o produto.'
+                }
+            }
+        },
         name: {
             type: DataTypes.STRING(180),
             allowNull: false,
@@ -382,6 +399,13 @@ module.exports = (sequelize, DataTypes) => {
     });
 
     Product.associate = (models) => {
+        if (models.Company) {
+            Product.belongsTo(models.Company, {
+                as: 'company',
+                foreignKey: 'companyId'
+            });
+        }
+
         Product.hasMany(models.ProductVariation, {
             as: 'variations',
             foreignKey: 'productId',

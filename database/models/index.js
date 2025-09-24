@@ -75,7 +75,9 @@ const {
     BudgetThresholdStatus,
     SupportTicket,
     SupportMessage,
-    SupportAttachment
+    SupportAttachment,
+    Company,
+    PaymentGatewayToken
 } = db;
 
 /**
@@ -184,6 +186,22 @@ if (FinanceEntry && FinanceCategory && !(FinanceEntry.associations && FinanceEnt
     FinanceEntry.belongsTo(FinanceCategory, {
         as: 'category',
         foreignKey: 'financeCategoryId'
+    });
+}
+
+if (PaymentGatewayToken && Company && !(PaymentGatewayToken.associations && PaymentGatewayToken.associations.company)) {
+    PaymentGatewayToken.belongsTo(Company, {
+        as: 'company',
+        foreignKey: 'companyId',
+        onDelete: 'CASCADE'
+    });
+}
+
+if (Company && PaymentGatewayToken && !(Company.associations && Company.associations.paymentTokens)) {
+    Company.hasMany(PaymentGatewayToken, {
+        as: 'paymentTokens',
+        foreignKey: 'companyId',
+        onDelete: 'CASCADE'
     });
 }
 

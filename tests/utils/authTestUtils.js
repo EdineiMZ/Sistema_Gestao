@@ -7,7 +7,8 @@ const buildTestUser = (overrides = {}) => ({
     email: overrides.email || 'admin.teste@example.com',
     role: overrides.role || USER_ROLES.ADMIN,
     active: overrides.active !== false,
-    profileImage: overrides.profileImage ?? null
+    profileImage: overrides.profileImage ?? null,
+    companyId: overrides.companyId ?? null
 });
 
 const authenticateTestUser = async (app, overrides = {}) => {

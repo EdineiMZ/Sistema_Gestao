@@ -228,7 +228,8 @@ app.use(async (req, res, next) => {
                 name: dbUser.name,
                 role: dbUser.role,
                 active: dbUser.active,
-                profileImage: dbUser.profileImage
+                profileImage: dbUser.profileImage,
+                companyId: dbUser.companyId
             };
 
             req.user = sanitizedUser;
@@ -238,7 +239,8 @@ app.use(async (req, res, next) => {
                 name: dbUser.name,
                 email: dbUser.email,
                 role: dbUser.role,
-                active: dbUser.active
+                active: dbUser.active,
+                companyId: dbUser.companyId
             };
         } else {
             req.session.user = null;
@@ -287,6 +289,7 @@ app.use('/products', productRoutes);
 app.use('/support', supportRoutes);
 app.use('/pos', posRoutes);
 app.use('/promotions', promotionRoutes);
+
 
 
 // Conexão DB

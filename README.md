@@ -9,6 +9,9 @@ As seguintes variáveis de ambiente são necessárias para executar o servidor:
 - `NGROK_AUTHTOKEN` (**obrigatória** apenas para `npm run dev:tunnel`): token de autenticação da sua conta Ngrok. Defina somente quando precisar expor o ambiente de desenvolvimento para a internet.
 - `NGROK_DOMAIN` (opcional): domínio reservado no Ngrok para reutilizar URLs estáveis durante o desenvolvimento.
 - `NGROK_REGION` (opcional): região preferida para o túnel Ngrok, reduzindo latência ao escolher a localização mais próxima dos seus usuários.
+- `PAYMENT_TOKEN_SECRET` (**obrigatória** para armazenar tokens de pagamento no painel): chave simétrica utilizada para criptografar credenciais sensíveis com AES-256-GCM. Utilize um valor aleatório com, no mínimo, 32 caracteres.
+
+Tokens de provedores como Mercado Pago ou Google Pay podem ser definidos diretamente no `.env` seguindo o padrão `CNPJ_API_NOME_DO_BANCO=TOKEN`. Exemplo: `12345678000199_MERCADO_PAGO_ITAU=seu_token_aqui`. Valores definidos no ambiente têm prioridade sobre os tokens cadastrados via painel administrativo.
 
 Certifique-se de carregar estas variáveis antes de executar `npm start` ou `npm run dev`.
 

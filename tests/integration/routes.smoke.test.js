@@ -135,8 +135,8 @@ describe('Smoke tests das rotas principais', () => {
         const response = await request(app).get('/');
 
         expect(response.status).toBe(200);
-        expect(response.text).toContain('Transforme sua gestão');
-        expect(response.text).toContain('Inteligência operacional');
+        expect(response.text).toContain('Potência máxima para o seu setup profissional e gamer');
+        expect(response.text).toContain('Produtos em destaque');
     });
 
     it('renderiza o dashboard para administradores autenticados', async () => {
