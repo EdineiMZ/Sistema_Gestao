@@ -15,25 +15,69 @@
 
     <div class="row g-4">
         <div class="col-lg-4">
-            <div class="card card-soft shadow-sm h-100">
-                <div class="card-body">
-                    <span class="badge-soft badge-soft-primary mb-3"><i class="bi bi-life-preserver me-2"></i>Novo chamado</span>
-                    <h4 class="card-title mb-3">Precisa de ajuda?</h4>
-                    <p class="text-muted small mb-4">
-                        Descreva sua necessidade com detalhes para que nossa equipe retorne com a solução mais adequada.
-                        Anexos podem ser enviados após abrir o chamado pelo painel administrativo.
-                    </p>
-                    <form method="POST" action="/support/tickets" class="support-form">
+            <div class="d-flex flex-column gap-4 h-100">
+                <div class="card card-soft shadow-sm">
+                    <div class="card-body chatbot-card" data-chatbot-assistant>
+                        <span class="badge-soft badge-soft-success mb-3"><i class="bi bi-stars me-2"></i>Assistente virtual</span>
+                        <h4 class="card-title mb-2">Encontre respostas imediatas</h4>
+                        <p class="text-muted small mb-4">
+                            Escolha o problema que deseja resolver e visualize o passo a passo recomendado pelo sistema.
+                            Caso não seja suficiente, conecte-se com um especialista em poucos segundos.
+                        </p>
                         <div class="mb-3">
-                            <label for="support-subject" class="form-label">Assunto</label>
-                            <input type="text" class="form-control" id="support-subject" name="subject" maxlength="180" required>
+                            <label for="support-chatbot-topic" class="form-label">Qual situação deseja resolver?</label>
+                            <select class="form-select" id="support-chatbot-topic" data-chatbot-select required>
+                                <option value="">Selecione uma opção</option>
+                                <% (chatbotTopics || []).forEach((topic) => { %>
+                                    <option value="<%= topic.id %>"><%= topic.title %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div class="chatbot-response d-none" data-chatbot-response>
+                            <h5 class="fw-semibold d-flex align-items-center gap-2 mb-2">
+                                <span class="chatbot-response__icon"><i class="bi bi-robot"></i></span>
+                                <span data-chatbot-response-title></span>
+                            </h5>
+                            <p class="text-muted small mb-3" data-chatbot-summary></p>
+                            <ul class="list-group list-group-flush mb-3" data-chatbot-steps></ul>
+                            <div class="alert alert-info d-none" role="status" data-chatbot-expected></div>
+                            <div class="alert alert-warning d-none" role="status" data-chatbot-escalation></div>
                         </div>
                         <div class="mb-3">
-                            <label for="support-description" class="form-label">Descrição</label>
-                            <textarea class="form-control" id="support-description" name="description" rows="5" required></textarea>
+                            <label for="support-chatbot-details" class="form-label">Conte para o atendente o que já tentou (opcional)</label>
+                            <textarea class="form-control" id="support-chatbot-details" data-chatbot-details rows="3" maxlength="600" placeholder="Compartilhe informações adicionais relevantes."></textarea>
+                            <small class="text-muted">Enviamos este resumo para a equipe caso você precise de atendimento humano.</small>
                         </div>
-                        <button type="submit" class="btn btn-gradient w-100">Abrir chamado</button>
-                    </form>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-outline-primary" data-chatbot-open-chat disabled>
+                                <span data-chatbot-open-chat-label><i class="bi bi-headset me-2"></i>Falar com suporte humano</span>
+                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" data-chatbot-loading></span>
+                            </button>
+                            <small class="text-muted text-center" data-chatbot-status></small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-soft shadow-sm flex-grow-1">
+                    <div class="card-body">
+                        <span class="badge-soft badge-soft-primary mb-3"><i class="bi bi-life-preserver me-2"></i>Novo chamado</span>
+                        <h4 class="card-title mb-3">Precisa de ajuda?</h4>
+                        <p class="text-muted small mb-4">
+                            Descreva sua necessidade com detalhes para que nossa equipe retorne com a solução mais adequada.
+                            Anexos podem ser enviados após abrir o chamado pelo painel administrativo.
+                        </p>
+                        <form method="POST" action="/support/tickets" class="support-form">
+                            <div class="mb-3">
+                                <label for="support-subject" class="form-label">Assunto</label>
+                                <input type="text" class="form-control" id="support-subject" name="subject" maxlength="180" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="support-description" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="support-description" name="description" rows="5" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-gradient w-100">Abrir chamado</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -160,6 +204,52 @@
         backdrop-filter: blur(6px);
     }
 
+    .chatbot-card {
+        position: relative;
+        background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(59, 130, 246, 0.06));
+    }
+
+    .chatbot-card .form-select,
+    .chatbot-card .form-control {
+        border-radius: 14px;
+    }
+
+    .chatbot-response__icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(79, 70, 229, 0.12);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #4f46e5;
+    }
+
+    .chatbot-response ul.list-group {
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .chatbot-response ul.list-group .list-group-item {
+        background-color: rgba(255, 255, 255, 0.9);
+        border: none;
+        border-bottom: 1px solid rgba(79, 70, 229, 0.08);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .chatbot-response ul.list-group .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    .chatbot-response ul.list-group .list-group-item::before {
+        content: '\2022';
+        color: #4f46e5;
+        font-weight: bold;
+    }
+
     .support-wrapper .status-badge {
         font-size: 0.85rem;
         padding: 0.4rem 0.75rem;
@@ -228,4 +318,18 @@
         background: rgba(13, 110, 253, 0.12);
         color: #0b5ed7;
     }
+
+    @media (max-width: 991px) {
+        .chatbot-card {
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(59, 130, 246, 0.1));
+        }
+    }
 </style>
+
+<script>
+    window.supportChatbotConfig = {
+        topics: <%- JSON.stringify(chatbotTopics || []) %>,
+        startChatUrl: '/support/chatbot/start-chat'
+    };
+</script>
+<script type="module" src="/js/support-chatbot.js"></script>

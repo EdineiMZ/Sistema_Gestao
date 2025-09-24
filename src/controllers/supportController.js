@@ -7,6 +7,8 @@ const {
     notifyAdminJoined,
     getAttachmentById
 } = require('../services/supportChatService');
+const supportTicketService = require('../services/supportTicketService');
+const supportChatbotService = require('../services/supportChatbotService');
 const fileStorageService = require('../services/fileStorageService');
 
 const getRequestUser = (req) => {
@@ -136,6 +138,55 @@ const supportController = {
             }
             console.error('Erro ao notificar entrada do administrador:', error);
             return res.status(500).json({ message: 'Erro ao notificar entrada.' });
+        }
+    },
+
+    async startChatFromChatbot(req, res) {
+        try {
+            const user = getRequestUser(req);
+            if (!user) {
+                return res.status(401).json({ message: 'Autenticação necessária.' });
+            }
+
+            const { topicId, details } = req.body || {};
+            const topic = supportChatbotService.getTopicById(topicId);
+
+            if (!topic) {
+                return res.status(400).json({ message: 'Seleção do assistente virtual inválida.' });
+            }
+
+            const userNotes = supportChatbotService.normalizeDetails(details);
+
+            const descriptionSections = [
+                'Solicitação encaminhada pelo assistente virtual interno.',
+                `Tópico consultado: ${topic.title}.`,
+                topic.summary ? `Resumo sugerido: ${topic.summary}` : null,
+                Array.isArray(topic.steps) && topic.steps.length
+                    ? `Passos já orientados:\n- ${topic.steps.join('\n- ')}`
+                    : null,
+                topic.expectedResult ? `Resultado esperado: ${topic.expectedResult}` : null,
+                userNotes ? `Observações adicionais do usuário: ${userNotes}` : null
+            ].filter(Boolean);
+
+            const description = descriptionSections.join('\n\n');
+
+            const { ticket } = await supportTicketService.createTicket({
+                subject: `[Assistente] ${topic.title}`,
+                description,
+                creator: user,
+                attachments: [],
+                ipAddress: req.ip
+            });
+
+            return res.status(201).json({
+                message: 'Chamado em tempo real criado com sucesso.',
+                ticketId: ticket.id,
+                chatUrl: `/support/tickets/${ticket.id}/chat`,
+                ticketUrl: `/support/tickets/${ticket.id}`
+            });
+        } catch (error) {
+            console.error('Erro ao iniciar chamado via assistente virtual:', error);
+            return res.status(500).json({ message: 'Não foi possível iniciar o atendimento em tempo real.' });
         }
     },
 
