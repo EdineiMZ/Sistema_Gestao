@@ -5,10 +5,22 @@ const authController = require('../controllers/authController');
 const { validateRegister } = require('../middlewares/validateMiddleware');
 const upload = require('../middlewares/uploadMiddleware'); // multer config
 const { loginRateLimiter } = require('../middlewares/rateLimiters');
+const {
+    featuredProducts,
+    promotionProducts,
+    recommendedProducts,
+    catalogProducts
+} = require('../constants/homepageProducts');
 
 // Página inicial
 router.get('/', (req, res) => {
-    res.render('index', { pageTitle: 'Visão geral' });
+    res.render('index', {
+        pageTitle: 'Kabum Experience',
+        featuredProducts,
+        promotionProducts,
+        recommendedProducts,
+        catalogProducts
+    });
 });
 
 
