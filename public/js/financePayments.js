@@ -278,6 +278,83 @@
         container.appendChild(list);
     };
 
+    const getOrCreateToastContainer = () => {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+
+        let container = document.querySelector('[data-toast-container]');
+        if (container) {
+            return container;
+        }
+
+        if (!document.body) {
+            return null;
+        }
+
+        container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.setAttribute('data-toast-container', 'true');
+        container.style.zIndex = '1080';
+        document.body.appendChild(container);
+        return container;
+    };
+
+    const showFeedback = (message, variant = 'success') => {
+        if (!message) {
+            return;
+        }
+
+        const normalizedVariant = ['success', 'danger', 'warning', 'info', 'primary', 'secondary'].includes(variant)
+            ? variant
+            : 'info';
+
+        if (window.bootstrap && window.bootstrap.Toast) {
+            const container = getOrCreateToastContainer();
+            if (!container) {
+                window.alert(message);
+                return;
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-bg-${normalizedVariant} border-0 shadow`;
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+
+            const toastBodyWrapper = document.createElement('div');
+            toastBodyWrapper.className = 'd-flex';
+
+            const toastBody = document.createElement('div');
+            toastBody.className = 'toast-body';
+            toastBody.textContent = message;
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+            closeButton.setAttribute('data-bs-dismiss', 'toast');
+            closeButton.setAttribute('aria-label', 'Fechar');
+
+            toastBodyWrapper.appendChild(toastBody);
+            toastBodyWrapper.appendChild(closeButton);
+            toast.appendChild(toastBodyWrapper);
+            container.appendChild(toast);
+
+            const toastInstance = window.bootstrap.Toast.getOrCreateInstance(toast, { delay: 4000 });
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+                if (!container.children.length) {
+                    container.remove();
+                }
+            }, { once: true });
+
+            toastInstance.show();
+            return;
+        }
+
+        window.alert(message);
+    };
+
     const registerEntryModal = () => {
         const modalElement = document.getElementById('financeEntryModal');
         if (!modalElement) {
@@ -345,6 +422,109 @@
         });
     };
 
+    const registerPaymentActions = () => {
+        const forms = document.querySelectorAll('[data-finance-pay-form]');
+        if (!forms.length) {
+            return;
+        }
+
+        forms.forEach((form) => {
+            if (!form || form.__financePayBound) {
+                return;
+            }
+
+            form.addEventListener('submit', async (event) => {
+                const entryDescription = form.getAttribute('data-entry-description') || '';
+                const entryId = form.getAttribute('data-entry-id') || '';
+                const sanitizedDescription = entryDescription.trim().replace(/\s+/g, ' ');
+                const descriptionPart = sanitizedDescription
+                    ? `"${sanitizedDescription}"`
+                    : (entryId ? `#${entryId}` : 'selecionado');
+                const confirmationMessage = `Confirmar a quitação do lançamento ${descriptionPart}?`;
+
+                if (!window.confirm(confirmationMessage)) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (typeof window.fetch !== 'function') {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const submitButton = form.querySelector('[data-finance-pay-submit]');
+                const originalHtml = submitButton ? submitButton.innerHTML : '';
+                const originalDisabled = submitButton ? submitButton.disabled : false;
+                const originalMinWidth = submitButton ? submitButton.style.minWidth : '';
+
+                const setLoadingState = (isLoading) => {
+                    if (!submitButton) {
+                        return;
+                    }
+
+                    if (isLoading) {
+                        const width = submitButton.getBoundingClientRect().width;
+                        if (Number.isFinite(width) && width > 0) {
+                            submitButton.style.minWidth = `${Math.ceil(width)}px`;
+                        }
+                        submitButton.disabled = true;
+                        submitButton.setAttribute('aria-busy', 'true');
+                        submitButton.innerHTML = `
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Processando...</span>
+                        `;
+                        return;
+                    }
+
+                    submitButton.disabled = originalDisabled;
+                    submitButton.removeAttribute('aria-busy');
+                    submitButton.style.minWidth = originalMinWidth || '';
+                    submitButton.innerHTML = originalHtml
+                        || '<i class="bi bi-cash-coin" aria-hidden="true"></i><span class="d-none d-md-inline">Pagar</span>';
+                };
+
+                setLoadingState(true);
+
+                try {
+                    const formData = new FormData(form);
+                    const response = await fetch(form.action, {
+                        method: form.method || 'POST',
+                        body: formData,
+                        headers: {
+                            Accept: 'application/json'
+                        },
+                        credentials: 'same-origin'
+                    });
+
+                    let payload = null;
+                    const contentType = response.headers.get('Content-Type') || '';
+                    if (contentType.includes('application/json')) {
+                        payload = await response.json();
+                    }
+
+                    if (response.ok && payload && payload.ok) {
+                        showFeedback(payload.message || 'Lançamento marcado como pago.', 'success');
+                        window.setTimeout(() => {
+                            window.location.reload();
+                        }, 900);
+                        return;
+                    }
+
+                    const message = payload?.message || 'Não foi possível marcar o lançamento como pago.';
+                    showFeedback(message, 'danger');
+                    setLoadingState(false);
+                } catch (error) {
+                    console.error('Erro ao marcar lançamento como pago:', error);
+                    showFeedback('Erro inesperado ao processar o pagamento. Tente novamente.', 'danger');
+                    setLoadingState(false);
+                }
+            });
+
+            form.__financePayBound = true;
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
         const state = parseStateElement();
         const filterForms = document.querySelectorAll('[data-filter-form]');
@@ -394,5 +574,6 @@
 
         setupImportToggle();
         registerEntryModal();
+        registerPaymentActions();
     });
 })();

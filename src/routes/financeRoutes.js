@@ -6,6 +6,7 @@ const { Budget } = require('../../database/models');
 const authMiddleware = require('../middlewares/authMiddleware');
 const permissionMiddleware = require('../middlewares/permissionMiddleware');
 const audit = require('../middlewares/audit');
+const csrfProtection = require('../middlewares/csrfProtection');
 const financeImportUpload = require('../middlewares/financeImportUpload');
 const financeAccessPolicyService = require('../services/financeAccessPolicyService');
 const { uploadAttachments } = require('../middlewares/financeAttachmentUpload');
@@ -96,6 +97,14 @@ router.put(
     uploadAttachments,
     audit('financeEntry.update', (req) => `FinanceEntry:${req.params.id}`),
     financeController.updateFinanceEntry
+);
+router.post(
+    '/pay/:id',
+    authMiddleware,
+    requireFinanceAccess,
+    csrfProtection,
+    audit('financeEntry.pay', (req) => `FinanceEntry:${req.params.id}`),
+    financeController.markFinanceEntryAsPaid
 );
 router.delete(
     '/delete/:id',

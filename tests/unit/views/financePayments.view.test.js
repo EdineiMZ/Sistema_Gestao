@@ -17,6 +17,7 @@ const buildViewContext = () => ({
     },
     userRoleLevel: getRoleLevel(USER_ROLES.ADMIN),
     roleLabels: ROLE_LABELS,
+    csrfToken: 'unit-csrf-token',
     entries: [
         {
             id: 101,
@@ -37,6 +38,20 @@ const buildViewContext = () => ({
                     size: 20480
                 }
             ]
+        },
+        {
+            id: 202,
+            description: 'Assinatura de software SaaS',
+            type: 'payable',
+            value: '289.90',
+            dueDate: '2024-05-15',
+            paymentDate: null,
+            status: 'pending',
+            recurring: true,
+            recurringInterval: 'monthly',
+            financeCategoryId: 12,
+            category: { id: 12, name: 'Marketing', color: '#9333ea' },
+            attachments: []
         }
     ],
     financeTotals: {
@@ -167,5 +182,15 @@ describe('views/finance/payments', () => {
         expect(html).toContain('page=2');
         expect(html).toContain('Exibindo <strong>');
         expect(html).toContain('de <strong>12</strong>');
+    });
+
+    it('exibe ação de quitação com proteção CSRF para lançamentos pendentes', async () => {
+        const html = await ejs.renderFile(viewPath, buildViewContext(), { async: true });
+
+        expect(html).toContain('data-finance-pay-form');
+        expect(html).toContain('action="/finance/pay/202"');
+        expect(html).toContain('data-finance-pay-submit');
+        expect(html).not.toContain('action="/finance/pay/101"');
+        expect(html).toContain('name="_csrf" value="unit-csrf-token"');
     });
 });
