@@ -7,7 +7,8 @@ const {
     User,
     Product,
     Sale,
-    SaleItem
+    SaleItem,
+    Company
 } = require('../../../database/models');
 const {
     getTopProducts,
@@ -19,25 +20,28 @@ const {
     MAX_INVENTORY_LIMIT
 } = require('../../../src/services/posReportingService');
 
-const createOperator = () => User.create({
+const createOperator = (companyId) => User.create({
     name: 'Operador Teste',
     email: 'operador+teste@example.com',
     password: 'SenhaSegura123',
     role: 'manager',
-    active: true
+    active: true,
+    companyId
 });
 
-const createProduct = (overrides = {}) => Product.create({
+const createProduct = (companyId, overrides = {}) => Product.create({
     name: 'Produto Base',
     sku: `SKU-${Math.random().toString(16).slice(2, 8)}`,
     status: 'active',
     price: '50.00',
     stockQuantity: 20,
     lowStockThreshold: 5,
+    companyId,
     ...overrides
 });
 
 describe('posReportingService', () => {
+    let company;
     let operator;
     let productA;
     let productB;
@@ -48,9 +52,14 @@ describe('posReportingService', () => {
 
     beforeEach(async () => {
         await sequelize.sync({ force: true });
-        operator = await createOperator();
-        productA = await createProduct({ name: 'Produto A', price: '80.00', stockQuantity: 3 });
-        productB = await createProduct({ name: 'Produto B', price: '40.00', stockQuantity: 12, lowStockThreshold: 10 });
+        company = await Company.create({
+            cnpj: '77888999000166',
+            corporateName: 'Relatorios Inteligentes LTDA',
+            tradeName: 'Relatórios Inteligentes'
+        });
+        operator = await createOperator(company.id);
+        productA = await createProduct(company.id, { name: 'Produto A', price: '80.00', stockQuantity: 3 });
+        productB = await createProduct(company.id, { name: 'Produto B', price: '40.00', stockQuantity: 12, lowStockThreshold: 10 });
 
         const sale1 = await Sale.create({
             userId: operator.id,

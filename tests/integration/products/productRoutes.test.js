@@ -8,7 +8,8 @@ const {
     Product,
     ProductVariation,
     ProductMedia,
-    ProductSupplier
+    ProductSupplier,
+    Company
 } = require('../../../database/models');
 const productRoutes = require('../../../src/routes/productRoutes');
 const { USER_ROLES } = require('../../../src/constants/roles');
@@ -102,6 +103,7 @@ const createProductViaApi = async (agent, overrides = {}) => {
 
 describe('Rotas de produtos', () => {
     let app;
+    let company;
 
     beforeAll(async () => {
         app = buildApp();
@@ -110,6 +112,13 @@ describe('Rotas de produtos', () => {
 
     beforeEach(async () => {
         await sequelize.sync({ force: true });
+        company = await Company.create({
+            cnpj: '12345678000199',
+            corporateName: 'Empresa Inteligente LTDA',
+            tradeName: 'Loja Inteligente',
+            email: 'contato@lojainteg.com',
+            phone: '11999999999'
+        });
     });
 
     afterAll(async () => {
@@ -126,7 +135,7 @@ describe('Rotas de produtos', () => {
     });
 
     it('cria um produto completo com variações, mídias e fornecedores', async () => {
-        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
+        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER, companyId: company.id });
 
         const response = await createProductViaApi(agent);
 
@@ -146,10 +155,11 @@ describe('Rotas de produtos', () => {
         expect(productRecord.variations).toHaveLength(1);
         expect(productRecord.media).toHaveLength(1);
         expect(productRecord.suppliers).toHaveLength(1);
+        expect(productRecord.companyId).toBe(company.id);
     });
 
     it('lista os produtos cadastrados com resumo financeiro', async () => {
-        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
+        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER, companyId: company.id });
         await createProductViaApi(agent, { slug: 'produto-smart-2', sku: 'SKU-002', name: 'Produto Smart 2' });
 
         const response = await agent
@@ -166,7 +176,7 @@ describe('Rotas de produtos', () => {
     });
 
     it('atualiza um produto substituindo registros relacionados', async () => {
-        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
+        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER, companyId: company.id });
         const creationResponse = await createProductViaApi(agent);
         const productId = creationResponse.body.data.id;
 
@@ -223,7 +233,7 @@ describe('Rotas de produtos', () => {
     });
 
     it('exclui um produto e remove registros relacionados', async () => {
-        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER });
+        const { agent } = await authenticateTestUser(app, { role: USER_ROLES.MANAGER, companyId: company.id });
         const creationResponse = await createProductViaApi(agent, { slug: 'produto-para-excluir', sku: 'SKU-DELETE' });
         const productId = creationResponse.body.data.id;
 

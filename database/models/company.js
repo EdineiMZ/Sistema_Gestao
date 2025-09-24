@@ -22,6 +22,54 @@ const validateCnpj = (value) => {
     return digits;
 };
 
+const slugify = (value) => {
+    if (!value) {
+        return '';
+    }
+
+    const normalized = String(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+
+    return normalized;
+};
+
+const ensureCompanySlug = async (company, CompanyModel) => {
+    const baseSource = company.slug || company.tradeName || company.corporateName || company.cnpj;
+    let slug = slugify(baseSource);
+
+    if (!slug) {
+        slug = `empresa-${Date.now()}`;
+    }
+
+    const Op = CompanyModel.sequelize.Sequelize.Op;
+    let suffix = 0;
+    let candidate = slug;
+
+    // Garante unicidade mesmo em cenários concorrentes
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const where = { slug: candidate };
+        if (company.id) {
+            where.id = { [Op.ne]: company.id };
+        }
+
+        // eslint-disable-next-line no-await-in-loop
+        const existing = await CompanyModel.findOne({ where });
+
+        if (!existing) {
+            company.slug = candidate;
+            break;
+        }
+
+        suffix += 1;
+        candidate = `${slug}-${suffix}`;
+    }
+};
+
 module.exports = (sequelize, DataTypes) => {
     const Company = sequelize.define('Company', {
         cnpj: {
@@ -194,6 +242,17 @@ module.exports = (sequelize, DataTypes) => {
         notes: {
             type: DataTypes.TEXT,
             allowNull: true
+        },
+        slug: {
+            type: DataTypes.STRING(180),
+            allowNull: false,
+            unique: true,
+            validate: {
+                len: {
+                    args: [3, 180],
+                    msg: 'Slug deve conter entre 3 e 180 caracteres.'
+                }
+            }
         }
     }, {
         tableName: 'Companies',
@@ -208,6 +267,10 @@ module.exports = (sequelize, DataTypes) => {
             },
             {
                 fields: ['status']
+            },
+            {
+                unique: true,
+                fields: ['slug']
             }
         ]
     });
@@ -216,12 +279,36 @@ module.exports = (sequelize, DataTypes) => {
         if (company.cnpj) {
             company.cnpj = validateCnpj(company.cnpj);
         }
+
+        if (company.slug) {
+            company.slug = slugify(company.slug);
+        } else {
+            const fallback = company.tradeName || company.corporateName || company.cnpj;
+            company.slug = slugify(fallback);
+        }
+    });
+
+    Company.beforeCreate(async (company) => {
+        await ensureCompanySlug(company, Company);
+    });
+
+    Company.beforeUpdate(async (company) => {
+        if (company.changed('slug') || company.changed('tradeName') || company.changed('corporateName')) {
+            await ensureCompanySlug(company, Company);
+        }
     });
 
     Company.associate = (models) => {
         if (models.User) {
             Company.hasMany(models.User, {
                 as: 'users',
+                foreignKey: 'companyId'
+            });
+        }
+
+        if (models.Product) {
+            Company.hasMany(models.Product, {
+                as: 'products',
                 foreignKey: 'companyId'
             });
         }
